@@ -8,7 +8,8 @@ use embedded_graphics::{
     Drawable,
     mono_font::{MonoTextStyle, ascii::FONT_10X20},
     pixelcolor::BinaryColor,
-    prelude::{DrawTarget, OriginDimensions, Point, Primitive},
+    prelude::{DrawTarget, OriginDimensions, Point, Primitive, Size},
+    primitives::{PrimitiveStyle, Rectangle},
     text::Text,
 };
 
@@ -73,6 +74,15 @@ pub struct Application<'a, S: AppSource> {
     error_message: Option<String>,
     prc_lines: Vec<String>,
     prc_scroll: usize,
+    prc_form_index: usize,
+    prc_forms: Vec<prc_app::form_preview::FormPreview>,
+    prc_bitmaps: Vec<prc_app::bitmap::PrcBitmap>,
+    prc_runtime_form_id: Option<u16>,
+    prc_runtime_bitmap_draws: Vec<prc_app::runner::RuntimeBitmapDraw>,
+    prc_system_fonts: Vec<prc_app::runtime::PalmFont>,
+    prc_active_entry: Option<ImageEntry>,
+    prc_anim_elapsed_ms: u32,
+    prc_tick_seed: u32,
     gray2_lsb: Vec<u8>,
     gray2_msb: Vec<u8>,
     exit_from: ExitFrom,
@@ -101,6 +111,28 @@ enum ExitFrom {
 }
 
 impl<'a, S: AppSource> Application<'a, S> {
+    fn best_prc_form_index(&self) -> Option<usize> {
+        self.prc_forms.iter().enumerate().max_by_key(|(_, f)| {
+            let area = (f.w.max(0) as i32) * (f.h.max(0) as i32);
+            let objs = f.objects.len() as i32;
+            area.saturating_mul(4).saturating_add(objs.saturating_mul(100))
+        }).map(|(idx, _)| idx)
+    }
+
+    fn current_prc_form(&self) -> Option<prc_app::form_preview::FormPreview> {
+        let len = self.prc_forms.len();
+        if len == 0 {
+            return None;
+        }
+        let idx = self.prc_form_index.min(len - 1);
+        self.prc_forms.get(idx).cloned()
+    }
+
+    fn runtime_prc_form(&self) -> Option<prc_app::form_preview::FormPreview> {
+        let fid = self.prc_runtime_form_id?;
+        self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
+    }
+
     pub fn new(display_buffers: &'a mut DisplayBuffers, source: &'a mut S) -> Self {
         display_buffers.set_rotation(Rotation::Rotate90);
         let resume_name = source.load_resume();
@@ -124,6 +156,15 @@ impl<'a, S: AppSource> Application<'a, S> {
             error_message: None,
             prc_lines: Vec::new(),
             prc_scroll: 0,
+            prc_form_index: 0,
+            prc_forms: Vec::new(),
+            prc_bitmaps: Vec::new(),
+            prc_runtime_form_id: None,
+            prc_runtime_bitmap_draws: Vec::new(),
+            prc_system_fonts: Vec::new(),
+            prc_active_entry: None,
+            prc_anim_elapsed_ms: 0,
+            prc_tick_seed: 0,
             gray2_lsb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
             gray2_msb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
             exit_from: ExitFrom::Image,
@@ -315,6 +356,12 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
             }
             AppState::PrcViewing => {
+                self.prc_anim_elapsed_ms = self.prc_anim_elapsed_ms.saturating_add(elapsed_ms);
+                if self.prc_anim_elapsed_ms >= 500 {
+                    self.prc_anim_elapsed_ms = 0;
+                    self.prc_tick_seed = self.prc_tick_seed.saturating_add(50);
+                    self.refresh_prc_runtime_preview(false);
+                }
                 if buttons.is_pressed(input::Buttons::Up) {
                     self.prc_scroll = self.prc_scroll.saturating_sub(1);
                     self.dirty = true;
@@ -327,10 +374,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                     || buttons.is_pressed(input::Buttons::Confirm)
                 {
                     self.set_state_menu();
-                } else {
-                    if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
+                } else if self.system.add_idle(elapsed_ms) {
+                    self.start_sleep_request();
                 }
             }
             AppState::SleepingPending => {}
@@ -551,8 +596,67 @@ impl<'a, S: AppSource> Application<'a, S> {
     fn open_prc_entry(&mut self, entry: ImageEntry) {
         match self.source.load_prc_info(&self.home.path, &entry) {
             Ok(info) => {
-                self.log_prc_info(&entry, &info);
+                self.prc_active_entry = Some(entry.clone());
+                self.prc_anim_elapsed_ms = 0;
+                self.prc_tick_seed = 0;
                 self.prc_lines = prc_app::format_info_lines(&info);
+                let runtime_snapshot = self.log_prc_info(&entry, &info);
+                self.prc_forms.clear();
+                self.prc_bitmaps.clear();
+                self.prc_runtime_form_id = runtime_snapshot.form_id;
+                self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
+                log::info!(
+                    "PRC runtime_ui form_id={:?} bitmap_draws={}",
+                    self.prc_runtime_form_id,
+                    self.prc_runtime_bitmap_draws.len()
+                );
+                self.prc_system_fonts = self.source.load_prc_system_fonts();
+                if let Ok(raw) = self.source.load_prc_bytes(&self.home.path, &entry) {
+                    self.prc_forms = prc_app::form_preview::parse_form_previews(&raw);
+                    self.prc_bitmaps = prc_app::bitmap::parse_prc_bitmaps(&raw);
+                }
+                self.prc_form_index = self.best_prc_form_index().unwrap_or(0);
+                self.prc_lines
+                    .insert(0, format!("Form resources parsed: {}", self.prc_forms.len()));
+                self.prc_lines
+                    .insert(1, format!("Bitmap resources parsed: {}", self.prc_bitmaps.len()));
+                if let Some(fid) = self.prc_runtime_form_id {
+                    self.prc_lines.insert(2, format!("Runtime form id: {}", fid));
+                }
+                if let Some(form) = self.current_prc_form() {
+                    self.prc_lines.insert(1, format!(
+                        "First form: id={} bounds=({},{} {}x{}) objs={}/{}",
+                        form.form_id,
+                        form.x,
+                        form.y,
+                        form.w,
+                        form.h,
+                        form.objects.len(),
+                        form.object_count
+                    ));
+                    self.prc_lines.insert(
+                        2,
+                        format!(
+                            "Selected form: {}/{} (Up/Down)",
+                            self.prc_form_index.saturating_add(1),
+                            self.prc_forms.len()
+                        ),
+                    );
+                    log::info!(
+                        "PRC form_preview first idx={}/{} id={} bounds=({},{} {}x{}) objs={}/{}",
+                        self.prc_form_index.saturating_add(1),
+                        self.prc_forms.len(),
+                        form.form_id,
+                        form.x,
+                        form.y,
+                        form.w,
+                        form.h,
+                        form.objects.len(),
+                        form.object_count
+                    );
+                } else {
+                    log::info!("PRC form_preview none");
+                }
                 self.prc_scroll = 0;
                 self.set_state_prc_viewing();
             }
@@ -560,7 +664,31 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
     }
 
-    fn log_prc_info(&mut self, entry: &ImageEntry, info: &prc_app::PrcInfo) {
+    fn refresh_prc_runtime_preview(&mut self, verbose_logs: bool) {
+        let Some(entry) = self.prc_active_entry.clone() else {
+            return;
+        };
+        let Ok(info) = self.source.load_prc_info(&self.home.path, &entry) else {
+            return;
+        };
+        let runtime_snapshot = prc_app::runner::log_prc_runtime_first_trap_with_seed(
+            self.source,
+            &self.home.path,
+            &entry,
+            &info,
+            verbose_logs,
+            self.prc_tick_seed,
+        );
+        self.prc_runtime_form_id = runtime_snapshot.form_id;
+        self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
+        self.dirty = true;
+    }
+
+    fn log_prc_info(
+        &mut self,
+        entry: &ImageEntry,
+        info: &prc_app::PrcInfo,
+    ) -> prc_app::runner::RuntimeUiSnapshot {
         log::info!(
             "PRC name='{}' type='{}' creator='{}' kind={:?} entries={} ver={} attrs=0x{:04X} size={} code_bytes={} other_bytes={}",
             info.db_name,
@@ -789,7 +917,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             entry,
             info,
             Self::prc_verbose_logs(),
-        );
+        )
     }
 
     fn prc_verbose_logs() -> bool {
@@ -969,6 +1097,17 @@ impl<'a, S: AppSource> Application<'a, S> {
         Text::new("Palm App (.prc)", Point::new(LIST_MARGIN_X, HEADER_Y), style)
             .draw(self.display_buffers)
             .ok();
+        let forms_line = if let Some(fid) = self.prc_runtime_form_id {
+            format!("runtime form: {}", fid)
+        } else {
+            format!(
+                "runtime form: none (parsed:{})",
+                self.prc_forms.len()
+            )
+        };
+        Text::new(&forms_line, Point::new(LIST_MARGIN_X + 240, HEADER_Y), style)
+            .draw(self.display_buffers)
+            .ok();
 
         let size = self.display_buffers.size();
         let rows = ((size.height as i32 - LIST_TOP - 24) / LINE_HEIGHT).max(1) as usize;
@@ -989,6 +1128,65 @@ impl<'a, S: AppSource> Application<'a, S> {
         )
         .draw(self.display_buffers)
         .ok();
+
+        if let Some(form) = self.runtime_prc_form() {
+            let outline = PrimitiveStyle::with_stroke(BinaryColor::Off, 1);
+            let clear = PrimitiveStyle::with_fill(BinaryColor::On);
+            let max_scale_w = ((size.width as i32 - 24) / 160).max(1);
+            let max_scale_h = ((size.height as i32 - LIST_TOP - 34) / 160).max(1);
+            let max_scale = max_scale_w.min(max_scale_h).max(1);
+            let scale = if max_scale >= 3 { 3 } else { max_scale };
+            let pane_w = 160 * scale;
+            let pane_h = 160 * scale;
+            let pane_x = ((size.width as i32 - pane_w) / 2).max(8);
+            let pane_y = (LIST_TOP + 18).max(8);
+            Rectangle::new(
+                Point::new(pane_x - 2, pane_y - 2),
+                Size::new((pane_w + 4) as u32, (pane_h + 4) as u32),
+            )
+            .into_styled(clear)
+            .draw(self.display_buffers)
+            .ok();
+            Rectangle::new(
+                Point::new(pane_x, pane_y),
+                Size::new(pane_w as u32, pane_h as u32),
+            )
+            .into_styled(outline)
+            .draw(self.display_buffers)
+            .ok();
+            prc_app::ui::draw_form_preview(
+                self.display_buffers,
+                &form,
+                &self.prc_system_fonts,
+                &self.prc_bitmaps,
+                &self.prc_runtime_bitmap_draws,
+                pane_x,
+                pane_y,
+                pane_w,
+                pane_h,
+                scale.max(1),
+                outline,
+            );
+
+            Text::new(
+                "runtime draw",
+                Point::new(pane_x, pane_y - 4),
+                style,
+            )
+            .draw(self.display_buffers)
+            .ok();
+            let meta = format!(
+                "x{} res:{} form:{} obj:{}/{}",
+                scale,
+                form.resource_id,
+                form.form_id,
+                form.objects.len(),
+                form.object_count
+            );
+            Text::new(&meta, Point::new(pane_x, pane_y + pane_h + 16), style)
+                .draw(self.display_buffers)
+                .ok();
+        }
 
         let mut rq = RenderQueue::default();
         rq.push(

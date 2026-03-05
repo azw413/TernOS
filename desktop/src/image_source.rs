@@ -97,6 +97,149 @@ impl DesktopImageSource {
             }
         }
     }
+
+    fn fonts_dir(&self) -> PathBuf {
+        self.root.join("fonts")
+    }
+
+    fn parse_font_resource_id(file_name: &str) -> Option<u16> {
+        let mut nums = Vec::new();
+        let mut cur = String::new();
+        for ch in file_name.chars() {
+            if ch.is_ascii_digit() {
+                cur.push(ch);
+            } else if !cur.is_empty() {
+                nums.push(cur.clone());
+                cur.clear();
+            }
+        }
+        if !cur.is_empty() {
+            nums.push(cur);
+        }
+        for n in nums {
+            let Ok(v) = n.parse::<u16>() else {
+                continue;
+            };
+            if (9000..=9099).contains(&v) {
+                return Some(v.saturating_add(100));
+            }
+            if (9100..=9999).contains(&v) {
+                return Some(v);
+            }
+            if v <= 255 {
+                return Some(9100u16.saturating_add(v));
+            }
+        }
+        None
+    }
+
+    fn parse_pumpkin_txt_font(path: &Path, font_id: u16) -> Option<tern_core::prc_app::runtime::PalmFont> {
+        let text = fs::read_to_string(path).ok()?;
+        let mut ascent: u8 = 0;
+        let mut descent: u8 = 0;
+        let mut glyphs: std::collections::BTreeMap<u8, (u8, Vec<u16>)> =
+            std::collections::BTreeMap::new();
+
+        let lines: Vec<&str> = text.lines().collect();
+        let mut i = 0usize;
+        while i < lines.len() {
+            let line = lines[i].trim();
+            if line.starts_with("ascent ") {
+                if let Ok(v) = line[7..].trim().parse::<u8>() {
+                    ascent = v;
+                }
+                i += 1;
+                continue;
+            }
+            if line.starts_with("descent ") {
+                if let Ok(v) = line[8..].trim().parse::<u8>() {
+                    descent = v;
+                }
+                i += 1;
+                continue;
+            }
+            if let Some(rest) = line.strip_prefix("GLYPH ") {
+                let Ok(code_u16) = rest.trim().parse::<u16>() else {
+                    i += 1;
+                    continue;
+                };
+                if code_u16 > 255 {
+                    i += 1;
+                    continue;
+                }
+                let code = code_u16 as u8;
+                i += 1;
+                let mut rows: Vec<&str> = Vec::new();
+                while i < lines.len() {
+                    let row = lines[i];
+                    let row_trim = row.trim();
+                    if row_trim.is_empty() || row_trim.starts_with("GLYPH ") {
+                        break;
+                    }
+                    rows.push(row);
+                    i += 1;
+                }
+                let mut width = 0usize;
+                let mut row_bits: Vec<u16> = Vec::new();
+                for row in &rows {
+                    let bytes = row.as_bytes();
+                    let mut last_hash: Option<usize> = None;
+                    let mut bits = 0u16;
+                    for (idx, b) in bytes.iter().enumerate() {
+                        if *b == b'#' {
+                            last_hash = Some(idx);
+                            if idx < 16 {
+                                bits |= 1u16 << idx;
+                            }
+                        }
+                    }
+                    let w = if let Some(last) = last_hash {
+                        last + 1
+                    } else {
+                        bytes.len()
+                    };
+                    width = width.max(w);
+                    row_bits.push(bits);
+                }
+                glyphs.insert(code, (width.min(255) as u8, row_bits));
+                continue;
+            }
+            i += 1;
+        }
+
+        if glyphs.is_empty() {
+            return None;
+        }
+        let first_char = *glyphs.keys().next()?;
+        let last_char = *glyphs.keys().next_back()?;
+        let mut widths = vec![0u8; (last_char - first_char) as usize + 1];
+        let mut bitmaps = vec![None; widths.len()];
+        for (ch, (w, rows)) in glyphs {
+            let idx = (ch - first_char) as usize;
+            widths[idx] = w.max(1);
+            bitmaps[idx] = Some(tern_core::prc_app::runtime::PalmGlyphBitmap {
+                width: w.max(1),
+                rows,
+            });
+        }
+        let max_width = widths.iter().copied().max().unwrap_or(1).max(1);
+        let avg_width = {
+            let sum: u32 = widths.iter().map(|w| *w as u32).sum();
+            ((sum / widths.len().max(1) as u32) as u8).max(1)
+        };
+        let rect_height = ascent.saturating_add(descent).max(1);
+
+        Some(tern_core::prc_app::runtime::PalmFont {
+            font_id,
+            first_char,
+            last_char,
+            max_width,
+            avg_width,
+            rect_height,
+            widths,
+            glyphs: bitmaps,
+        })
+    }
 }
 
 impl ImageSource for DesktopImageSource {
@@ -223,6 +366,81 @@ impl ImageSource for DesktopImageSource {
         let base = path.iter().fold(self.root.clone(), |acc, part| acc.join(part));
         let full_path = base.join(&entry.name);
         fs::read(full_path).map_err(|_| ImageError::Io)
+    }
+
+    fn load_prc_system_resources(&mut self) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
+        let dir = self.fonts_dir();
+        let Ok(read_dir) = fs::read_dir(&dir) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for dent in read_dir.flatten() {
+            let Ok(ft) = dent.file_type() else {
+                continue;
+            };
+            if !ft.is_file() {
+                continue;
+            }
+            let name = dent.file_name().to_string_lossy().to_string();
+            let lower = name.to_ascii_lowercase();
+            if !(lower.ends_with(".nfnt")
+                || lower.ends_with(".fnt")
+                || lower.ends_with(".bin")
+                || lower.ends_with(".dat"))
+            {
+                continue;
+            }
+            let Some(id) = Self::parse_font_resource_id(&name) else {
+                continue;
+            };
+            let Ok(data) = fs::read(dent.path()) else {
+                continue;
+            };
+            if data.len() < 26 {
+                continue;
+            }
+            out.push(tern_core::prc_app::runtime::ResourceBlob {
+                kind: u32::from_be_bytes(*b"NFNT"),
+                id,
+                data,
+            });
+        }
+        if !out.is_empty() {
+            log::info!("Loaded {} system font resources from {}", out.len(), dir.display());
+        }
+        out
+    }
+
+    fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+        let dir = self.fonts_dir();
+        let Ok(read_dir) = fs::read_dir(&dir) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for dent in read_dir.flatten() {
+            let Ok(ft) = dent.file_type() else {
+                continue;
+            };
+            if !ft.is_file() {
+                continue;
+            }
+            let name = dent.file_name().to_string_lossy().to_string();
+            if !name.to_ascii_lowercase().ends_with(".txt") {
+                continue;
+            }
+            let Some(resource_id) = Self::parse_font_resource_id(&name) else {
+                continue;
+            };
+            // Palm FontID in traps/forms is usually 0..N, while NFNT resource IDs are 9100+FontID.
+            let font_id = resource_id.saturating_sub(9100);
+            if let Some(font) = Self::parse_pumpkin_txt_font(&dent.path(), font_id) {
+                out.push(font);
+            }
+        }
+        if !out.is_empty() {
+            log::info!("Loaded {} text system fonts from {}", out.len(), dir.display());
+        }
+        out
     }
 }
 

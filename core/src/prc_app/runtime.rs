@@ -29,6 +29,13 @@ pub struct PrcRuntimeContext {
     pub dm_get_resource_last_log: Option<(u32, u16, u32, u16)>,
     pub features: alloc::vec::Vec<FeatureEntry>,
     pub default_stubbed_traps: alloc::vec::Vec<u16>,
+    pub fonts: alloc::vec::Vec<PalmFont>,
+    pub drawn_form_id: Option<u16>,
+    pub drawn_bitmaps: alloc::vec::Vec<RuntimeBitmapDraw>,
+    pub blink_next_tick: u32,
+    pub blink_phase: u8,
+    pub terminate_requested: bool,
+    pub trace_traps: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -54,6 +61,31 @@ pub struct FeatureEntry {
     pub creator: u32,
     pub num: u16,
     pub value: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct PalmFont {
+    pub font_id: u16,
+    pub first_char: u8,
+    pub last_char: u8,
+    pub max_width: u8,
+    pub avg_width: u8,
+    pub rect_height: u8,
+    pub widths: alloc::vec::Vec<u8>,
+    pub glyphs: alloc::vec::Vec<Option<PalmGlyphBitmap>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PalmGlyphBitmap {
+    pub width: u8,
+    pub rows: alloc::vec::Vec<u16>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeBitmapDraw {
+    pub resource_id: u16,
+    pub x: i16,
+    pub y: i16,
 }
 
 impl Default for PrcRuntimeContext {
@@ -82,6 +114,13 @@ impl Default for PrcRuntimeContext {
             dm_get_resource_last_log: None,
             features: alloc::vec::Vec::new(),
             default_stubbed_traps: alloc::vec::Vec::new(),
+            fonts: alloc::vec::Vec::new(),
+            drawn_form_id: None,
+            drawn_bitmaps: alloc::vec::Vec::new(),
+            blink_next_tick: 175,
+            blink_phase: 0,
+            terminate_requested: false,
+            trace_traps: true,
         }
     }
 }

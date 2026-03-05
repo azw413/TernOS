@@ -73,6 +73,12 @@ pub trait ImageSource {
     ) -> Result<Vec<u8>, ImageError> {
         Err(ImageError::Unsupported)
     }
+    fn load_prc_system_resources(&mut self) -> Vec<crate::prc_app::runtime::ResourceBlob> {
+        Vec::new()
+    }
+    fn load_prc_system_fonts(&mut self) -> Vec<crate::prc_app::runtime::PalmFont> {
+        Vec::new()
+    }
 }
 
 pub trait BookSource {

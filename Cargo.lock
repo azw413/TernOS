@@ -3788,6 +3788,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tern-prc-fonts"
+version = "0.1.0"
+dependencies = [
+ "tern_core",
+]
+
+[[package]]
 name = "tern-x4"
 version = "0.1.0"
 dependencies = [

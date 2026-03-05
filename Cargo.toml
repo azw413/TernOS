@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["core", "desktop", "x4", "tools/tern-image", "tools/tern-epub", "tools/tern-book"]
+members = ["core", "desktop", "x4", "tools/tern-image", "tools/tern-epub", "tools/tern-book", "tools/tern-prc-fonts"]
 
 [workspace.package]
 edition      = "2024"

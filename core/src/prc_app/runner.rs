@@ -15,7 +15,21 @@ use crate::prc_app::{bootstrap, trap_stub};
 
 const PRC_EXEC_STEP_LIMIT: usize = 262_144;
 const PRC_EXEC_STUB_STEP_BUDGET: usize = 1_000_000;
-const PRC_EXEC_TRAP_STUB_LIMIT: usize = 4_096;
+const PRC_EXEC_TRAP_STUB_LIMIT: usize = 65_536;
+const PRC_IDLE_LOOP_POLLS: u32 = 256;
+
+#[derive(Clone, Debug, Default)]
+pub struct RuntimeUiSnapshot {
+    pub form_id: Option<u16>,
+    pub bitmap_draws: Vec<RuntimeBitmapDraw>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeBitmapDraw {
+    pub resource_id: u16,
+    pub x: i16,
+    pub y: i16,
+}
 
 #[derive(Clone)]
 struct TrapStat {
@@ -25,7 +39,24 @@ struct TrapStat {
     handled: bool,
 }
 
-pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String], entry: &ImageEntry, info: &PrcInfo, verbose_logs: bool) {
+pub fn log_prc_runtime_first_trap<S: AppSource>(
+    source: &mut S,
+    path: &[String],
+    entry: &ImageEntry,
+    info: &PrcInfo,
+    verbose_logs: bool,
+) -> RuntimeUiSnapshot {
+    log_prc_runtime_first_trap_with_seed(source, path, entry, info, verbose_logs, 0)
+}
+
+pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
+    source: &mut S,
+    path: &[String],
+    entry: &ImageEntry,
+    info: &PrcInfo,
+    verbose_logs: bool,
+    tick_seed: u32,
+) -> RuntimeUiSnapshot {
     let code_id = info
         .code_scan
         .iter()
@@ -34,7 +65,7 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
         .or_else(|| info.code_scan.first().map(|scan| scan.resource_id));
     let Some(code_id) = code_id else {
         log::info!("PRC exec_trace skipped: no code resources");
-        return;
+        return RuntimeUiSnapshot::default();
     };
 
     let code0 = source
@@ -47,22 +78,24 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
         Ok(code) => code,
         Err(ImageError::Unsupported) => {
             log::info!("PRC exec_trace skipped: source does not provide code bytes");
-            return;
+            return RuntimeUiSnapshot::default();
         }
         Err(err) => {
             log::info!("PRC exec_trace failed: {:?}", err);
-            return;
+            return RuntimeUiSnapshot::default();
         }
     };
     if code.len() < 2 {
         log::info!("PRC exec_trace skipped: code#{} too small ({} bytes)", code_id, code.len());
-        return;
+            return RuntimeUiSnapshot::default();
     }
     let prc_raw = source.load_prc_bytes(path, entry).ok();
     let prc_resources = prc_raw
         .as_deref()
         .map(bootstrap::parse_prc_resource_blobs)
         .unwrap_or_default();
+    let system_resources = source.load_prc_system_resources();
+    let system_fonts = source.load_prc_system_fonts();
 
     #[derive(Clone)]
     struct BootstrapRun {
@@ -90,6 +123,9 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
         a2_changes: Vec<(usize, u32, u32)>,
         trap_stats: Vec<TrapStat>,
         default_stubbed_traps: Vec<u16>,
+        active_form_id: Option<u16>,
+        drawn_form_id: Option<u16>,
+        drawn_bitmaps: Vec<RuntimeBitmapDraw>,
     }
 
     let primary_entry = code0
@@ -124,7 +160,8 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
                          launch_cmd: u16,
                          launch_flags: u16,
                          cmd_pbp: u32,
-                         code: &[u8]|
+                         code: &[u8],
+                         trace_traps: bool|
      -> BootstrapRun {
         let mut cpu = core::CpuState68k::default();
         cpu.pc = entry_pc;
@@ -136,8 +173,23 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
         } else {
             launch_flags
         };
+        runtime_ctx.ticks = tick_seed;
+        runtime_ctx.trace_traps = trace_traps;
         runtime_ctx.cmd_pbp = cmd_pbp;
         runtime_ctx.resources = prc_resources.clone();
+        runtime_ctx.resources.extend(system_resources.clone());
+        runtime_ctx.fonts = crate::prc_app::font::load_nfnt_fonts(&runtime_ctx.resources);
+        for font in system_fonts.clone() {
+            if let Some(existing) = runtime_ctx
+                .fonts
+                .iter_mut()
+                .find(|f| f.font_id == font.font_id)
+            {
+                *existing = font;
+            } else {
+                runtime_ctx.fonts.push(font);
+            }
+        }
         runtime_ctx.prc_image = prc_raw.clone().unwrap_or_default();
         let mut memory = memory::MemoryMap::with_data(0, code.to_vec());
         // Seed a minimal globals world from data#0 when available; many apps rely on A5 globals.
@@ -273,7 +325,7 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
                         if *trap_word == 0xA08F {
                             has_startup_trap = true;
                         }
-                        if matches!(*trap_word, 0xA11D | 0xA1A0 | 0xA1BF | 0xA173 | 0xA19F) {
+                        if matches!(*trap_word, 0xA11D | 0xA1A0 | 0xA1BF | 0xA173 | 0xA19F | 0xA470) {
                             has_app_loop_trap = true;
                         }
                         let meta = table::lookup(*trap_word);
@@ -324,6 +376,14 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
                         && trap_index < PRC_EXEC_TRAP_STUB_LIMIT
                         && total_steps < PRC_EXEC_STUB_STEP_BUDGET =>
                 {
+                    // If we've clearly entered a stable GUI event loop, treat it as a successful boot.
+                    if has_app_loop_trap
+                        && runtime_ctx.evt_polls >= PRC_IDLE_LOOP_POLLS
+                        && matches!(trap_word, 0xA11D | 0xA0A9 | 0xA1BF)
+                    {
+                        stop_reason = Some(core::StopReason::EntryReturn { pc });
+                        break;
+                    }
                     trap_stub::apply_prc_runtime_trap_stub(
                         &mut cpu,
                         &mut runtime_ctx,
@@ -331,6 +391,10 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
                         trap_word,
                         pc,
                     );
+                    if runtime_ctx.terminate_requested {
+                        stop_reason = Some(core::StopReason::ATrap { trap_word, pc });
+                        break;
+                    }
                     continue;
                 }
                 other => {
@@ -385,29 +449,41 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
             a2_changes,
             trap_stats,
             default_stubbed_traps: runtime_ctx.default_stubbed_traps.clone(),
+            active_form_id: runtime_ctx.active_form_id,
+            drawn_form_id: runtime_ctx.drawn_form_id,
+            drawn_bitmaps: runtime_ctx
+                .drawn_bitmaps
+                .iter()
+                .map(|d| RuntimeBitmapDraw {
+                    resource_id: d.resource_id,
+                    x: d.x,
+                    y: d.y,
+                })
+                .collect(),
         }
     };
 
     let mut runs: Vec<BootstrapRun> = candidates
         .iter()
         .copied()
-        .map(|(pc, is_primary)| run_candidate(pc, is_primary, 0, 0x000C, 0, &code))
+        .map(|(pc, is_primary)| run_candidate(pc, is_primary, 0, 0x000C, 0, &code, false))
         .collect();
     runs.sort_by(|a, b| {
-        b.has_app_loop_trap
-            .cmp(&a.has_app_loop_trap)
+        b.drawn_bitmaps.len()
+            .cmp(&a.drawn_bitmaps.len())
+            .then_with(|| b.drawn_form_id.is_some().cmp(&a.drawn_form_id.is_some()))
             .then_with(|| b.has_startup_trap.cmp(&a.has_startup_trap))
+            .then_with(|| b.has_app_loop_trap.cmp(&a.has_app_loop_trap))
             .then_with(|| {
                 let b_step = matches!(b.stop_reason, Some(core::StopReason::StepLimit { .. }));
                 let a_step = matches!(a.stop_reason, Some(core::StopReason::StepLimit { .. }));
                 a_step.cmp(&b_step)
             })
             .then_with(|| b.is_primary.cmp(&a.is_primary))
-            .then_with(|| b.event_count
-            .cmp(&a.event_count)
+            .then_with(|| b.event_count.cmp(&a.event_count))
             .then_with(|| b.trap_index.cmp(&a.trap_index))
             .then_with(|| b.total_steps.cmp(&a.total_steps))
-            .then_with(|| b.entry_pc.cmp(&a.entry_pc)))
+            .then_with(|| b.entry_pc.cmp(&a.entry_pc))
     });
     if verbose_logs {
         for run in &runs {
@@ -445,7 +521,7 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
     let best = runs
         .first()
         .cloned()
-        .unwrap_or_else(|| run_candidate(primary_entry, true, 0, 0x000C, 0, &code));
+        .unwrap_or_else(|| run_candidate(primary_entry, true, 0, 0x000C, 0, &code, false));
     let mut best = best;
     let launch_scenarios = [
         ("normal", 0u16, 0x000C_u16, 0u32),
@@ -453,22 +529,24 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
         ("goto_subcall", 2u16, 0x0018_u16, 0u32),
         ("goto_subcall_new_globals", 2u16, 0x001C_u16, 0u32),
     ];
-    if !best.has_app_loop_trap {
+    if !best.has_app_loop_trap || best.drawn_form_id.is_none() || best.drawn_bitmaps.is_empty() {
         let mut scenario_runs: Vec<(&str, BootstrapRun)> = launch_scenarios
             .iter()
             .map(|(label, cmd, flags, pbp)| {
                 (
                     *label,
-                    run_candidate(best.entry_pc, best.is_primary, *cmd, *flags, *pbp, &code),
+                    run_candidate(best.entry_pc, best.is_primary, *cmd, *flags, *pbp, &code, false),
                 )
             })
             .collect();
         scenario_runs.sort_by(|a, b| {
             let ar = &a.1;
             let br = &b.1;
-            br.has_app_loop_trap
-                .cmp(&ar.has_app_loop_trap)
+            br.drawn_bitmaps.len()
+                .cmp(&ar.drawn_bitmaps.len())
+                .then_with(|| br.drawn_form_id.is_some().cmp(&ar.drawn_form_id.is_some()))
                 .then_with(|| br.has_startup_trap.cmp(&ar.has_startup_trap))
+                .then_with(|| br.has_app_loop_trap.cmp(&ar.has_app_loop_trap))
                 .then_with(|| {
                     let b_step =
                         matches!(br.stop_reason, Some(core::StopReason::StepLimit { .. }));
@@ -481,7 +559,9 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
                 .then_with(|| br.total_steps.cmp(&ar.total_steps))
         });
         if let Some((label, top)) = scenario_runs.first() {
-            if top.has_app_loop_trap
+            if (top.drawn_form_id.is_some() && best.drawn_form_id.is_none())
+                || (top.drawn_bitmaps.len() > best.drawn_bitmaps.len())
+                || (top.has_app_loop_trap && !best.has_app_loop_trap)
                 || (!best.has_startup_trap && top.has_startup_trap)
                 || (best.stop_reason
                     == Some(core::StopReason::EntryReturn { pc: 0 })
@@ -489,208 +569,55 @@ pub fn log_prc_runtime_first_trap<S: AppSource>(source: &mut S, path: &[String],
                         != Some(core::StopReason::EntryReturn { pc: 0 }))
                 || (top.event_count > best.event_count)
             {
-                log::info!(
-                    "PRC launch_scenario selected='{}' cmd={} flags=0x{:04X}",
-                    label,
-                    top.launch_cmd,
-                    top.launch_flags
-                );
+                let _ = label;
                 best = top.clone();
             }
         }
     }
     log::info!(
-        "PRC bootstrap candidates={} selected_entry=0x{:X} selected_events={} selected_traps={} selected_steps={} startup_trap={} app_loop_trap={}",
-        candidates.len(),
-        best.entry_pc,
-        best.event_count,
-        best.trap_index,
-        best.total_steps,
-        best.has_startup_trap,
-        best.has_app_loop_trap
-    );
-    let entry_pc = best.entry_pc;
-    let total_steps = best.total_steps;
-    let _trap_index = best.trap_index;
-    let unknown_total = best.unknown_total;
-    let unknown_samples = best.unknown_samples;
-    let mut pc_samples = best.pc_samples;
-    let stop_reason = best.stop_reason;
-    let recent_pcs = best.recent_pcs;
-    let final_sr = best.final_sr;
-    let final_d = best.final_d;
-    let final_a = best.final_a;
-    let final_mem_at_a2 = best.final_mem_at_a2;
-    let final_frame_at_a6 = best.final_frame_at_a6;
-    let a2_changes = best.a2_changes;
-    let mut trap_stats = best.trap_stats;
-    let default_stubbed_traps = best.default_stubbed_traps;
-    for line in best.event_lines {
-        log::info!("{}", line);
-    }
-    log::info!(
-        "PRC exec_trace start code_id={} code_size={} entry_pc=0x{:X} launch_cmd={} launch_flags=0x{:04X} cmd_pbp=0x{:X} steps={}",
+        "PRC exec start code_id={} code_size={} entry_pc=0x{:X} launch_cmd={} launch_flags=0x{:04X} cmd_pbp=0x{:X}",
         code_id,
         code.len(),
-        entry_pc,
+        best.entry_pc,
+        best.launch_cmd,
+        best.launch_flags,
+        best.cmd_pbp
+    );
+    let best = run_candidate(
+        best.entry_pc,
+        best.is_primary,
         best.launch_cmd,
         best.launch_flags,
         best.cmd_pbp,
-        total_steps
+        &code,
+        true,
     );
-    if unknown_total > 0 {
-        log::info!("PRC exec_trace unknown_count={}", unknown_total);
-        for (pc, word) in unknown_samples {
-            log::info!("PRC exec_trace unknown pc=0x{:X} word=0x{:04X}", pc, word);
-        }
-    }
-    if matches!(stop_reason, Some(core::StopReason::StepLimit { .. })) {
-        pc_samples.sort_by(|a, b| b.1.cmp(&a.1));
-        for (pc, cnt) in pc_samples.into_iter().take(8) {
-            let word = if (pc as usize) + 1 < code.len() {
-                u16::from_be_bytes([code[pc as usize], code[pc as usize + 1]])
-            } else {
-                0
-            };
-            log::info!(
-                "PRC exec_trace hotspot pc=0x{:X} hits={} word=0x{:04X}",
-                pc,
-                cnt,
-                word
-            );
-        }
-    }
-    match stop_reason {
+    let total_steps = best.total_steps;
+    let stop_reason = best.stop_reason;
+    let snapshot = RuntimeUiSnapshot {
+        form_id: best.drawn_form_id.or(best.active_form_id),
+        bitmap_draws: best.drawn_bitmaps.clone(),
+    };
+    let stop_text = match stop_reason {
         Some(core::StopReason::ATrap { trap_word, pc }) => {
             let meta = table::lookup(trap_word);
-            log::info!(
-                "PRC exec_trace stop trap=0x{:04X} group={} name={} pc=0x{:X}",
-                trap_word,
-                meta.group.as_str(),
-                meta.name,
-                pc
-            );
+            format!("trap=0x{:04X} {} pc=0x{:X}", trap_word, meta.name, pc)
         }
-        Some(core::StopReason::Trap15 { pc }) => {
-            log::info!("PRC exec_trace stop trap15 pc=0x{:X}", pc);
-        }
-        Some(core::StopReason::Trap { vector, pc }) => {
-            log::info!("PRC exec_trace stop trap#{} pc=0x{:X}", vector, pc);
-        }
-        Some(core::StopReason::OutOfBounds { pc }) => {
-            log::info!("PRC exec_trace stop out_of_bounds pc=0x{:X}", pc);
-            if !recent_pcs.is_empty() {
-                for p in recent_pcs {
-                    let w = if (p as usize) + 1 < code.len() {
-                        u16::from_be_bytes([code[p as usize], code[p as usize + 1]])
-                    } else {
-                        0
-                    };
-                    log::info!("PRC exec_trace recent_pc pc=0x{:X} word=0x{:04X}", p, w);
-                }
-            }
-        }
+        Some(core::StopReason::Trap15 { pc }) => format!("trap15 pc=0x{:X}", pc),
+        Some(core::StopReason::Trap { vector, pc }) => format!("trap#{} pc=0x{:X}", vector, pc),
+        Some(core::StopReason::OutOfBounds { pc }) => format!("out_of_bounds pc=0x{:X}", pc),
         Some(core::StopReason::UnknownOpcode { pc, word }) => {
-            log::info!(
-                "PRC exec_trace stop unknown_opcode pc=0x{:X} word=0x{:04X}",
-                pc,
-                word
-            );
+            format!("unknown_opcode pc=0x{:X} word=0x{:04X}", pc, word)
         }
-        Some(core::StopReason::ReturnUnderflow { pc }) => {
-            log::info!("PRC exec_trace stop return_underflow pc=0x{:X}", pc);
-        }
-        Some(core::StopReason::EntryReturn { pc }) => {
-            log::info!("PRC exec_trace stop entry_return pc=0x{:X}", pc);
-        }
-        Some(core::StopReason::StepLimit { pc }) => {
-            log::info!("PRC exec_trace stop step_limit pc=0x{:X}", pc);
-        }
-        None => {
-            log::info!("PRC exec_trace stop none");
-        }
-    }
-    if matches!(stop_reason, Some(core::StopReason::StepLimit { .. })) {
-        log::info!(
-            "PRC exec_trace regs sr=0x{:04X} d0={:#X} d1={:#X} d2={:#X} d3={:#X} d4={:#X} a0={:#X} a1={:#X} a2={:#X} a3={:#X} a5={:#X} a6={:#X} a7={:#X}",
-            final_sr,
-            final_d[0],
-            final_d[1],
-            final_d[2],
-            final_d[3],
-            final_d[4],
-            final_a[0],
-            final_a[1],
-            final_a[2],
-            final_a[3],
-            final_a[5],
-            final_a[6],
-            final_a[7]
-        );
-        log::info!(
-            "PRC exec_trace mem a2 bytes={:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
-            final_mem_at_a2[0],
-            final_mem_at_a2[1],
-            final_mem_at_a2[2],
-            final_mem_at_a2[3],
-            final_mem_at_a2[4],
-            final_mem_at_a2[5],
-            final_mem_at_a2[6],
-            final_mem_at_a2[7]
-        );
-        for (step, pc, a2) in a2_changes.into_iter().take(24) {
-            let word = if (pc as usize) + 1 < code.len() {
-                u16::from_be_bytes([code[pc as usize], code[pc as usize + 1]])
-            } else {
-                0
-            };
-            log::info!(
-                "PRC exec_trace a2_change step={} pc=0x{:X} word=0x{:04X} a2=0x{:X}",
-                step,
-                pc,
-                word,
-                a2
-            );
-        }
-        for pc in (0x280usize..=0x29Cusize).step_by(2) {
-            if pc + 1 >= code.len() {
-                break;
-            }
-            let word = u16::from_be_bytes([code[pc], code[pc + 1]]);
-            log::info!("PRC exec_trace focus_code pc=0x{:X} word=0x{:04X}", pc, word);
-        }
-        if let Some(frame) = final_frame_at_a6 {
-            log::info!(
-                "PRC exec_trace frame a6=0x{:X} [0]=0x{:08X} [4]=0x{:08X} [8]=0x{:08X} [12]=0x{:08X}",
-                final_a[6], frame[0], frame[1], frame[2], frame[3]
-            );
-        }
-        let mut pc = 0x270usize;
-        let end = 0x2B8usize.min(code.len().saturating_sub(1));
-        while pc + 1 < end {
-            let word = u16::from_be_bytes([code[pc], code[pc + 1]]);
-            log::info!("PRC exec_trace loop_code pc=0x{:X} word=0x{:04X}", pc, word);
-            pc += 2;
-        }
-    }
-    let total_traps: usize = trap_stats.iter().map(|s| s.count).sum();
-    trap_stats.sort_by(|a, b| b.count.cmp(&a.count));
+        Some(core::StopReason::ReturnUnderflow { pc }) => format!("return_underflow pc=0x{:X}", pc),
+        Some(core::StopReason::EntryReturn { pc }) => format!("entry_return pc=0x{:X}", pc),
+        Some(core::StopReason::StepLimit { pc }) => format!("step_limit pc=0x{:X}", pc),
+        None => String::from("none"),
+    };
     log::info!(
-        "PRC trap_census unique={} total={} default_stubbed={}",
-        trap_stats.len(),
-        total_traps,
-        default_stubbed_traps.len()
+        "PRC exec end stop={} steps={}",
+        stop_text,
+        total_steps
     );
-    for stat in trap_stats.into_iter().take(24) {
-        let meta = table::lookup(stat.trap_word);
-        log::info!(
-            "PRC trap_census trap=0x{:04X} group={} name={} count={} first_pc=0x{:X} handled={}",
-            stat.trap_word,
-            meta.group.as_str(),
-            meta.name,
-            stat.count,
-            stat.first_pc,
-            stat.handled
-        );
-    }
+    snapshot
 }

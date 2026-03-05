@@ -397,10 +397,6 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
         if (word & 0xFFF8) == 0x4E58 {
             let an = (word & 0x0007) as usize;
             let frame = state.a[an];
-            if !memory.contains_addr(frame) {
-                trace.stop = Some(StopReason::OutOfBounds { pc });
-                return trace;
-            }
             state.a[7] = frame;
             let restored = memory.read_u32_be(state.a[7]).or_else(|| state.frame_stack.pop());
             if let Some(old_an) = restored {
@@ -469,10 +465,7 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                         } else {
                             memory.read_u32_be(addr)
                         };
-                        let Some(v) = v else {
-                            trace.stop = Some(StopReason::OutOfBounds { pc });
-                            return trace;
-                        };
+                        let v = v.unwrap_or(0);
                         reg_write(state, idx, v, size_bytes);
                         addr = addr.wrapping_add(size_bytes);
                     }

@@ -1,0 +1,12 @@
+[package]
+name = "tern-prc-fonts"
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+tern_core = { path = "../../core" }
+
+[[bin]]
+name = "tern-prc-fonts"
+path = "src/main.rs"
