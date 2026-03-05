@@ -26,6 +26,10 @@ fn is_epub(name: &str) -> bool {
     name.ends_with(".epub") || name.ends_with(".epb")
 }
 
+fn is_prc(name: &str) -> bool {
+    name.to_ascii_lowercase().ends_with(".prc")
+}
+
 use crate::{
     app::{
         book_reader::{draw_trbk_image, BookReaderContext, BookReaderState, PageTurnIndicator},
@@ -47,6 +51,7 @@ use crate::{
     framebuffer::{DisplayBuffers, Rotation},
     image_viewer::{AppSource, ImageEntry, ImageError},
     input,
+    prc_app,
     ui::{flush_queue, Rect, RenderQueue},
 };
 
@@ -66,6 +71,8 @@ pub struct Application<'a, S: AppSource> {
     current_entry: Option<String>,
     last_viewed_entry: Option<String>,
     error_message: Option<String>,
+    prc_lines: Vec<String>,
+    prc_scroll: usize,
     gray2_lsb: Vec<u8>,
     gray2_msb: Vec<u8>,
     exit_from: ExitFrom,
@@ -81,6 +88,7 @@ enum AppState {
     BookViewing,
     ExitingPending,
     Toc,
+    PrcViewing,
     SleepingPending,
     Sleeping,
     Error,
@@ -114,6 +122,8 @@ impl<'a, S: AppSource> Application<'a, S> {
             current_entry: None,
             last_viewed_entry: None,
             error_message: None,
+            prc_lines: Vec::new(),
+            prc_scroll: 0,
             gray2_lsb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
             gray2_msb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
             exit_from: ExitFrom::Image,
@@ -304,6 +314,25 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 }
             }
+            AppState::PrcViewing => {
+                if buttons.is_pressed(input::Buttons::Up) {
+                    self.prc_scroll = self.prc_scroll.saturating_sub(1);
+                    self.dirty = true;
+                } else if buttons.is_pressed(input::Buttons::Down) {
+                    if self.prc_scroll + 1 < self.prc_lines.len() {
+                        self.prc_scroll += 1;
+                    }
+                    self.dirty = true;
+                } else if buttons.is_pressed(input::Buttons::Back)
+                    || buttons.is_pressed(input::Buttons::Confirm)
+                {
+                    self.set_state_menu();
+                } else {
+                    if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                }
+            }
             AppState::SleepingPending => {}
             AppState::Sleeping => {}
             AppState::ExitingPending => {}
@@ -355,6 +384,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.set_state_start_menu(true);
             }
             AppState::Toc => self.draw_toc_view(display),
+            AppState::PrcViewing => self.draw_prc_viewer(display),
             AppState::SleepingPending => {
                 self.draw_sleeping_indicator(display);
                 let resume_debug = format!(
@@ -474,6 +504,10 @@ impl<'a, S: AppSource> Application<'a, S> {
             ));
             return;
         }
+        if is_prc(&entry.name) {
+            self.open_prc_entry(entry);
+            return;
+        }
         self.open_image_entry(entry);
     }
 
@@ -512,6 +546,254 @@ impl<'a, S: AppSource> Application<'a, S> {
             }
             Err(err) => self.set_error(err),
         }
+    }
+
+    fn open_prc_entry(&mut self, entry: ImageEntry) {
+        match self.source.load_prc_info(&self.home.path, &entry) {
+            Ok(info) => {
+                self.log_prc_info(&entry, &info);
+                self.prc_lines = prc_app::format_info_lines(&info);
+                self.prc_scroll = 0;
+                self.set_state_prc_viewing();
+            }
+            Err(err) => self.set_error(err),
+        }
+    }
+
+    fn log_prc_info(&mut self, entry: &ImageEntry, info: &prc_app::PrcInfo) {
+        log::info!(
+            "PRC name='{}' type='{}' creator='{}' kind={:?} entries={} ver={} attrs=0x{:04X} size={} code_bytes={} other_bytes={}",
+            info.db_name,
+            info.type_code,
+            info.creator_code,
+            info.kind,
+            info.entry_count,
+            info.version,
+            info.attributes,
+            info.file_size,
+            info.code_bytes,
+            info.other_bytes
+        );
+        if Self::prc_verbose_logs() {
+            let mut group_counts = [
+                ("mem", 0u32),
+                ("dm", 0u32),
+                ("sys", 0u32),
+                ("evt", 0u32),
+                ("fld", 0u32),
+                ("frm", 0u32),
+                ("lst", 0u32),
+                ("win", 0u32),
+                ("menu", 0u32),
+                ("tim", 0u32),
+                ("str", 0u32),
+                ("snd", 0u32),
+                ("fnt", 0u32),
+                ("lib", 0u32),
+                ("unknown", 0u32),
+            ];
+            log::info!(
+                "PRC traps a_total={} trap15_total={} unique_a_traps={}",
+                info.a_trap_total,
+                info.trap15_total,
+                info.unique_a_traps.len()
+            );
+            for trap in &info.unique_a_traps {
+                let meta = prc_app::traps::table::lookup(*trap);
+                for (group, count) in &mut group_counts {
+                    if *group == meta.group.as_str() {
+                        *count = count.saturating_add(1);
+                        break;
+                    }
+                }
+                log::info!(
+                    "PRC trap A 0x{:04X} group={} name={}",
+                    trap,
+                    meta.group.as_str(),
+                    meta.name
+                );
+            }
+            for (group, count) in group_counts {
+                if count > 0 {
+                    log::info!("PRC trap_group {} count={}", group, count);
+                }
+            }
+            for res in &info.resources {
+                log::info!(
+                    "PRC resource kind='{}' id={} offset={} size={}",
+                    res.kind,
+                    res.id,
+                    res.offset,
+                    res.size
+                );
+            }
+            for scan in &info.code_scan {
+                log::info!(
+                    "PRC code_scan id={} size={} a_traps={} trap15={} unique_a={}",
+                    scan.resource_id,
+                    scan.size,
+                    scan.a_trap_count,
+                    scan.trap15_count,
+                    scan.unique_a_traps.len()
+                );
+                for trap in &scan.unique_a_traps {
+                    let meta = prc_app::traps::table::lookup(*trap);
+                    log::info!(
+                        "PRC code_scan id={} trap=0x{:04X} group={} name={}",
+                        scan.resource_id,
+                        trap,
+                        meta.group.as_str(),
+                        meta.name
+                    );
+                }
+            }
+
+            let dry_run = prc_app::runtime::dry_run_default(info);
+            log::info!(
+                "PRC dry_run(strict) total_hits={} handled={} stubbed={}",
+                dry_run.total_hits,
+                dry_run.handled,
+                dry_run.stubbed
+            );
+            if let Some(stop) = dry_run.unimplemented {
+                if stop.trap15 {
+                    log::info!(
+                        "PRC dry_run stop trap15 resource_id={} code_offset={} file_offset={}",
+                        stop.resource_id,
+                        stop.code_offset,
+                        stop.file_offset
+                    );
+                } else {
+                    log::info!(
+                        "PRC dry_run stop trap=0x{:04X} group={} name={} resource_id={} code_offset={} file_offset={}",
+                        stop.trap_word,
+                        stop.group.as_str(),
+                        stop.name,
+                        stop.resource_id,
+                        stop.code_offset,
+                        stop.file_offset
+                    );
+                }
+            } else {
+                log::info!("PRC dry_run(strict) complete without unimplemented trap");
+            }
+            for probe in &dry_run.lib_dispatch_probes {
+                if let Some(selector) = probe.selector {
+                    log::info!(
+                        "PRC lib_probe resource_id={} code_offset={} file_offset={} selector=0x{:04X} next1={:?} next2={:?}",
+                        probe.resource_id,
+                        probe.code_offset,
+                        probe.file_offset,
+                        selector,
+                        probe.next_word_1,
+                        probe.next_word_2
+                    );
+                } else {
+                    log::info!(
+                        "PRC lib_probe resource_id={} code_offset={} file_offset={} selector=? next1={:?} next2={:?}",
+                        probe.resource_id,
+                        probe.code_offset,
+                        probe.file_offset,
+                        probe.next_word_1,
+                        probe.next_word_2
+                    );
+                }
+            }
+
+            let dry_run_no_lib = prc_app::runtime::dry_run_ignore_lib(info);
+            log::info!(
+                "PRC dry_run(ignore_lib) total_hits={} handled={} stubbed={}",
+                dry_run_no_lib.total_hits,
+                dry_run_no_lib.handled,
+                dry_run_no_lib.stubbed
+            );
+            if let Some(stop) = dry_run_no_lib.unimplemented {
+                if stop.trap15 {
+                    log::info!(
+                        "PRC dry_run(ignore_lib) stop trap15 resource_id={} code_offset={} file_offset={}",
+                        stop.resource_id,
+                        stop.code_offset,
+                        stop.file_offset
+                    );
+                } else {
+                    log::info!(
+                        "PRC dry_run(ignore_lib) stop trap=0x{:04X} group={} name={} resource_id={} code_offset={} file_offset={}",
+                        stop.trap_word,
+                        stop.group.as_str(),
+                        stop.name,
+                        stop.resource_id,
+                        stop.code_offset,
+                        stop.file_offset
+                    );
+                }
+            } else {
+                log::info!("PRC dry_run(ignore_lib) complete without unimplemented trap");
+            }
+            for probe in &dry_run_no_lib.lib_dispatch_probes {
+                if let Some(selector) = probe.selector {
+                    log::info!(
+                        "PRC lib_probe(ignore_lib) resource_id={} code_offset={} file_offset={} selector=0x{:04X} next1={:?} next2={:?}",
+                        probe.resource_id,
+                        probe.code_offset,
+                        probe.file_offset,
+                        selector,
+                        probe.next_word_1,
+                        probe.next_word_2
+                    );
+                } else {
+                    log::info!(
+                        "PRC lib_probe(ignore_lib) resource_id={} code_offset={} file_offset={} selector=? next1={:?} next2={:?}",
+                        probe.resource_id,
+                        probe.code_offset,
+                        probe.file_offset,
+                        probe.next_word_1,
+                        probe.next_word_2
+                    );
+                }
+            }
+
+            let dry_run_bootstrap = prc_app::runtime::dry_run_ignore_bootstrap_lib(info);
+            log::info!(
+                "PRC dry_run(ignore_bootstrap_lib) total_hits={} handled={} stubbed={}",
+                dry_run_bootstrap.total_hits,
+                dry_run_bootstrap.handled,
+                dry_run_bootstrap.stubbed
+            );
+            if let Some(stop) = dry_run_bootstrap.unimplemented {
+                if stop.trap15 {
+                    log::info!(
+                        "PRC dry_run(ignore_bootstrap_lib) stop trap15 resource_id={} code_offset={} file_offset={}",
+                        stop.resource_id,
+                        stop.code_offset,
+                        stop.file_offset
+                    );
+                } else {
+                    log::info!(
+                        "PRC dry_run(ignore_bootstrap_lib) stop trap=0x{:04X} group={} name={} resource_id={} code_offset={} file_offset={}",
+                        stop.trap_word,
+                        stop.group.as_str(),
+                        stop.name,
+                        stop.resource_id,
+                        stop.code_offset,
+                        stop.file_offset
+                    );
+                }
+            } else {
+                log::info!("PRC dry_run(ignore_bootstrap_lib) complete without unimplemented trap");
+            }
+        }
+
+        prc_app::runner::log_prc_runtime_first_trap(
+            self.source,
+            &self.home.path,
+            entry,
+            info,
+            Self::prc_verbose_logs(),
+        );
+    }
+
+    fn prc_verbose_logs() -> bool {
+        false
     }
 
     fn exit_image(&mut self) {
@@ -585,6 +867,12 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn set_state_toc(&mut self) {
         self.state = AppState::Toc;
+        self.dirty = true;
+    }
+
+    fn set_state_prc_viewing(&mut self) {
+        self.state = AppState::PrcViewing;
+        self.system.full_refresh = true;
         self.dirty = true;
     }
 
@@ -665,6 +953,43 @@ impl<'a, S: AppSource> Application<'a, S> {
         .draw(self.display_buffers)
         .ok();
         let size = self.display_buffers.size();
+        let mut rq = RenderQueue::default();
+        rq.push(
+            Rect::new(0, 0, size.width as i32, size.height as i32),
+            RefreshMode::Full,
+        );
+        flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Full);
+    }
+
+    fn draw_prc_viewer(&mut self, display: &mut impl crate::display::Display) {
+        const LIST_TOP: i32 = 64;
+        const LINE_HEIGHT: i32 = 22;
+        self.display_buffers.clear(BinaryColor::On).ok();
+        let style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
+        Text::new("Palm App (.prc)", Point::new(LIST_MARGIN_X, HEADER_Y), style)
+            .draw(self.display_buffers)
+            .ok();
+
+        let size = self.display_buffers.size();
+        let rows = ((size.height as i32 - LIST_TOP - 24) / LINE_HEIGHT).max(1) as usize;
+        for row in 0..rows {
+            let idx = self.prc_scroll + row;
+            let Some(line) = self.prc_lines.get(idx) else {
+                break;
+            };
+            let y = LIST_TOP + (row as i32 * LINE_HEIGHT);
+            Text::new(line, Point::new(LIST_MARGIN_X, y), style)
+                .draw(self.display_buffers)
+                .ok();
+        }
+        Text::new(
+            "Up/Down: scroll  Back: return",
+            Point::new(LIST_MARGIN_X, size.height as i32 - 4),
+            style,
+        )
+        .draw(self.display_buffers)
+        .ok();
+
         let mut rq = RenderQueue::default();
         rq.push(
             Rect::new(0, 0, size.width as i32, size.height as i32),

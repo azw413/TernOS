@@ -8,6 +8,7 @@ pub mod fs;
 pub mod framebuffer;
 pub mod image_viewer;
 pub mod input;
+pub mod prc_app;
 pub mod ui;
 pub mod trbk;
 pub mod test_image;

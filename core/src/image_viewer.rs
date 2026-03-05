@@ -51,6 +51,28 @@ pub enum ImageError {
 pub trait ImageSource {
     fn refresh(&mut self, path: &[String]) -> Result<Vec<ImageEntry>, ImageError>;
     fn load(&mut self, path: &[String], entry: &ImageEntry) -> Result<ImageData, ImageError>;
+    fn load_prc_info(
+        &mut self,
+        _path: &[String],
+        _entry: &ImageEntry,
+    ) -> Result<crate::prc_app::PrcInfo, ImageError> {
+        Err(ImageError::Unsupported)
+    }
+    fn load_prc_code_resource(
+        &mut self,
+        _path: &[String],
+        _entry: &ImageEntry,
+        _resource_id: u16,
+    ) -> Result<Vec<u8>, ImageError> {
+        Err(ImageError::Unsupported)
+    }
+    fn load_prc_bytes(
+        &mut self,
+        _path: &[String],
+        _entry: &ImageEntry,
+    ) -> Result<Vec<u8>, ImageError> {
+        Err(ImageError::Unsupported)
+    }
 }
 
 pub trait BookSource {

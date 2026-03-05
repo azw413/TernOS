@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 
 use embedded_io::{Read, Seek, SeekFrom, Write};
 use tern_core::fs::{DirEntry, Directory, File, Filesystem, Mode};
+use tern_core::prc_app::{PrcCodeScan, PrcDbKind, PrcInfo, PrcResourceEntry, PrcSectionStat};
 use crate::sdspi_fs::UsbFsOps;
 use tern_core::image_viewer::{
     BookSource, EntryKind, Gray2StreamSource, ImageData, ImageEntry, ImageError, ImageSource,
@@ -136,6 +137,7 @@ where
             || name.ends_with(".tbk")
             || name.ends_with(".epub")
             || name.ends_with(".epb")
+            || name.ends_with(".prc")
     }
 
     fn resume_filename() -> &'static str {
@@ -551,6 +553,69 @@ fn read_u16_le(data: &[u8], offset: usize) -> Result<u16, ImageError> {
     Ok(u16::from_le_bytes([data[offset], data[offset + 1]]))
 }
 
+fn read_u16_be(data: &[u8], offset: usize) -> Result<u16, ImageError> {
+    if offset + 2 > data.len() {
+        return Err(ImageError::Decode);
+    }
+    Ok(u16::from_be_bytes([data[offset], data[offset + 1]]))
+}
+
+fn read_u32_be(data: &[u8], offset: usize) -> Result<u32, ImageError> {
+    if offset + 4 > data.len() {
+        return Err(ImageError::Decode);
+    }
+    Ok(u32::from_be_bytes([
+        data[offset],
+        data[offset + 1],
+        data[offset + 2],
+        data[offset + 3],
+    ]))
+}
+
+fn parse_c_string_ascii(bytes: &[u8]) -> String {
+    let end = bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len());
+    let mut out = String::new();
+    for b in &bytes[..end] {
+        if (0x20..=0x7e).contains(b) {
+            out.push(*b as char);
+        }
+    }
+    out
+}
+
+fn parse_fourcc_ascii(bytes: &[u8]) -> String {
+    let mut out = String::new();
+    for b in bytes {
+        if (0x20..=0x7e).contains(b) {
+            out.push(*b as char);
+        } else {
+            out.push('.');
+        }
+    }
+    out
+}
+
+fn add_prc_section(sections: &mut Vec<PrcSectionStat>, name: &str, size: u32) {
+    for section in sections.iter_mut() {
+        if section.name == name {
+            section.count = section.count.saturating_add(1);
+            section.bytes = section.bytes.saturating_add(size);
+            return;
+        }
+    }
+    sections.push(PrcSectionStat {
+        name: name.to_string(),
+        count: 1,
+        bytes: size,
+    });
+}
+
+fn add_unique_u16(values: &mut Vec<u16>, value: u16) {
+    if !values.iter().any(|v| *v == value) {
+        values.push(value);
+    }
+}
+
 fn read_i16_le(data: &[u8], offset: usize) -> Result<i16, ImageError> {
     if offset + 2 > data.len() {
         return Err(ImageError::Decode);
@@ -804,6 +869,209 @@ where
             }
             _ => Err(ImageError::Unsupported),
         }
+    }
+
+    fn load_prc_info(&mut self, path: &[String], entry: &ImageEntry) -> Result<PrcInfo, ImageError> {
+        if entry.kind != EntryKind::File {
+            return Err(ImageError::Message("Select a file, not a folder.".into()));
+        }
+        if !entry.name.to_ascii_lowercase().ends_with(".prc") {
+            return Err(ImageError::Unsupported);
+        }
+
+        let file_path = Self::build_path(path, &entry.name);
+        let mut file = self
+            .fs
+            .open_file(&file_path, Mode::Read)
+            .map_err(|_| ImageError::Io)?;
+        let file_size = file.size() as u32;
+        if file_size < 78 {
+            return Err(ImageError::Decode);
+        }
+
+        let mut header = [0u8; 78];
+        read_exact(&mut file, &mut header)?;
+        let db_name = parse_c_string_ascii(&header[0..32]);
+        let attrs = read_u16_be(&header, 32)?;
+        let version = read_u16_be(&header, 34)?;
+        let type_code = parse_fourcc_ascii(&header[60..64]);
+        let creator_code = parse_fourcc_ascii(&header[64..68]);
+        let entry_count = read_u16_be(&header, 76)?;
+        let is_resource = (attrs & 0x0001) != 0;
+        let entry_size = if is_resource { 10usize } else { 8usize };
+        let table_len = entry_size.saturating_mul(entry_count as usize);
+        if (78 + table_len) as u32 > file_size {
+            return Err(ImageError::Decode);
+        }
+
+        let mut table = Vec::new();
+        if table.try_reserve(table_len).is_err() {
+            return Err(ImageError::Message("Not enough memory for PRC header.".into()));
+        }
+        table.resize(table_len, 0);
+        read_exact(&mut file, &mut table)?;
+
+        let mut sections: Vec<PrcSectionStat> = Vec::new();
+        let mut resources: Vec<PrcResourceEntry> = Vec::new();
+        let mut code_scan: Vec<PrcCodeScan> = Vec::new();
+        let mut code_bytes = 0u32;
+        let mut other_bytes = 0u32;
+        let mut a_trap_total = 0u32;
+        let mut trap15_total = 0u32;
+        let mut unique_a_traps: Vec<u16> = Vec::new();
+
+        let mut scan_code_resource = |data_off: u32, size: u32, res_id: u16| -> Result<PrcCodeScan, ImageError> {
+            let _ = file
+                .seek(SeekFrom::Start(data_off as u64))
+                .map_err(|_| ImageError::Io)?;
+            let mut remaining = size as usize;
+            let mut buf = [0u8; 256];
+            let mut carry: Option<u8> = None;
+            let mut a_count = 0u32;
+            let mut t15_count = 0u32;
+            let mut traps = Vec::new();
+            while remaining > 0 {
+                let want = remaining.min(buf.len());
+                let read = file.read(&mut buf[..want]).map_err(|_| ImageError::Io)?;
+                if read == 0 {
+                    break;
+                }
+                let chunk = &buf[..read];
+                let mut idx = 0usize;
+                if let Some(prev) = carry.take() {
+                    let word = u16::from_be_bytes([prev, chunk[0]]);
+                    if (word & 0xF000) == 0xA000 {
+                        a_count = a_count.saturating_add(1);
+                        add_unique_u16(&mut traps, word);
+                    } else if (word & 0xFFF0) == 0x4E40 && (word & 0x000F) == 0x000F {
+                        t15_count = t15_count.saturating_add(1);
+                    }
+                    idx = 1;
+                }
+                while idx + 1 < chunk.len() {
+                    let word = u16::from_be_bytes([chunk[idx], chunk[idx + 1]]);
+                    if (word & 0xF000) == 0xA000 {
+                        a_count = a_count.saturating_add(1);
+                        add_unique_u16(&mut traps, word);
+                    } else if (word & 0xFFF0) == 0x4E40 && (word & 0x000F) == 0x000F {
+                        t15_count = t15_count.saturating_add(1);
+                    }
+                    idx += 2;
+                }
+                carry = if idx < chunk.len() {
+                    Some(chunk[idx])
+                } else {
+                    None
+                };
+                remaining -= read;
+            }
+            Ok(PrcCodeScan {
+                resource_id: res_id,
+                size,
+                a_trap_count: a_count,
+                trap15_count: t15_count,
+                unique_a_traps: traps,
+            })
+        };
+
+        if is_resource {
+            let mut offsets = Vec::new();
+            let mut kinds = Vec::new();
+            let mut ids = Vec::new();
+            if offsets.try_reserve(entry_count as usize).is_err()
+                || kinds.try_reserve(entry_count as usize).is_err()
+                || ids.try_reserve(entry_count as usize).is_err()
+            {
+                return Err(ImageError::Message("Not enough memory for PRC index.".into()));
+            }
+            for i in 0..entry_count as usize {
+                let off = i * 10;
+                let kind = parse_fourcc_ascii(&table[off..off + 4]);
+                let id = read_u16_be(&table, off + 4)?;
+                let data_off = read_u32_be(&table, off + 6)?.min(file_size);
+                kinds.push(kind);
+                ids.push(id);
+                offsets.push(data_off);
+            }
+            for i in 0..offsets.len() {
+                let cur = offsets[i];
+                let next = if i + 1 < offsets.len() {
+                    offsets[i + 1]
+                } else {
+                    file_size
+                };
+                let size = if next > cur { next - cur } else { 0 };
+                resources.push(PrcResourceEntry {
+                    kind: kinds[i].clone(),
+                    id: ids[i],
+                    offset: cur,
+                    size,
+                });
+                add_prc_section(&mut sections, &kinds[i], size);
+                if kinds[i].eq_ignore_ascii_case("code") {
+                    code_bytes = code_bytes.saturating_add(size);
+                    let scan = scan_code_resource(cur, size, ids[i])?;
+                    a_trap_total = a_trap_total.saturating_add(scan.a_trap_count);
+                    trap15_total = trap15_total.saturating_add(scan.trap15_count);
+                    for trap in &scan.unique_a_traps {
+                        add_unique_u16(&mut unique_a_traps, *trap);
+                    }
+                    code_scan.push(scan);
+                } else {
+                    other_bytes = other_bytes.saturating_add(size);
+                }
+            }
+        } else {
+            let mut offsets = Vec::new();
+            if offsets.try_reserve(entry_count as usize).is_err() {
+                return Err(ImageError::Message("Not enough memory for PRC index.".into()));
+            }
+            for i in 0..entry_count as usize {
+                let off = i * 8;
+                offsets.push(read_u32_be(&table, off)?.min(file_size));
+            }
+            for i in 0..offsets.len() {
+                let cur = offsets[i];
+                let next = if i + 1 < offsets.len() {
+                    offsets[i + 1]
+                } else {
+                    file_size
+                };
+                let size = if next > cur { next - cur } else { 0 };
+                resources.push(PrcResourceEntry {
+                    kind: "record".into(),
+                    id: i as u16,
+                    offset: cur,
+                    size,
+                });
+                add_prc_section(&mut sections, "record", size);
+                other_bytes = other_bytes.saturating_add(size);
+            }
+        }
+
+        Ok(PrcInfo {
+            db_name,
+            kind: if is_resource {
+                PrcDbKind::Resource
+            } else {
+                PrcDbKind::Record
+            },
+            file_size,
+            type_code,
+            creator_code,
+            attributes: attrs,
+            version,
+            entry_count,
+            code_bytes,
+            other_bytes,
+            sections,
+            resources,
+            code_scan,
+            a_trap_total,
+            trap15_total,
+            unique_a_traps,
+            trap_hits: Vec::new(),
+        })
     }
 
 }

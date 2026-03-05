@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use log::error;
 use tern_core::image_viewer::{
@@ -32,6 +33,7 @@ impl DesktopImageSource {
             || name.ends_with(".trimg")
             || name.ends_with(".tri")
             || name.ends_with(".trbk")
+            || name.ends_with(".prc")
     }
 
     fn resume_path(&self) -> PathBuf {
@@ -170,6 +172,57 @@ impl ImageSource for DesktopImageSource {
             height: luma.height(),
             pixels: luma.into_raw(),
         })
+    }
+
+    fn load_prc_info(
+        &mut self,
+        path: &[String],
+        entry: &ImageEntry,
+    ) -> Result<tern_core::prc_app::PrcInfo, ImageError> {
+        if entry.kind != EntryKind::File || !entry.name.to_ascii_lowercase().ends_with(".prc") {
+            return Err(ImageError::Unsupported);
+        }
+        let base = path.iter().fold(self.root.clone(), |acc, part| acc.join(part));
+        let full_path = base.join(&entry.name);
+        let data = fs::read(full_path).map_err(|_| ImageError::Io)?;
+        tern_core::prc_app::parse_prc(&data).ok_or(ImageError::Decode)
+    }
+
+    fn load_prc_code_resource(
+        &mut self,
+        path: &[String],
+        entry: &ImageEntry,
+        resource_id: u16,
+    ) -> Result<Vec<u8>, ImageError> {
+        if entry.kind != EntryKind::File || !entry.name.to_ascii_lowercase().ends_with(".prc") {
+            return Err(ImageError::Unsupported);
+        }
+        let base = path.iter().fold(self.root.clone(), |acc, part| acc.join(part));
+        let full_path = base.join(&entry.name);
+        let data = fs::read(full_path).map_err(|_| ImageError::Io)?;
+        let info = tern_core::prc_app::parse_prc(&data).ok_or(ImageError::Decode)?;
+        let res = info
+            .resources
+            .iter()
+            .find(|res| res.kind == "code" && res.id == resource_id)
+            .ok_or(ImageError::Unsupported)?;
+        let start = res.offset as usize;
+        let end = start.saturating_add(res.size as usize);
+        let slice = data.get(start..end).ok_or(ImageError::Decode)?;
+        Ok(slice.to_vec())
+    }
+
+    fn load_prc_bytes(
+        &mut self,
+        path: &[String],
+        entry: &ImageEntry,
+    ) -> Result<Vec<u8>, ImageError> {
+        if entry.kind != EntryKind::File || !entry.name.to_ascii_lowercase().ends_with(".prc") {
+            return Err(ImageError::Unsupported);
+        }
+        let base = path.iter().fold(self.root.clone(), |acc, part| acc.join(part));
+        let full_path = base.join(&entry.name);
+        fs::read(full_path).map_err(|_| ImageError::Io)
     }
 }
 
@@ -320,9 +373,9 @@ impl BookSource for DesktopImageSource {
         &mut self,
         path: &[String],
         entry: &ImageEntry,
-    ) -> Result<tern_core::trbk::TrbkBookInfo, ImageError> {
+    ) -> Result<Rc<tern_core::trbk::TrbkBookInfo>, ImageError> {
         let (book, data) = self.load_trbk_data(path, entry)?;
-        let info = book.info();
+        let info = Rc::new(book.info());
         self.trbk_pages = Some(book.pages);
         self.trbk_images = Some(info.images.clone());
         self.trbk_data = Some(data);
