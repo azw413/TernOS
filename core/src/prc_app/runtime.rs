@@ -5,6 +5,7 @@ use crate::prc_app::traps::{TrapGroup, table};
 
 pub const SYS_APP_LAUNCH_CMD_NORMAL_LAUNCH: u16 = 0;
 pub const EVT_NIL: u16 = 0;
+pub const EVT_CTL_SELECT: u16 = 9;
 pub const EVT_FRM_LOAD: u16 = 23;
 pub const EVT_FRM_OPEN: u16 = 24;
 
@@ -19,6 +20,7 @@ pub struct PrcRuntimeContext {
     pub sys_app_info_ptr: u32,
     pub shutting_down: bool,
     pub event_queue: alloc::vec::Vec<RuntimeEvent>,
+    pub pending_dispatch_event: Option<RuntimeEvent>,
     pub mem_blocks: alloc::vec::Vec<MemBlock>,
     pub resources: alloc::vec::Vec<ResourceBlob>,
     pub prc_image: alloc::vec::Vec<u8>,
@@ -49,7 +51,7 @@ pub struct PrcRuntimeContext {
     pub prev_globals_ptr: u32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RuntimeEvent {
     pub e_type: u16,
     pub data_u16: u16,
@@ -118,6 +120,7 @@ impl Default for PrcRuntimeContext {
             sys_app_info_ptr: 0,
             shutting_down: false,
             event_queue: alloc::vec::Vec::new(),
+            pending_dispatch_event: None,
             mem_blocks: alloc::vec::Vec::new(),
             resources: alloc::vec::Vec::new(),
             prc_image: alloc::vec::Vec::new(),

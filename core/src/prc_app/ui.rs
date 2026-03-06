@@ -23,11 +23,11 @@ fn find_font(fonts: &[PalmFont], font_id: u8) -> Option<&PalmFont> {
     fonts.iter().find(|f| f.font_id == font_id as u16)
 }
 
-fn fallback_text_style(font_id: u8) -> MonoTextStyle<'static, BinaryColor> {
+fn fallback_text_style(font_id: u8, color: BinaryColor) -> MonoTextStyle<'static, BinaryColor> {
     if font_id == 2 {
-        MonoTextStyle::new(&FONT_9X15, BinaryColor::Off)
+        MonoTextStyle::new(&FONT_9X15, color)
     } else {
-        MonoTextStyle::new(&FONT_6X10, BinaryColor::Off)
+        MonoTextStyle::new(&FONT_6X10, color)
     }
 }
 
@@ -38,6 +38,7 @@ fn draw_bitmap_text<T: DrawTarget<Color = BinaryColor>>(
     y: i32,
     font: &PalmFont,
     scale: i32,
+    color: BinaryColor,
 ) {
     let mut pen_x = x;
     let s = scale.max(1);
@@ -45,7 +46,7 @@ fn draw_bitmap_text<T: DrawTarget<Color = BinaryColor>>(
         let w = if ch >= font.first_char && ch <= font.last_char {
             let idx = (ch - font.first_char) as usize;
             if let Some(Some(glyph)) = font.glyphs.get(idx) {
-                draw_bitmap_glyph(target, pen_x, y, glyph, s);
+                draw_bitmap_glyph(target, pen_x, y, glyph, s, color);
                 glyph.width.max(1) as i32
             } else {
                 font.widths.get(idx).copied().unwrap_or(font.avg_width).max(1) as i32
@@ -63,6 +64,7 @@ fn draw_bitmap_glyph<T: DrawTarget<Color = BinaryColor>>(
     y: i32,
     glyph: &PalmGlyphBitmap,
     scale: i32,
+    color: BinaryColor,
 ) {
     for (ry, row_bits) in glyph.rows.iter().enumerate() {
         for rx in 0..(glyph.width as i32) {
@@ -74,7 +76,7 @@ fn draw_bitmap_glyph<T: DrawTarget<Color = BinaryColor>>(
                     for sx in 0..scale {
                         let _ = Pixel(
                             Point::new(x + rx * scale + sx, y + ry as i32 * scale + sy),
-                            BinaryColor::Off,
+                            color,
                         )
                         .draw(target);
                     }
@@ -113,11 +115,12 @@ fn draw_text<T: DrawTarget<Color = BinaryColor>>(
     font_id: u8,
     fonts: &[PalmFont],
     scale: i32,
+    color: BinaryColor,
 ) {
     if let Some(font) = find_font(fonts, font_id) {
-        draw_bitmap_text(target, text, x, y, font, scale);
+        draw_bitmap_text(target, text, x, y, font, scale, color);
     } else {
-        let style = fallback_text_style(font_id);
+        let style = fallback_text_style(font_id, color);
         let _ = Text::new(text, Point::new(x, y + 10), style).draw(target);
     }
 }
@@ -287,6 +290,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     fonts: &[PalmFont],
     bitmaps: &[PrcBitmap],
     runtime_bitmap_draws: &[RuntimeBitmapDraw],
+    focused_control_id: Option<u16>,
     pane_x: i32,
     pane_y: i32,
     pane_w: i32,
@@ -316,9 +320,19 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     for obj in form.objects.iter().take(48) {
         match obj {
             FormPreviewObject::Label { x, y, font, text } => {
-                draw_text(&mut canvas, text, map_x(*x), map_y(*y), *font, fonts, 1);
+                draw_text(
+                    &mut canvas,
+                    text,
+                    map_x(*x),
+                    map_y(*y),
+                    *font,
+                    fonts,
+                    1,
+                    BinaryColor::Off,
+                );
             }
             FormPreviewObject::Button {
+                id,
                 x,
                 y,
                 w,
@@ -334,10 +348,32 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
                     continue;
                 }
                 draw_button_outline(&mut canvas, bx, by, bw, bh, outline);
+                let focused = focused_control_id == Some(*id);
+                if focused && bw > 4 && bh > 4 {
+                    let _ = Rectangle::new(
+                        Point::new(bx + 1, by + 1),
+                        Size::new((bw - 2) as u32, (bh - 2) as u32),
+                    )
+                    .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+                    .draw(&mut canvas);
+                }
                 let (tw, th) = text_metrics(text, *font, fonts, 1);
                 let tx = bx + ((bw - tw) / 2).max(1);
                 let ty = by + ((bh - th) / 2).max(1);
-                draw_text(&mut canvas, text, tx, ty, *font, fonts, 1);
+                draw_text(
+                    &mut canvas,
+                    text,
+                    tx,
+                    ty,
+                    *font,
+                    fonts,
+                    1,
+                    if focused {
+                        BinaryColor::On
+                    } else {
+                        BinaryColor::Off
+                    },
+                );
             }
             FormPreviewObject::Bitmap { x, y, resource_id } => {
                 if let Some(bmp) = find_bitmap(bitmaps, *resource_id) {

@@ -88,7 +88,7 @@ impl PrcRuntimeSession {
         runtime_ctx.cmd_pbp = 0;
         runtime_ctx.ticks = tick_seed;
         runtime_ctx.trace_traps = true;
-        runtime_ctx.trace_trap_budget = 128;
+        runtime_ctx.trace_trap_budget = 100_000;
         runtime_ctx.block_on_evt_get_event = true;
         runtime_ctx.resources = prc_resources;
         runtime_ctx.resources.extend(system_resources);
@@ -318,6 +318,48 @@ impl PrcRuntimeSession {
             e_type: runtime::EVT_NIL,
             data_u16: 0,
         });
+    }
+
+    pub fn queue_control_select(&mut self, control_id: u16) {
+        let evt = runtime::RuntimeEvent {
+            e_type: runtime::EVT_CTL_SELECT,
+            data_u16: control_id,
+        };
+        self.runtime.event_queue.insert(0, evt);
+        self.runtime.pending_dispatch_event = Some(evt);
+        log::info!(
+            "PRC runtime input queued ctlSelect control_id={} qlen={}",
+            control_id,
+            self.runtime.event_queue.len()
+        );
+    }
+
+    pub fn inject_control_select_now(&mut self, control_id: u16) {
+        let event_p = self.runtime.evt_event_p;
+        if event_p != 0 && self.memory.contains_addr(event_p) {
+            let _ = self.memory.write_u16_be(event_p, runtime::EVT_CTL_SELECT);
+            let _ = self.memory.write_u16_be(event_p.saturating_add(2), 0);
+            let _ = self.memory.write_u16_be(event_p.saturating_add(4), 0);
+            let _ = self.memory.write_u16_be(event_p.saturating_add(6), 0);
+            let _ = self.memory.write_u16_be(event_p.saturating_add(8), control_id);
+            let _ = self
+                .memory
+                .write_u32_be(event_p.saturating_add(10), 0x3001_0000u32);
+            let _ = self.memory.write_u8(event_p.saturating_add(14), 1);
+            let _ = self.memory.write_u8(event_p.saturating_add(15), 0);
+            let _ = self.memory.write_u16_be(event_p.saturating_add(16), 0);
+            log::info!(
+                "PRC runtime input injected ctlSelect eventP=0x{:08X} control_id={}",
+                event_p,
+                control_id
+            );
+        } else {
+            log::info!(
+                "PRC runtime input inject skipped (no event buffer) control_id={}",
+                control_id
+            );
+        }
+        self.queue_control_select(control_id);
     }
 
     fn snapshot(&self) -> RuntimeUiSnapshot {

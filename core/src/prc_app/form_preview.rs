@@ -14,6 +14,7 @@ pub enum FormPreviewObject {
         text: String,
     },
     Button {
+        id: u16,
         x: i16,
         y: i16,
         w: i16,
@@ -85,6 +86,7 @@ fn parse_text_button(data: &[u8], text_off: usize, font_off: usize) -> Option<Fo
     if data.len() <= text_off {
         return None;
     }
+    let id = read_u16_be(data, 0)?;
     let x = read_i16_be(data, 2)?;
     let y = read_i16_be(data, 4)?;
     let w = read_i16_be(data, 6)?;
@@ -92,6 +94,7 @@ fn parse_text_button(data: &[u8], text_off: usize, font_off: usize) -> Option<Fo
     let font = *data.get(font_off).unwrap_or(&0);
     let text = read_c_string(data, text_off);
     Some(FormPreviewObject::Button {
+        id,
         x,
         y,
         w,
@@ -205,6 +208,7 @@ fn parse_packed_control(form_data: &[u8], off: usize) -> Option<FormPreviewObjec
     if off + 17 > form_data.len() {
         return None;
     }
+    let id = read_u16_be(form_data, off)?;
     let x = read_i16_be(form_data, off + 2)?;
     let y = read_i16_be(form_data, off + 4)?;
     let w = read_i16_be(form_data, off + 6)?;
@@ -236,6 +240,7 @@ fn parse_packed_control(form_data: &[u8], off: usize) -> Option<FormPreviewObjec
     };
 
     Some(FormPreviewObject::Button {
+        id,
         x,
         y,
         w,

@@ -4,7 +4,10 @@ use alloc::{vec, vec::Vec};
 
 use crate::prc_app::{
     cpu::{core::CpuState68k, memory::MemoryMap},
-    runtime::{FeatureEntry, MemBlock, PrcRuntimeContext, RuntimeEvent, EVT_FRM_LOAD, EVT_FRM_OPEN, EVT_NIL},
+    runtime::{
+        EVT_CTL_SELECT, EVT_FRM_LOAD, EVT_FRM_OPEN, EVT_NIL, FeatureEntry, MemBlock,
+        PrcRuntimeContext, RuntimeEvent,
+    },
 };
 
 pub fn is_prc_runtime_trap_handled(trap_word: u16) -> bool {
@@ -366,9 +369,19 @@ pub fn apply_prc_runtime_trap_stub(
         let _ = memory.write_u16_be(event_p.saturating_add(4), 0);
         let _ = memory.write_u16_be(event_p.saturating_add(6), 0);
         let _ = memory.write_u16_be(event_p.saturating_add(8), data_u16);
-        // Keep a minimal generic payload consistent with eType to help glue code
-        // that aliases the union through generic fields.
-        let _ = memory.write_u16_be(event_p.saturating_add(10), e_type);
+        if e_type == EVT_CTL_SELECT {
+            // ctlSelectEvent payload starts at +8 in EventType union:
+            // controlID (u16), pControl (u32), on (u8), reserved (u8), value (u16).
+            // Keep pControl synthetic but stable; many apps only read controlID/on.
+            let _ = memory.write_u32_be(event_p.saturating_add(10), 0x3001_0000u32);
+            let _ = memory.write_u8(event_p.saturating_add(14), 1);
+            let _ = memory.write_u8(event_p.saturating_add(15), 0);
+            let _ = memory.write_u16_be(event_p.saturating_add(16), 0);
+        } else {
+            // Keep a minimal generic payload consistent with eType to help glue code
+            // that aliases the union through generic fields.
+            let _ = memory.write_u16_be(event_p.saturating_add(10), e_type);
+        }
     }
 
     fn decode_ptr_arg_from_stack(
@@ -409,6 +422,7 @@ pub fn apply_prc_runtime_trap_stub(
             runtime.active_form_handle = 0x3000_0000;
             runtime.active_form_handler = 0;
             runtime.event_queue.clear();
+            runtime.pending_dispatch_event = None;
             runtime.evt_polls = 0;
             runtime.blink_next_tick = 175;
             runtime.blink_phase = 0;
@@ -568,7 +582,43 @@ pub fn apply_prc_runtime_trap_stub(
             if !memory.contains_addr(event_p) {
                 event_p = runtime.evt_event_p;
             }
-            let evt_type = memory.read_u16_be(event_p).unwrap_or(0xFFFF);
+            let mut evt_type = memory.read_u16_be(event_p).unwrap_or(0xFFFF);
+            // If a control-select is pending but the current event buffer still
+            // carries nil, upgrade it in-place before dispatch so form handlers
+            // observe button activation deterministically.
+            if evt_type == EVT_NIL {
+                if let Some(evt) = runtime.pending_dispatch_event.take() {
+                    write_event(memory, event_p, evt.e_type, evt.data_u16);
+                    evt_type = evt.e_type;
+                    log::info!(
+                        "PRC trap detail FrmDispatchEvent promoted pending eType={} data=0x{:04X} eventP=0x{:08X}",
+                        evt.e_type,
+                        evt.data_u16,
+                        event_p
+                    );
+                    if let Some(i) = runtime
+                        .event_queue
+                        .iter()
+                        .position(|e| e.e_type == evt.e_type && e.data_u16 == evt.data_u16)
+                    {
+                        let _ = runtime.event_queue.remove(i);
+                    }
+                } else if let Some(i) = runtime
+                    .event_queue
+                    .iter()
+                    .position(|e| e.e_type == EVT_CTL_SELECT)
+                {
+                    let evt = runtime.event_queue.remove(i);
+                    write_event(memory, event_p, evt.e_type, evt.data_u16);
+                    evt_type = evt.e_type;
+                    log::info!(
+                        "PRC trap detail FrmDispatchEvent promoted queued eType={} data=0x{:04X} eventP=0x{:08X}",
+                        evt.e_type,
+                        evt.data_u16,
+                        event_p
+                    );
+                }
+            }
             if runtime.active_form_handler != 0 {
                 let ret_pc = cpu.pc;
                 cpu.a[7] = cpu.a[7].wrapping_sub(4);
@@ -576,9 +626,10 @@ pub fn apply_prc_runtime_trap_stub(
                 cpu.pc = runtime.active_form_handler;
                 if runtime.trace_traps && runtime.trace_trap_budget > 0 {
                     log::info!(
-                        "PRC trap detail FrmDispatchEvent call handler=0x{:08X} eventP=0x{:08X}",
+                        "PRC trap detail FrmDispatchEvent call handler=0x{:08X} eventP=0x{:08X} eType={}",
                         runtime.active_form_handler,
-                        event_p
+                        event_p,
+                        evt_type
                     );
                 }
                 return;
@@ -628,7 +679,18 @@ pub fn apply_prc_runtime_trap_stub(
             .unwrap_or(1);
             if let Some(evt) = runtime.event_queue.first().copied() {
                 let _ = runtime.event_queue.remove(0);
+                if runtime.pending_dispatch_event == Some(evt) {
+                    runtime.pending_dispatch_event = None;
+                }
                 write_event(memory, event_p, evt.e_type, evt.data_u16);
+                if evt.e_type != EVT_NIL {
+                    log::info!(
+                        "PRC trap detail EvtGetEvent queued eType={} data=0x{:04X} eventP=0x{:08X}",
+                        evt.e_type,
+                        evt.data_u16,
+                        event_p
+                    );
+                }
                 if runtime.trace_traps && runtime.trace_trap_budget > 0 {
                     let rb_type = memory.read_u16_be(event_p).unwrap_or(0xFFFF);
                     let rb_form = memory

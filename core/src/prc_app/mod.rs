@@ -1,6 +1,7 @@
 mod bootstrap;
 pub mod bitmap;
 pub mod compat;
+pub mod controller;
 pub mod cpu;
 pub mod font;
 pub mod form_preview;

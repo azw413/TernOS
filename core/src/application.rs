@@ -78,6 +78,7 @@ pub struct Application<'a, S: AppSource> {
     prc_forms: Vec<prc_app::form_preview::FormPreview>,
     prc_bitmaps: Vec<prc_app::bitmap::PrcBitmap>,
     prc_runtime_form_id: Option<u16>,
+    prc_ui_controller: prc_app::controller::PrcUiController,
     prc_runtime_bitmap_draws: Vec<prc_app::runner::RuntimeBitmapDraw>,
     prc_system_fonts: Vec<prc_app::runtime::PalmFont>,
     prc_active_entry: Option<ImageEntry>,
@@ -152,6 +153,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_forms: Vec::new(),
             prc_bitmaps: Vec::new(),
             prc_runtime_form_id: None,
+            prc_ui_controller: prc_app::controller::PrcUiController::default(),
             prc_runtime_bitmap_draws: Vec::new(),
             prc_system_fonts: Vec::new(),
             prc_active_entry: None,
@@ -349,6 +351,12 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
             }
             AppState::PrcViewing => {
+                {
+                    let form = self.runtime_prc_form();
+                    if self.prc_ui_controller.sync_with_form(form.as_ref()) {
+                        self.dirty = true;
+                    }
+                }
                 if self.prc_blocked_timeout_ticks > 0 {
                     self.prc_blocked_elapsed_ms = self.prc_blocked_elapsed_ms.saturating_add(elapsed_ms);
                     let wait_ms = self.prc_blocked_timeout_ticks.saturating_mul(10);
@@ -359,16 +367,35 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 }
                 if buttons.is_pressed(input::Buttons::Up) {
-                    self.prc_scroll = self.prc_scroll.saturating_sub(1);
-                    self.dirty = true;
-                } else if buttons.is_pressed(input::Buttons::Down) {
-                    if self.prc_scroll + 1 < self.prc_lines.len() {
-                        self.prc_scroll += 1;
+                    let form = self.runtime_prc_form();
+                    if !self.prc_ui_controller.move_focus(form.as_ref(), -1) {
+                        self.prc_scroll = self.prc_scroll.saturating_sub(1);
+                        self.dirty = true;
+                    } else {
+                        self.dirty = true;
                     }
-                    self.dirty = true;
-                } else if buttons.is_pressed(input::Buttons::Back)
-                    || buttons.is_pressed(input::Buttons::Confirm)
-                {
+                } else if buttons.is_pressed(input::Buttons::Down) {
+                    let form = self.runtime_prc_form();
+                    if !self.prc_ui_controller.move_focus(form.as_ref(), 1) {
+                        if self.prc_scroll + 1 < self.prc_lines.len() {
+                            self.prc_scroll += 1;
+                        }
+                        self.dirty = true;
+                    } else {
+                        self.dirty = true;
+                    }
+                } else if buttons.is_pressed(input::Buttons::Confirm) {
+                    if let (Some(control_id), Some(session)) =
+                        (self.prc_ui_controller.focused_control_id(), self.prc_session.as_mut())
+                    {
+                        session.inject_control_select_now(control_id);
+                        self.prc_blocked_elapsed_ms = 0;
+                        self.prc_blocked_timeout_ticks = 0;
+                        self.resume_prc_runtime_session();
+                    } else {
+                        self.set_state_menu();
+                    }
+                } else if buttons.is_pressed(input::Buttons::Back) {
                     self.set_state_menu();
                 } else if self.system.add_idle(elapsed_ms) {
                     self.start_sleep_request();
@@ -599,6 +626,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_lines = prc_app::format_info_lines(&info);
                 let runtime_snapshot = self.log_prc_info(&entry, &info);
                 self.prc_runtime_form_id = runtime_snapshot.form_id;
+                self.prc_ui_controller.reset();
                 self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
                 log::info!(
                     "PRC runtime_ui form_id={:?} bitmap_draws={}",
@@ -663,6 +691,12 @@ impl<'a, S: AppSource> Application<'a, S> {
         );
         self.prc_runtime_form_id = runtime_snapshot.form_id;
         self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
+        {
+            let form = self.runtime_prc_form();
+            if self.prc_ui_controller.sync_with_form(form.as_ref()) {
+                self.dirty = true;
+            }
+        }
         self.prc_blocked_timeout_ticks = match runtime_out.state {
             prc_app::runner::RuntimeRunState::BlockedOnEvent { timeout_ticks } => {
                 log::info!(
@@ -1171,6 +1205,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 &self.prc_system_fonts,
                 &self.prc_bitmaps,
                 &self.prc_runtime_bitmap_draws,
+                self.prc_ui_controller.focused_control_id(),
                 pane_x,
                 pane_y,
                 pane_w,

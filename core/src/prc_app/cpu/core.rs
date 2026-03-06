@@ -252,17 +252,6 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                 return trace;
             }
         };
-        if (0x1118..=0x1130).contains(&pc) {
-            log::info!(
-                "PRC cpu step pc=0x{:04X} word=0x{:04X} d0=0x{:08X} d1=0x{:08X} d3=0x{:08X} a7=0x{:08X}",
-                pc,
-                word,
-                state.d[0],
-                state.d[1],
-                state.d[3],
-                state.a[7]
-            );
-        }
         trace.steps = trace.steps.saturating_add(1);
 
         // BRA/BSR/Bcc
@@ -1161,19 +1150,6 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                     trace.stop = Some(StopReason::UnknownOpcode { pc, word });
                     return trace;
                 }
-                if (0x1100..=0x1320).contains(&pc) {
-                    log::info!(
-                        "PRC cpu {} pc=0x{:04X} word=0x{:04X} dn={} mode={} reg={} dividend=0x{:08X} divisor=0x{:04X}",
-                        if divu { "DIVU" } else { "DIVS" },
-                        pc,
-                        word,
-                        dn,
-                        mode,
-                        reg,
-                        state.d[dn],
-                        divisor
-                    );
-                }
                 if divu {
                     let dividend = state.d[dn];
                     let q = dividend / (divisor as u32);
@@ -1213,15 +1189,6 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                             state.sr |= 0x0004;
                         }
                     }
-                }
-                if (0x1100..=0x1320).contains(&pc) {
-                    log::info!(
-                        "PRC cpu {} result pc=0x{:04X} d{}=0x{:08X}",
-                        if divu { "DIVU" } else { "DIVS" },
-                        pc,
-                        dn,
-                        state.d[dn]
-                    );
                 }
                 let ea_words = ea_ext_words(mode, reg as u16).unwrap_or(0);
                 state.pc = pc.saturating_add(2 + ea_words * 2);
