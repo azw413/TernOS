@@ -122,44 +122,39 @@ pub fn parse_pumpkin_txt_font(text: &str, font_id: u16) -> Option<PalmFont> {
     let mut descent: u8 = 0;
     let mut glyphs: BTreeMap<u8, (u8, Vec<u16>)> = BTreeMap::new();
 
-    let lines: Vec<&str> = text.lines().collect();
-    let mut i = 0usize;
-    while i < lines.len() {
-        let line = lines[i].trim();
+    // Parse incrementally to avoid collecting all lines into a large Vec on
+    // constrained targets.
+    let mut lines = text.lines().peekable();
+    while let Some(raw_line) = lines.next() {
+        let line = raw_line.trim();
         if let Some(rest) = line.strip_prefix("ascent ") {
             if let Ok(v) = rest.trim().parse::<u8>() {
                 ascent = v;
             }
-            i += 1;
             continue;
         }
         if let Some(rest) = line.strip_prefix("descent ") {
             if let Ok(v) = rest.trim().parse::<u8>() {
                 descent = v;
             }
-            i += 1;
             continue;
         }
         if let Some(rest) = line.strip_prefix("GLYPH ") {
             let Ok(code_u16) = rest.trim().parse::<u16>() else {
-                i += 1;
                 continue;
             };
             if code_u16 > 255 {
-                i += 1;
                 continue;
             }
             let code = code_u16 as u8;
-            i += 1;
             let mut rows: Vec<&str> = Vec::new();
-            while i < lines.len() {
-                let row = lines[i];
+            while let Some(row) = lines.peek().copied() {
                 let row_trim = row.trim();
                 if row_trim.is_empty() || row_trim.starts_with("GLYPH ") {
                     break;
                 }
                 rows.push(row);
-                i += 1;
+                let _ = lines.next();
             }
             let mut width = 0usize;
             let mut row_bits: Vec<u16> = Vec::new();
@@ -186,7 +181,6 @@ pub fn parse_pumpkin_txt_font(text: &str, font_id: u16) -> Option<PalmFont> {
             glyphs.insert(code, (width.min(255) as u8, row_bits));
             continue;
         }
-        i += 1;
     }
 
     if glyphs.is_empty() {

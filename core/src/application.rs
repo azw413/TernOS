@@ -1188,17 +1188,17 @@ impl<'a, S: AppSource> Application<'a, S> {
         if let Some(form) = self.runtime_prc_form() {
             let outline = PrimitiveStyle::with_stroke(BinaryColor::Off, 1);
             let clear = PrimitiveStyle::with_fill(BinaryColor::On);
-            let max_scale_w = ((size.width as i32 - 24) / 160).max(1);
+            let max_scale_w = ((size.width as i32) / 160).max(1);
             let max_scale_h = ((size.height as i32 - LIST_TOP - 34) / 160).max(1);
             let max_scale = max_scale_w.min(max_scale_h).max(1);
             let scale = if max_scale >= 3 { 3 } else { max_scale };
             let pane_w = 160 * scale;
             let pane_h = 160 * scale;
-            let pane_x = ((size.width as i32 - pane_w) / 2).max(8);
+            let pane_x = ((size.width as i32 - pane_w) / 2).max(0);
             let pane_y = (LIST_TOP + 18).max(8);
             Rectangle::new(
-                Point::new(pane_x - 2, pane_y - 2),
-                Size::new((pane_w + 4) as u32, (pane_h + 4) as u32),
+                Point::new(pane_x, pane_y),
+                Size::new(pane_w as u32, pane_h as u32),
             )
             .into_styled(clear)
             .draw(self.display_buffers)
@@ -1254,12 +1254,17 @@ impl<'a, S: AppSource> Application<'a, S> {
             .ok();
         }
 
+        let mode = if self.system.full_refresh {
+            RefreshMode::Full
+        } else {
+            RefreshMode::Fast
+        };
         let mut rq = RenderQueue::default();
         rq.push(
             Rect::new(0, 0, size.width as i32, size.height as i32),
-            RefreshMode::Full,
+            mode,
         );
-        flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Full);
+        flush_queue(display, self.display_buffers, &mut rq, mode);
     }
 
     fn draw_settings(&mut self, display: &mut impl crate::display::Display) {

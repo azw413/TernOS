@@ -52,6 +52,8 @@ pub trait UsbStorage {
     fn usb_mkdir(&mut self, path: &str) -> Result<(), ImageError>;
 }
 
+const USB_MAX_READ_CHUNK: usize = 8 * 1024;
+
 struct UsbWriteStreamState<FileT> {
     path: String,
     file: FileT,
@@ -281,7 +283,10 @@ where
     fn usb_read(&mut self, path: &str, offset: u64, length: u32) -> Result<Vec<u8>, ImageError> {
         let mut file = self.fs.open_file(path, Mode::Read).map_err(|_| ImageError::Io)?;
         let _ = file.seek(SeekFrom::Start(offset)).map_err(|_| ImageError::Io)?;
-        let mut buf = vec![0u8; length as usize];
+        // Host-side callers may request large chunks (e.g. 32 KiB). Cap the
+        // temporary allocation to keep device heap usage predictable.
+        let req_len = (length as usize).min(USB_MAX_READ_CHUNK);
+        let mut buf = vec![0u8; req_len];
         let read = file.read(&mut buf).map_err(|_| ImageError::Io)?;
         buf.truncate(read);
         Ok(buf)
@@ -1135,7 +1140,7 @@ where
 
     fn load_prc_system_resources(&mut self) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
         let mut out = Vec::new();
-        let mut listed: Option<Vec<DirEntry<F::File<'_>>>> = None;
+        let mut listed = None;
         for dir in ["fonts", "/fonts"] {
             if let Ok(d) = self.fs.open_directory(dir) {
                 if let Ok(items) = d.list() {
@@ -1196,7 +1201,7 @@ where
 
     fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
         let mut out = Vec::new();
-        let mut listed: Option<Vec<DirEntry<F::File<'_>>>> = None;
+        let mut listed = None;
         for dir in ["fonts", "/fonts"] {
             if let Ok(d) = self.fs.open_directory(dir) {
                 if let Ok(items) = d.list() {

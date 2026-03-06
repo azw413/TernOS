@@ -17,6 +17,7 @@ const PRC_EXEC_STEP_LIMIT: usize = 262_144;
 const PRC_EXEC_STUB_STEP_BUDGET: usize = 1_000_000;
 const PRC_EXEC_TRAP_STUB_LIMIT: usize = 65_536;
 const PRC_IDLE_LOOP_POLLS: u32 = 4;
+const PRC_STACK_CANDIDATES: &[usize] = &[8 * 1024, 4 * 1024, 2 * 1024, 1024, 512, 256];
 
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeUiSnapshot {
@@ -246,9 +247,9 @@ impl PrcRuntimeSession {
         let stack_base = 0x00FC_0000u32;
         let mut stack = Vec::new();
         let mut stack_len = 0usize;
-        for candidate in [64 * 1024usize, 32 * 1024, 16 * 1024, 8 * 1024, 4 * 1024, 2 * 1024] {
-            if stack.try_reserve_exact(candidate).is_ok() {
-                stack_len = candidate;
+        for candidate in PRC_STACK_CANDIDATES {
+            if stack.try_reserve_exact(*candidate).is_ok() {
+                stack_len = *candidate;
                 break;
             }
         }
@@ -594,9 +595,9 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
         let stack_base = 0x00FC_0000u32;
         let mut stack = Vec::new();
         let mut stack_len = 0usize;
-        for candidate in [64 * 1024usize, 32 * 1024, 16 * 1024, 8 * 1024, 4 * 1024, 2 * 1024] {
-            if stack.try_reserve_exact(candidate).is_ok() {
-                stack_len = candidate;
+        for candidate in PRC_STACK_CANDIDATES {
+            if stack.try_reserve_exact(*candidate).is_ok() {
+                stack_len = *candidate;
                 break;
             }
         }
