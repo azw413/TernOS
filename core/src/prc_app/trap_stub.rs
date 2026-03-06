@@ -81,15 +81,17 @@ pub fn apply_prc_runtime_trap_stub(
     let s3 = memory.read_u16_be(sp.saturating_add(6)).unwrap_or(0);
     if runtime.trace_traps && runtime.trace_trap_budget > 0 {
         log::info!(
-            "PRC trap call pc=0x{:X} trap=0x{:04X} group={} name={} d0=0x{:08X} d1=0x{:08X} a0=0x{:08X} a1=0x{:08X} a7=0x{:08X} sp[0..8]={:04X} {:04X} {:04X} {:04X}",
+            "PRC trap call pc=0x{:X} trap=0x{:04X} group={} name={} d0=0x{:08X} d1=0x{:08X} d3=0x{:08X} a0=0x{:08X} a1=0x{:08X} a6=0x{:08X} a7=0x{:08X} sp[0..8]={:04X} {:04X} {:04X} {:04X}",
             pc,
             trap_word,
             trap_meta.group.as_str(),
             trap_meta.name,
             cpu.d[0],
             cpu.d[1],
+            cpu.d[3],
             cpu.a[0],
             cpu.a[1],
+            cpu.a[6],
             cpu.a[7],
             s0,
             s1,
@@ -925,7 +927,8 @@ pub fn apply_prc_runtime_trap_stub(
             }
         }
         0xA2E9 => {
-            cpu.d[0] = 100;
+            // UInt16 SysTicksPerSecond(): write low word and preserve upper word.
+            cpu.d[0] = (cpu.d[0] & 0xFFFF_0000) | 100;
         }
         0xA0C2 => {
             // Int16 SysRandom(Int32 newSeed)
@@ -940,7 +943,16 @@ pub fn apply_prc_runtime_trap_stub(
                 .wrapping_mul(1_664_525)
                 .wrapping_add(1_013_904_223);
             let rnd15 = (runtime.rand_state & 0x7FFF_FFFF) % 0x7FFF;
-            cpu.d[0] = rnd15;
+            // Int16 return in low word; preserve upper word for ABI fidelity.
+            cpu.d[0] = (cpu.d[0] & 0xFFFF_0000) | (rnd15 & 0xFFFF);
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                log::info!(
+                    "PRC trap detail SysRandom new_seed=0x{:08X} state=0x{:08X} out=0x{:04X}",
+                    new_seed,
+                    runtime.rand_state,
+                    rnd15 & 0xFFFF
+                );
+            }
         }
         0xA0C7 => {
             let ptr = if cpu.a[0] != 0 { cpu.a[0] } else { cpu.d[0] };

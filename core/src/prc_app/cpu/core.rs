@@ -252,6 +252,17 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                 return trace;
             }
         };
+        if (0x1118..=0x1130).contains(&pc) {
+            log::info!(
+                "PRC cpu step pc=0x{:04X} word=0x{:04X} d0=0x{:08X} d1=0x{:08X} d3=0x{:08X} a7=0x{:08X}",
+                pc,
+                word,
+                state.d[0],
+                state.d[1],
+                state.d[3],
+                state.a[7]
+            );
+        }
         trace.steps = trace.steps.saturating_add(1);
 
         // BRA/BSR/Bcc
@@ -433,8 +444,13 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
         }
 
         // MOVEM.[W/L] subset used by app prolog/epilog.
-        if (word & 0xFB80) == 0x4880 || (word & 0xFB80) == 0x4C80 {
-            let mode = (word >> 3) & 0x0007;
+        // Guard by addressing mode first so EXT.W/EXT.L (0x488x/0x48Cx) are
+        // not mis-decoded as MOVEM and accidentally skip the following opcode.
+        let movem_mode = (word >> 3) & 0x0007;
+        if ((word & 0xFB80) == 0x4880 || (word & 0xFB80) == 0x4C80)
+            && matches!(movem_mode, 2 | 3 | 4 | 5)
+        {
+            let mode = movem_mode;
             let reg = (word & 0x0007) as usize;
             let is_mem_to_regs = (word & 0x0400) != 0; // 0x4Cxx direction
             let size_bytes = if (word & 0x0040) != 0 { 4u32 } else { 2u32 };
@@ -1119,6 +1135,97 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                         continue;
                     }
                 }
+            }
+        }
+
+        // DIVU/DIVS.W <ea>,Dn (minimal; needed by PRC UI handlers using SysRandom scaling)
+        {
+            // Distinguish DIVU (opmode 0b011) vs DIVS (opmode 0b111) via bit 8.
+            let divu = (word & 0xF1C0) == 0x80C0;
+            let divs = (word & 0xF1C0) == 0x81C0;
+            if divu || divs {
+                let dn = ((word >> 9) & 0x0007) as usize;
+                let mode = (word >> 3) & 0x0007;
+                let reg = (word & 0x0007) as usize;
+                let divisor_opt: Option<u16> = match mode {
+                    0 => Some((state.d[reg] & 0xFFFF) as u16), // Dn
+                    1 => Some((state.a[reg] & 0xFFFF) as u16), // An
+                    2 => memory.read_u16_be(state.a[reg]),      // (An)
+                    _ => None,
+                };
+                let Some(divisor) = divisor_opt else {
+                    trace.stop = Some(StopReason::UnknownOpcode { pc, word });
+                    return trace;
+                };
+                if divisor == 0 {
+                    trace.stop = Some(StopReason::UnknownOpcode { pc, word });
+                    return trace;
+                }
+                if (0x1100..=0x1320).contains(&pc) {
+                    log::info!(
+                        "PRC cpu {} pc=0x{:04X} word=0x{:04X} dn={} mode={} reg={} dividend=0x{:08X} divisor=0x{:04X}",
+                        if divu { "DIVU" } else { "DIVS" },
+                        pc,
+                        word,
+                        dn,
+                        mode,
+                        reg,
+                        state.d[dn],
+                        divisor
+                    );
+                }
+                if divu {
+                    let dividend = state.d[dn];
+                    let q = dividend / (divisor as u32);
+                    let r = dividend % (divisor as u32);
+                    if q > 0xFFFF {
+                        // Overflow: V set, C clear; destination remains unchanged.
+                        state.sr |= 0x0002;
+                        state.sr &= !0x0001;
+                    } else {
+                        state.d[dn] = ((r & 0xFFFF) << 16) | (q & 0xFFFF);
+                        state.sr &= !0x000F;
+                        if (q & 0x8000) != 0 {
+                            state.sr |= 0x0008;
+                        }
+                        if (q & 0xFFFF) == 0 {
+                            state.sr |= 0x0004;
+                        }
+                    }
+                } else {
+                    let divisor_s = divisor as i16 as i32;
+                    let dividend_s = state.d[dn] as i32;
+                    let q = dividend_s / divisor_s;
+                    let r = dividend_s % divisor_s;
+                    if !(-32768..=32767).contains(&q) {
+                        // Overflow: V set, C clear; destination remains unchanged.
+                        state.sr |= 0x0002;
+                        state.sr &= !0x0001;
+                    } else {
+                        let q16 = (q as i16 as u16) as u32;
+                        let r16 = (r as i16 as u16) as u32;
+                        state.d[dn] = (r16 << 16) | q16;
+                        state.sr &= !0x000F;
+                        if (q16 & 0x8000) != 0 {
+                            state.sr |= 0x0008;
+                        }
+                        if (q16 & 0xFFFF) == 0 {
+                            state.sr |= 0x0004;
+                        }
+                    }
+                }
+                if (0x1100..=0x1320).contains(&pc) {
+                    log::info!(
+                        "PRC cpu {} result pc=0x{:04X} d{}=0x{:08X}",
+                        if divu { "DIVU" } else { "DIVS" },
+                        pc,
+                        dn,
+                        state.d[dn]
+                    );
+                }
+                let ea_words = ea_ext_words(mode, reg as u16).unwrap_or(0);
+                state.pc = pc.saturating_add(2 + ea_words * 2);
+                continue;
             }
         }
 
