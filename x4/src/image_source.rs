@@ -1074,6 +1074,189 @@ where
         })
     }
 
+    fn load_prc_code_resource(
+        &mut self,
+        path: &[String],
+        entry: &ImageEntry,
+        resource_id: u16,
+    ) -> Result<Vec<u8>, ImageError> {
+        let info = self.load_prc_info(path, entry)?;
+        let res = info
+            .resources
+            .iter()
+            .find(|r| r.kind.eq_ignore_ascii_case("code") && r.id == resource_id)
+            .ok_or(ImageError::Decode)?;
+        let file_path = Self::build_path(path, &entry.name);
+        let mut file = self
+            .fs
+            .open_file(&file_path, Mode::Read)
+            .map_err(|_| ImageError::Io)?;
+        let _ = file
+            .seek(SeekFrom::Start(res.offset as u64))
+            .map_err(|_| ImageError::Io)?;
+        let mut out = Vec::new();
+        let sz = res.size as usize;
+        if out.try_reserve(sz).is_err() {
+            return Err(ImageError::Message("Not enough memory for PRC code.".into()));
+        }
+        out.resize(sz, 0);
+        read_exact(&mut file, &mut out)?;
+        Ok(out)
+    }
+
+    fn load_prc_bytes(
+        &mut self,
+        path: &[String],
+        entry: &ImageEntry,
+    ) -> Result<Vec<u8>, ImageError> {
+        if entry.kind != EntryKind::File {
+            return Err(ImageError::Message("Select a file, not a folder.".into()));
+        }
+        if !entry.name.to_ascii_lowercase().ends_with(".prc") {
+            return Err(ImageError::Unsupported);
+        }
+        let file_path = Self::build_path(path, &entry.name);
+        let mut file = self
+            .fs
+            .open_file(&file_path, Mode::Read)
+            .map_err(|_| ImageError::Io)?;
+        let size = file.size() as usize;
+        if size < 78 {
+            return Err(ImageError::Decode);
+        }
+        let mut out = Vec::new();
+        if out.try_reserve(size).is_err() {
+            return Err(ImageError::Message("Not enough memory for PRC bytes.".into()));
+        }
+        out.resize(size, 0);
+        read_exact(&mut file, &mut out)?;
+        Ok(out)
+    }
+
+    fn load_prc_system_resources(&mut self) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
+        let mut out = Vec::new();
+        let mut listed: Option<Vec<DirEntry<F::File<'_>>>> = None;
+        for dir in ["fonts", "/fonts"] {
+            if let Ok(d) = self.fs.open_directory(dir) {
+                if let Ok(items) = d.list() {
+                    listed = Some(items);
+                    break;
+                }
+            }
+        }
+        let Some(entries) = listed else {
+            return out;
+        };
+
+        for entry in entries {
+            if entry.is_directory() {
+                continue;
+            }
+            let name = entry.name().to_string();
+            if !tern_core::prc_app::font::is_prc_font_resource_blob_name(&name) {
+                continue;
+            }
+            let Some(id) = tern_core::prc_app::font::parse_font_resource_id_from_name(&name) else {
+                continue;
+            };
+            let mut data = Vec::new();
+            let mut opened = None;
+            for base in ["fonts", "/fonts"] {
+                let file_path = format!("{}/{}", base.trim_end_matches('/'), name);
+                if let Ok(file) = self.fs.open_file(&file_path, Mode::Read) {
+                    opened = Some(file);
+                    break;
+                }
+            }
+            let Some(mut file) = opened else {
+                continue;
+            };
+            let size = file.size();
+            if size < 26 {
+                continue;
+            }
+            if data.try_reserve(size).is_err() {
+                continue;
+            }
+            data.resize(size, 0);
+            if read_exact(&mut file, &mut data).is_err() {
+                continue;
+            }
+            out.push(tern_core::prc_app::runtime::ResourceBlob {
+                kind: u32::from_be_bytes(*b"NFNT"),
+                id,
+                data,
+            });
+        }
+        if !out.is_empty() {
+            log::info!("Loaded {} system font resources from sdcard/fonts", out.len());
+        }
+        out
+    }
+
+    fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+        let mut out = Vec::new();
+        let mut listed: Option<Vec<DirEntry<F::File<'_>>>> = None;
+        for dir in ["fonts", "/fonts"] {
+            if let Ok(d) = self.fs.open_directory(dir) {
+                if let Ok(items) = d.list() {
+                    listed = Some(items);
+                    break;
+                }
+            }
+        }
+        let Some(entries) = listed else {
+            return out;
+        };
+
+        for entry in entries {
+            if entry.is_directory() {
+                continue;
+            }
+            let name = entry.name().to_string();
+            if !name.to_ascii_lowercase().ends_with(".txt") {
+                continue;
+            }
+            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(&name) else {
+                continue;
+            };
+            let font_id = resource_id.saturating_sub(9100);
+            let mut opened = None;
+            for base in ["fonts", "/fonts"] {
+                let file_path = format!("{}/{}", base.trim_end_matches('/'), name);
+                if let Ok(file) = self.fs.open_file(&file_path, Mode::Read) {
+                    opened = Some(file);
+                    break;
+                }
+            }
+            let Some(mut file) = opened else {
+                continue;
+            };
+            let size = file.size();
+            if size == 0 {
+                continue;
+            }
+            let mut buf = Vec::new();
+            if buf.try_reserve(size).is_err() {
+                continue;
+            }
+            buf.resize(size, 0);
+            if read_exact(&mut file, &mut buf).is_err() {
+                continue;
+            }
+            let Ok(text) = core::str::from_utf8(&buf) else {
+                continue;
+            };
+            if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(text, font_id) {
+                out.push(font);
+            }
+        }
+        if !out.is_empty() {
+            log::info!("Loaded {} text system fonts from sdcard/fonts", out.len());
+        }
+        out
+    }
+
 }
 
 impl<F> PersistenceSource for SdImageSource<F>

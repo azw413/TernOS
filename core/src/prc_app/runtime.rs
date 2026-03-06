@@ -4,6 +4,9 @@ use crate::prc_app::prc::PrcInfo;
 use crate::prc_app::traps::{TrapGroup, table};
 
 pub const SYS_APP_LAUNCH_CMD_NORMAL_LAUNCH: u16 = 0;
+pub const EVT_NIL: u16 = 0;
+pub const EVT_FRM_LOAD: u16 = 23;
+pub const EVT_FRM_OPEN: u16 = 24;
 
 #[derive(Clone, Debug)]
 pub struct PrcRuntimeContext {
@@ -15,7 +18,7 @@ pub struct PrcRuntimeContext {
     pub active_form_handler: u32,
     pub sys_app_info_ptr: u32,
     pub shutting_down: bool,
-    pub event_queue: alloc::vec::Vec<u16>,
+    pub event_queue: alloc::vec::Vec<RuntimeEvent>,
     pub mem_blocks: alloc::vec::Vec<MemBlock>,
     pub resources: alloc::vec::Vec<ResourceBlob>,
     pub prc_image: alloc::vec::Vec<u8>,
@@ -36,6 +39,20 @@ pub struct PrcRuntimeContext {
     pub blink_phase: u8,
     pub terminate_requested: bool,
     pub trace_traps: bool,
+    pub trace_trap_budget: u32,
+    pub block_on_evt_get_event: bool,
+    pub blocked_on_evt_get_event: bool,
+    pub blocked_evt_timeout_ticks: u32,
+    pub evt_event_p: u32,
+    pub code_handle: u32,
+    pub globals_ptr: u32,
+    pub prev_globals_ptr: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RuntimeEvent {
+    pub e_type: u16,
+    pub data_u16: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -121,6 +138,14 @@ impl Default for PrcRuntimeContext {
             blink_phase: 0,
             terminate_requested: false,
             trace_traps: true,
+            trace_trap_budget: 0,
+            block_on_evt_get_event: false,
+            blocked_on_evt_get_event: false,
+            blocked_evt_timeout_ticks: 0,
+            evt_event_p: 0,
+            code_handle: 0,
+            globals_ptr: 0,
+            prev_globals_ptr: 0,
         }
     }
 }

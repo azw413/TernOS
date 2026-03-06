@@ -180,6 +180,35 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
         }
     }
 
+    fn set_ccr_add(state: &mut CpuState68k, src: u32, dst: u32, res: u32, bits: u32) {
+        let sign = 1u32 << (bits - 1);
+        let mask = if bits == 32 {
+            u32::MAX
+        } else {
+            (1u32 << bits) - 1
+        };
+        let s = src & mask;
+        let d = dst & mask;
+        let r = res & mask;
+        let n = (r & sign) != 0;
+        let z = r == 0;
+        let v = ((!(d ^ s)) & (d ^ r) & sign) != 0;
+        let c = (d as u64 + s as u64) > (mask as u64);
+        state.sr &= !0x000F;
+        if n {
+            state.sr |= 0x0008;
+        }
+        if z {
+            state.sr |= 0x0004;
+        }
+        if v {
+            state.sr |= 0x0002;
+        }
+        if c {
+            state.sr |= 0x0001;
+        }
+    }
+
     fn ea_ext_words(mode: u16, reg: u16) -> Option<u32> {
         match mode {
             0 | 1 | 2 | 3 | 4 => Some(0), // Dn/An/(An)/(An)+/-(An)
@@ -235,6 +264,9 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                     return trace;
                 }
             };
+            // 68k branch displacement is based off PC+2 (the extension-word address).
+            // This matters for Bcc/BSR with 16-bit displacement.
+            let base_pc = pc.saturating_add(2);
             let next_pc = pc.saturating_add(instr_len);
             let taken = if cond == 0x0 {
                 true // BRA
@@ -242,13 +274,12 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                 // BSR
                 state.a[7] = state.a[7].wrapping_sub(4);
                 memory.write_u32_be(state.a[7], next_pc);
-                state.call_stack.push(next_pc);
                 true
             } else {
                 sr_cond_true(state.sr, cond)
             };
             if taken {
-                let Some(dst) = target_pc(next_pc, disp) else {
+                let Some(dst) = target_pc(base_pc, disp) else {
                     trace.stop = Some(StopReason::OutOfBounds { pc });
                     return trace;
                 };
@@ -322,7 +353,6 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             let ret = pc.saturating_add(6);
             state.a[7] = state.a[7].wrapping_sub(4);
             memory.write_u32_be(state.a[7], ret);
-            state.call_stack.push(ret);
             state.pc = dst;
             continue;
         }
@@ -341,7 +371,6 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             let ret = pc.saturating_add(4);
             state.a[7] = state.a[7].wrapping_sub(4);
             memory.write_u32_be(state.a[7], ret);
-            state.call_stack.push(ret);
             state.pc = dst;
             continue;
         }
@@ -350,17 +379,13 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             let ret = pc.saturating_add(2);
             state.a[7] = state.a[7].wrapping_sub(4);
             memory.write_u32_be(state.a[7], ret);
-            state.call_stack.push(ret);
             state.pc = state.a[an];
             continue;
         }
 
         // RTS
         if word == 0x4E75 {
-            let ret = if let Some(v) = state.call_stack.pop() {
-                state.a[7] = state.a[7].wrapping_add(4);
-                v
-            } else if let Some(v) = memory.read_u32_be(state.a[7]) {
+            let ret = if let Some(v) = memory.read_u32_be(state.a[7]) {
                 state.a[7] = state.a[7].wrapping_add(4);
                 v
             } else {
@@ -388,7 +413,6 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             memory.write_u32_be(state.a[7], old_an);
             state.a[an] = state.a[7];
             state.a[7] = add_signed_u32(state.a[7], disp);
-            state.frame_stack.push(old_an);
             state.pc = pc.saturating_add(4);
             continue;
         }
@@ -398,10 +422,11 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             let an = (word & 0x0007) as usize;
             let frame = state.a[an];
             state.a[7] = frame;
-            let restored = memory.read_u32_be(state.a[7]).or_else(|| state.frame_stack.pop());
-            if let Some(old_an) = restored {
-                state.a[an] = old_an;
-            }
+            let Some(old_an) = memory.read_u32_be(state.a[7]) else {
+                trace.stop = Some(StopReason::OutOfBounds { pc });
+                return trace;
+            };
+            state.a[an] = old_an;
             state.a[7] = state.a[7].wrapping_add(4);
             state.pc = pc.saturating_add(2);
             continue;
@@ -435,14 +460,35 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                 }
             };
 
+            let mut pc_ext = pc.saturating_add(4);
+            let disp16 = if mode == 5 {
+                memory.read_u16_be(pc_ext).map(|v| {
+                    pc_ext = pc_ext.saturating_add(2);
+                    (v as i16) as i32
+                })
+            } else {
+                None
+            };
+            let ea_base = |state: &CpuState68k, mode: u16, reg: usize, disp16: Option<i32>| -> u32 {
+                match mode {
+                    2 | 3 | 4 => state.a[reg],
+                    5 => add_signed_u32(state.a[reg], disp16.unwrap_or(0)),
+                    _ => state.a[reg],
+                }
+            };
+
             match (is_mem_to_regs, mode) {
                 // MOVEM <reglist>,-(An)
                 (false, 4) => {
                     let mut addr = state.a[reg];
-                    for idx in (0..16usize).rev() {
-                        if (mask & (1u16 << idx)) == 0 {
+                    // For predecrement register->memory, MOVEM uses reversed
+                    // register mask encoding (bit 0 => A7 ... bit 15 => D0).
+                    // Iterate mask bits ascending so transfer order matches 68k.
+                    for bit in 0..16usize {
+                        if (mask & (1u16 << bit)) == 0 {
                             continue;
                         }
+                        let idx = 15usize.saturating_sub(bit);
                         let v = reg_read(state, idx);
                         addr = addr.wrapping_sub(size_bytes);
                         if size_bytes == 2 {
@@ -452,6 +498,22 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                         }
                     }
                     state.a[reg] = addr;
+                }
+                // MOVEM <reglist>,(An) or (d16,An)
+                (false, 2 | 5) => {
+                    let mut addr = ea_base(state, mode, reg, disp16);
+                    for idx in 0..16usize {
+                        if (mask & (1u16 << idx)) == 0 {
+                            continue;
+                        }
+                        let v = reg_read(state, idx);
+                        if size_bytes == 2 {
+                            memory.write_u16_be(addr, v as u16);
+                        } else {
+                            memory.write_u32_be(addr, v);
+                        }
+                        addr = addr.wrapping_add(size_bytes);
+                    }
                 }
                 // MOVEM (An)+,<reglist>
                 (true, 3) => {
@@ -471,9 +533,27 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                     }
                     state.a[reg] = addr;
                 }
+                // MOVEM (An) or (d16,An),<reglist>
+                (true, 2 | 5) => {
+                    let mut addr = ea_base(state, mode, reg, disp16);
+                    for idx in 0..16usize {
+                        if (mask & (1u16 << idx)) == 0 {
+                            continue;
+                        }
+                        let v = if size_bytes == 2 {
+                            memory.read_u16_be(addr).map(|x| x as u32)
+                        } else {
+                            memory.read_u32_be(addr)
+                        };
+                        let v = v.unwrap_or(0);
+                        reg_write(state, idx, v, size_bytes);
+                        addr = addr.wrapping_add(size_bytes);
+                    }
+                }
                 _ => {}
             }
-            state.pc = pc.saturating_add(4);
+            let ext_words = ea_ext_words(mode, reg as u16).unwrap_or(0);
+            state.pc = pc.saturating_add(4 + ext_words * 2);
             continue;
         }
 
@@ -483,6 +563,16 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             let addr = state.a[an];
             state.a[7] = state.a[7].wrapping_sub(4);
             memory.write_u32_be(state.a[7], addr);
+            state.pc = pc.saturating_add(2);
+            continue;
+        }
+        // SWAP Dn
+        if (word & 0xFFF8) == 0x4840 {
+            let dn = (word & 0x0007) as usize;
+            let v = state.d[dn];
+            let r = v.rotate_right(16);
+            state.d[dn] = r;
+            set_ccr_nz(state, (r & 0x8000_0000) != 0, r == 0);
             state.pc = pc.saturating_add(2);
             continue;
         }
@@ -528,7 +618,8 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                 trace.stop = Some(StopReason::OutOfBounds { pc });
                 return trace;
             };
-            let addr = add_signed_u32(pc.saturating_add(4), (disp16 as i16) as i32);
+            // For d16(PC), 68k uses the extension-word address as PC base.
+            let addr = add_signed_u32(pc.saturating_add(2), (disp16 as i16) as i32);
             state.a[7] = state.a[7].wrapping_sub(4);
             memory.write_u32_be(state.a[7], addr);
             state.pc = pc.saturating_add(4);
@@ -558,7 +649,7 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             continue;
         }
 
-        // CLR family / TST family register-direct.
+        // CLR/TST family (register-direct + key memory forms).
         if (word & 0xFFC0) == 0x4200
             || (word & 0xFFC0) == 0x4240
             || (word & 0xFFC0) == 0x4280
@@ -568,62 +659,69 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
         {
             let mode = (word >> 3) & 0x0007;
             let reg = (word & 0x0007) as usize;
+            let size_bits = (word >> 6) & 0x0003; // 0=byte, 1=word, 2=long
+            let is_clr = (word & 0xFF00) == 0x4200;
             if mode == 0 {
-                let op_hi = word & 0xFF00;
-                match op_hi {
-                    0x4200 => {
-                        // CLR.B Dn
-                        state.d[reg] &= 0xFFFF_FF00;
-                        set_ccr_nz(state, false, true);
+                if is_clr {
+                    match size_bits {
+                        0 => state.d[reg] &= 0xFFFF_FF00,
+                        1 => state.d[reg] &= 0xFFFF_0000,
+                        _ => state.d[reg] = 0,
                     }
-                    0x4240 => {
-                        // CLR.W Dn
-                        state.d[reg] &= 0xFFFF_0000;
-                        set_ccr_nz(state, false, true);
+                    set_ccr_nz(state, false, true);
+                } else {
+                    match size_bits {
+                        0 => {
+                            let v = (state.d[reg] & 0xFF) as u8;
+                            set_ccr_nz(state, (v & 0x80) != 0, v == 0);
+                        }
+                        1 => {
+                            let v = (state.d[reg] & 0xFFFF) as u16;
+                            set_ccr_nz(state, (v & 0x8000) != 0, v == 0);
+                        }
+                        _ => {
+                            let v = state.d[reg];
+                            set_ccr_nz(state, (v & 0x8000_0000) != 0, v == 0);
+                        }
                     }
-                    0x4280 => {
-                        // CLR.L Dn
-                        state.d[reg] = 0;
-                        set_ccr_nz(state, false, true);
-                    }
-                    0x4A00 => {
-                        // TST.B Dn
-                        let v = (state.d[reg] & 0xFF) as u8;
-                        set_ccr_nz(state, (v & 0x80) != 0, v == 0);
-                    }
-                    0x4A40 => {
-                        // TST.W Dn
-                        let v = (state.d[reg] & 0xFFFF) as u16;
-                        set_ccr_nz(state, (v & 0x8000) != 0, v == 0);
-                    }
-                    0x4A80 => {
-                        // TST.L Dn
-                        let v = state.d[reg];
-                        set_ccr_nz(state, (v & 0x8000_0000) != 0, v == 0);
-                    }
-                    _ => {}
                 }
             } else if mode == 4 {
                 // CLR.<size> -(An), primarily used for stack argument setup.
                 let an = reg;
-                match word & 0xFF00 {
-                    0x4200 => {
-                        let dec = if an == 7 { 2 } else { 1 };
-                        state.a[an] = state.a[an].wrapping_sub(dec);
-                        let _ = memory.write_u8(state.a[an], 0);
-                        set_ccr_nz(state, false, true);
+                if is_clr {
+                    match size_bits {
+                        0 => {
+                            let dec = if an == 7 { 2 } else { 1 };
+                            state.a[an] = state.a[an].wrapping_sub(dec);
+                            let _ = memory.write_u8(state.a[an], 0);
+                        }
+                        1 => {
+                            state.a[an] = state.a[an].wrapping_sub(2);
+                            let _ = memory.write_u16_be(state.a[an], 0);
+                        }
+                        _ => {
+                            state.a[an] = state.a[an].wrapping_sub(4);
+                            let _ = memory.write_u32_be(state.a[an], 0);
+                        }
                     }
-                    0x4240 => {
-                        state.a[an] = state.a[an].wrapping_sub(2);
-                        let _ = memory.write_u16_be(state.a[an], 0);
-                        set_ccr_nz(state, false, true);
+                    set_ccr_nz(state, false, true);
+                }
+            } else if mode == 2 {
+                // CLR.<size> (An), used by Palm startup relocation glue.
+                let an = reg;
+                if is_clr {
+                    match size_bits {
+                        0 => {
+                            let _ = memory.write_u8(state.a[an], 0);
+                        }
+                        1 => {
+                            let _ = memory.write_u16_be(state.a[an], 0);
+                        }
+                        _ => {
+                            let _ = memory.write_u32_be(state.a[an], 0);
+                        }
                     }
-                    0x4280 => {
-                        state.a[an] = state.a[an].wrapping_sub(4);
-                        let _ = memory.write_u32_be(state.a[an], 0);
-                        set_ccr_nz(state, false, true);
-                    }
-                    _ => {}
+                    set_ccr_nz(state, false, true);
                 }
             }
             state.pc = pc.saturating_add(2);
@@ -690,6 +788,75 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             continue;
         }
 
+        // Register shift/rotate class (AS/LS/ROX/RO on Dn).
+        // Needed by Palm app glue paths (e.g. `LSR.W #1,D0` = 0xE248).
+        if (word & 0xF000) == 0xE000 {
+            let size_bits = (word >> 6) & 0x0003;
+            if size_bits != 0x0003 {
+                let ir = (word & 0x0020) != 0; // 0=immediate count, 1=count in Dn
+                let op = (word >> 3) & 0x0003; // 0=AS,1=LS,2=ROX,3=RO
+                let left = (word & 0x0100) != 0;
+                let dest = (word & 0x0007) as usize;
+                let count_src = ((word >> 9) & 0x0007) as usize;
+                let mut count = if ir {
+                    (state.d[count_src] & 0x3F) as u32
+                } else {
+                    let c = count_src as u32;
+                    if c == 0 { 8 } else { c }
+                };
+                let (mask, sign_bit, width) = match size_bits {
+                    0 => (0xFFu32, 0x80u32, 8u32),
+                    1 => (0xFFFFu32, 0x8000u32, 16u32),
+                    2 => (0xFFFF_FFFFu32, 0x8000_0000u32, 32u32),
+                    _ => (0, 0, 0),
+                };
+                if width != 0 {
+                    count %= 64;
+                    let cur = match size_bits {
+                        0 => state.d[dest] & 0xFF,
+                        1 => state.d[dest] & 0xFFFF,
+                        _ => state.d[dest],
+                    };
+                    let mut out = cur;
+                    if count != 0 {
+                        out = match op {
+                            0 => {
+                                // Arithmetic shift
+                                if left {
+                                    (cur << count) & mask
+                                } else {
+                                    // Sign-extend to 32 then shift right.
+                                    let ext = if (cur & sign_bit) != 0 {
+                                        cur | (!mask)
+                                    } else {
+                                        cur
+                                    };
+                                    (ext as i32 >> count) as u32 & mask
+                                }
+                            }
+                            1 => {
+                                // Logical shift
+                                if left {
+                                    (cur << count) & mask
+                                } else {
+                                    (cur >> count) & mask
+                                }
+                            }
+                            _ => cur, // ROX/RO not needed yet; keep fail-fast for wrong semantics.
+                        };
+                    }
+                    match size_bits {
+                        0 => state.d[dest] = (state.d[dest] & 0xFFFF_FF00) | (out & 0xFF),
+                        1 => state.d[dest] = (state.d[dest] & 0xFFFF_0000) | (out & 0xFFFF),
+                        _ => state.d[dest] = out,
+                    }
+                    set_ccr_nz(state, (out & sign_bit) != 0, out == 0);
+                    state.pc = pc.saturating_add(2);
+                    continue;
+                }
+            }
+        }
+
         // Immediate op class: ORI/ANDI/SUBI/ADDI/EORI/CMPI #imm,<ea>
         {
             let base = word & 0xFF00;
@@ -705,6 +872,222 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                 if imm_words != 0 {
                     let mode = (word >> 3) & 0x0007;
                     let reg = word & 0x0007;
+                    if base == 0x0C00 {
+                        // CMPI #imm,<ea>: compute <ea> - imm and set CCR.
+                        let mut ext_pc = pc.saturating_add(2);
+                        let size_bytes = match size_bits {
+                            0 => 1u32,
+                            1 | 3 => 2u32,
+                            2 => 4u32,
+                            _ => 0u32,
+                        };
+                        if size_bytes != 0 {
+                            let imm = match size_bytes {
+                                1 => match memory.read_u16_be(ext_pc) {
+                                    Some(v) => {
+                                        ext_pc = ext_pc.saturating_add(2);
+                                        (v & 0x00FF) as u32
+                                    }
+                                    None => {
+                                        trace.stop = Some(StopReason::OutOfBounds { pc });
+                                        return trace;
+                                    }
+                                },
+                                2 => match memory.read_u16_be(ext_pc) {
+                                    Some(v) => {
+                                        ext_pc = ext_pc.saturating_add(2);
+                                        v as u32
+                                    }
+                                    None => {
+                                        trace.stop = Some(StopReason::OutOfBounds { pc });
+                                        return trace;
+                                    }
+                                },
+                                _ => match memory.read_u32_be(ext_pc) {
+                                    Some(v) => {
+                                        ext_pc = ext_pc.saturating_add(4);
+                                        v
+                                    }
+                                    None => {
+                                        trace.stop = Some(StopReason::OutOfBounds { pc });
+                                        return trace;
+                                    }
+                                },
+                            };
+                            let dst = match mode {
+                                0 => Some(state.d[reg as usize]),
+                                1 => Some(state.a[reg as usize]),
+                                2 => {
+                                    let addr = state.a[reg as usize];
+                                    match size_bytes {
+                                        1 => memory.read_u8(addr).map(u32::from),
+                                        2 => memory.read_u16_be(addr).map(u32::from),
+                                        _ => memory.read_u32_be(addr),
+                                    }
+                                }
+                                3 => {
+                                    let an = reg as usize;
+                                    let addr = state.a[an];
+                                    let v = match size_bytes {
+                                        1 => memory.read_u8(addr).map(u32::from),
+                                        2 => memory.read_u16_be(addr).map(u32::from),
+                                        _ => memory.read_u32_be(addr),
+                                    };
+                                    let inc = if size_bytes == 1 && an == 7 { 2 } else { size_bytes };
+                                    state.a[an] = state.a[an].wrapping_add(inc);
+                                    v
+                                }
+                                4 => {
+                                    let an = reg as usize;
+                                    let dec = if size_bytes == 1 && an == 7 { 2 } else { size_bytes };
+                                    state.a[an] = state.a[an].wrapping_sub(dec);
+                                    let addr = state.a[an];
+                                    match size_bytes {
+                                        1 => memory.read_u8(addr).map(u32::from),
+                                        2 => memory.read_u16_be(addr).map(u32::from),
+                                        _ => memory.read_u32_be(addr),
+                                    }
+                                }
+                                5 => {
+                                    let disp_w = match memory.read_u16_be(ext_pc) {
+                                        Some(v) => v,
+                                        None => {
+                                            trace.stop = Some(StopReason::OutOfBounds { pc });
+                                            return trace;
+                                        }
+                                    };
+                                    ext_pc = ext_pc.saturating_add(2);
+                                    let addr = add_signed_u32(state.a[reg as usize], disp_w as i16 as i32);
+                                    match size_bytes {
+                                        1 => memory.read_u8(addr).map(u32::from),
+                                        2 => memory.read_u16_be(addr).map(u32::from),
+                                        _ => memory.read_u32_be(addr),
+                                    }
+                                }
+                                7 => match reg {
+                                    0 => {
+                                        let aw_w = match memory.read_u16_be(ext_pc) {
+                                            Some(v) => v,
+                                            None => {
+                                                trace.stop = Some(StopReason::OutOfBounds { pc });
+                                                return trace;
+                                            }
+                                        };
+                                        ext_pc = ext_pc.saturating_add(2);
+                                        let addr = (aw_w as i16 as i32) as u32;
+                                        match size_bytes {
+                                            1 => memory.read_u8(addr).map(u32::from),
+                                            2 => memory.read_u16_be(addr).map(u32::from),
+                                            _ => memory.read_u32_be(addr),
+                                        }
+                                    }
+                                    1 => {
+                                        let addr = match memory.read_u32_be(ext_pc) {
+                                            Some(v) => v,
+                                            None => {
+                                                trace.stop = Some(StopReason::OutOfBounds { pc });
+                                                return trace;
+                                            }
+                                        };
+                                        ext_pc = ext_pc.saturating_add(4);
+                                        match size_bytes {
+                                            1 => memory.read_u8(addr).map(u32::from),
+                                            2 => memory.read_u16_be(addr).map(u32::from),
+                                            _ => memory.read_u32_be(addr),
+                                        }
+                                    }
+                                    _ => None,
+                                },
+                                _ => None,
+                            };
+                            if let Some(dst_raw) = dst {
+                                let (imm_v, dst_v, bits) = match size_bytes {
+                                    1 => (imm & 0xFF, dst_raw & 0xFF, 8u32),
+                                    2 => (imm & 0xFFFF, dst_raw & 0xFFFF, 16u32),
+                                    _ => (imm, dst_raw, 32u32),
+                                };
+                                let res = dst_v.wrapping_sub(imm_v);
+                                set_ccr_sub(state, imm_v, dst_v, res, bits);
+                            }
+                            state.pc = ext_pc;
+                            continue;
+                        }
+                    }
+                    if mode == 0 {
+                        // Register-immediate ops on Dn used heavily by app logic.
+                        let dn = reg as usize;
+                        let apply_word = |state: &mut CpuState68k, v: u16| {
+                            state.d[dn] = (state.d[dn] & 0xFFFF_0000) | (v as u32);
+                        };
+                        let apply_byte = |state: &mut CpuState68k, v: u8| {
+                            state.d[dn] = (state.d[dn] & 0xFFFF_FF00) | (v as u32);
+                        };
+                        if size_bits == 2 {
+                            if let Some(imm) = memory.read_u32_be(pc + 2) {
+                                let cur = state.d[dn];
+                                let out = match base {
+                                    0x0000 => cur | imm,            // ORI.L
+                                    0x0400 => cur.wrapping_sub(imm), // SUBI.L
+                                    0x0600 => cur.wrapping_add(imm), // ADDI.L
+                                    0x0A00 => cur ^ imm,            // EORI.L
+                                    _ => cur,
+                                };
+                                if matches!(base, 0x0000 | 0x0400 | 0x0600 | 0x0A00) {
+                                    state.d[dn] = out;
+                                    match base {
+                                        0x0400 => set_ccr_sub(state, imm, cur, out, 32),
+                                        0x0600 => set_ccr_add(state, imm, cur, out, 32),
+                                        _ => set_ccr_nz(state, (out & 0x8000_0000) != 0, out == 0),
+                                    }
+                                }
+                            }
+                        } else if let Some(immw) = memory.read_u16_be(pc + 2) {
+                            match size_bits {
+                                0 => {
+                                    let cur = (state.d[dn] & 0xFF) as u8;
+                                    let imm = (immw & 0x00FF) as u8;
+                                    let out = match base {
+                                        0x0000 => cur | imm,            // ORI.B
+                                        0x0400 => cur.wrapping_sub(imm), // SUBI.B
+                                        0x0600 => cur.wrapping_add(imm), // ADDI.B
+                                        0x0A00 => cur ^ imm,            // EORI.B
+                                        _ => cur,
+                                    };
+                                    if matches!(base, 0x0000 | 0x0400 | 0x0600 | 0x0A00) {
+                                        apply_byte(state, out);
+                                        match base {
+                                            0x0400 => set_ccr_sub(state, imm as u32, cur as u32, out as u32, 8),
+                                            0x0600 => set_ccr_add(state, imm as u32, cur as u32, out as u32, 8),
+                                            _ => set_ccr_nz(state, (out & 0x80) != 0, out == 0),
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    let cur = (state.d[dn] & 0xFFFF) as u16;
+                                    let imm = immw;
+                                    let out = match base {
+                                        0x0000 => cur | imm,            // ORI.W
+                                        0x0400 => cur.wrapping_sub(imm), // SUBI.W
+                                        0x0600 => cur.wrapping_add(imm), // ADDI.W
+                                        0x0A00 => cur ^ imm,            // EORI.W
+                                        _ => cur,
+                                    };
+                                    if matches!(base, 0x0000 | 0x0400 | 0x0600 | 0x0A00) {
+                                        apply_word(state, out);
+                                        match base {
+                                            0x0400 => {
+                                                set_ccr_sub(state, imm as u32, cur as u32, out as u32, 16)
+                                            }
+                                            0x0600 => {
+                                                set_ccr_add(state, imm as u32, cur as u32, out as u32, 16)
+                                            }
+                                            _ => set_ccr_nz(state, (out & 0x8000) != 0, out == 0),
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // Minimal execution semantics for ANDI to Dn (used in Noah loop).
                     if base == 0x0200 && mode == 0 {
                         let dn = reg as usize;
@@ -742,7 +1125,10 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
         // MOVE.[B/W/L] generic length handling (covers many data motion opcodes).
         {
             let sz = (word >> 12) & 0x0003;
-            if sz == 0x1 || sz == 0x2 || sz == 0x3 {
+            // MOVE encodings live in opcode class 00 (top two bits clear) with
+            // high nibble 0x1/0x2/0x3 selecting size. Without the class check,
+            // opcodes like 0x5xxx (ADDQ/SUBQ/DBcc) get misdecoded as MOVE.
+            if (word & 0xC000) == 0 && (sz == 0x1 || sz == 0x2 || sz == 0x3) {
                 let src_mode = (word >> 3) & 0x0007;
                 let src_reg = word & 0x0007;
                 let dst_mode = (word >> 6) & 0x0007;
@@ -900,7 +1286,8 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                         (0x3, 7) if src_reg == 2 => {
                             // MOVEA.W (d16,PC),Am
                             if let Some(disp16) = memory.read_u16_be(pc + 2) {
-                                let addr = add_signed_u32(pc.saturating_add(4), (disp16 as i16) as i32);
+                                // For d16(PC), 68k uses the extension-word address as PC base.
+                                let addr = add_signed_u32(pc.saturating_add(2), (disp16 as i16) as i32);
                                 if let Some(v) = memory.read_u16_be(addr) {
                                     state.a[an] = (v as i16 as i32) as u32;
                                 }
@@ -909,7 +1296,8 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                         (0x2, 7) if src_reg == 2 => {
                             // MOVEA.L (d16,PC),Am
                             if let Some(disp16) = memory.read_u16_be(pc + 2) {
-                                let addr = add_signed_u32(pc.saturating_add(4), (disp16 as i16) as i32);
+                                // For d16(PC), 68k uses the extension-word address as PC base.
+                                let addr = add_signed_u32(pc.saturating_add(2), (disp16 as i16) as i32);
                                 if let Some(v) = memory.read_u32_be(addr) {
                                     state.a[an] = v;
                                 }
@@ -1274,11 +1662,51 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             let mode = (word >> 3) & 0x0007;
             let reg = word & 0x0007;
             let ea_words = ea_ext_words(mode, reg).unwrap_or(0);
+            let opmode = (word >> 6) & 0x0007;
+            let dst = ((word >> 9) & 0x0007) as usize;
+            // ADDA/SUBA minimal support for startup glue.
+            if opmode == 0x3 || opmode == 0x7 {
+                let src_long = opmode == 0x7;
+                let src = match (mode, reg) {
+                    // Dn / An sources.
+                    (0, r) => {
+                        let v = state.d[r as usize];
+                        if src_long { Some(v) } else { Some((v as u16 as i16) as i32 as u32) }
+                    }
+                    (1, r) => {
+                        let v = state.a[r as usize];
+                        if src_long { Some(v) } else { Some((v as u16 as i16) as i32 as u32) }
+                    }
+                    // Immediate source (#imm), used by SUBA.L in startup glue.
+                    (7, 4) => {
+                        if src_long {
+                            memory.read_u32_be(pc.saturating_add(2))
+                        } else {
+                            memory
+                                .read_u16_be(pc.saturating_add(2))
+                                .map(|v| (v as i16 as i32) as u32)
+                        }
+                    }
+                    _ => None,
+                };
+                if let Some(src_v) = src {
+                    if (word & 0xF000) == 0xD000 {
+                        state.a[dst] = state.a[dst].wrapping_add(src_v);
+                    } else {
+                        state.a[dst] = state.a[dst].wrapping_sub(src_v);
+                    }
+                }
+                let ext_words = if mode == 7 && reg == 4 {
+                    if src_long { 2 } else { 1 }
+                } else {
+                    ea_words
+                };
+                state.pc = pc.saturating_add(2 + ext_words * 2);
+                continue;
+            }
             // Minimal execution for ADD <Dn>,Dn (word/long destination in Dn).
             if (word & 0xF000) == 0xD000 && mode == 0 {
                 let src = reg as usize;
-                let dst = ((word >> 9) & 0x0007) as usize;
-                let opmode = (word >> 6) & 0x0007;
                 match opmode {
                     0x0 => {
                         let s = (state.d[src] & 0xFF) as u8;
@@ -1308,6 +1736,60 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                     0x7 => {
                         // ADDA.L Dn,An
                         state.a[dst] = state.a[dst].wrapping_add(state.d[src]);
+                    }
+                    _ => {}
+                }
+            } else if (word & 0xF000) == 0xD000 && mode == 1 {
+                // ADD <An>,Dn (needed by app loop setup, e.g. ADD.L A6,D3).
+                let src_an = reg as usize;
+                match opmode {
+                    0x1 => {
+                        // ADD.W An,Dn (word source from An low word).
+                        let s = (state.a[src_an] & 0xFFFF) as u16;
+                        let d = (state.d[dst] & 0xFFFF) as u16;
+                        let r = d.wrapping_add(s);
+                        state.d[dst] = (state.d[dst] & 0xFFFF_0000) | (r as u32);
+                        set_ccr_nz(state, (r & 0x8000) != 0, r == 0);
+                    }
+                    0x2 => {
+                        // ADD.L An,Dn
+                        let r = state.d[dst].wrapping_add(state.a[src_an]);
+                        state.d[dst] = r;
+                        set_ccr_nz(state, (r & 0x8000_0000) != 0, r == 0);
+                    }
+                    _ => {}
+                }
+            } else if (word & 0xF000) == 0xD000 && mode == 2 {
+                // ADD Dn,(An) variants used by startup relocation glue.
+                let an = reg as usize;
+                let src = ((word >> 9) & 0x0007) as usize;
+                let opmode = (word >> 6) & 0x0007;
+                match opmode {
+                    0x4 => {
+                        // ADD.B Dn,(An)
+                        if let Some(d) = memory.read_u8(state.a[an]) {
+                            let s = (state.d[src] & 0xFF) as u8;
+                            let r = d.wrapping_add(s);
+                            memory.write_u8(state.a[an], r);
+                            set_ccr_nz(state, (r & 0x80) != 0, r == 0);
+                        }
+                    }
+                    0x5 => {
+                        // ADD.W Dn,(An)
+                        if let Some(d) = memory.read_u16_be(state.a[an]) {
+                            let s = (state.d[src] & 0xFFFF) as u16;
+                            let r = d.wrapping_add(s);
+                            memory.write_u16_be(state.a[an], r);
+                            set_ccr_nz(state, (r & 0x8000) != 0, r == 0);
+                        }
+                    }
+                    0x6 => {
+                        // ADD.L Dn,(An)
+                        if let Some(d) = memory.read_u32_be(state.a[an]) {
+                            let r = d.wrapping_add(state.d[src]);
+                            memory.write_u32_be(state.a[an], r);
+                            set_ccr_nz(state, (r & 0x8000_0000) != 0, r == 0);
+                        }
                     }
                     _ => {}
                 }
@@ -1404,6 +1886,29 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             let opmode = (word >> 6) & 0x0007;
             let mode = (word >> 3) & 0x0007;
             let reg = (word & 0x0007) as usize;
+            // CMPA.W/L <ea>,An (minimal: sets CCR from An - src).
+            if opmode == 0x3 || opmode == 0x7 {
+                let src_long = opmode == 0x7;
+                let src = match (mode, reg) {
+                    (0, r) => {
+                        let v = state.d[r];
+                        if src_long { Some(v) } else { Some((v as u16 as i16) as i32 as u32) }
+                    }
+                    (1, r) => {
+                        let v = state.a[r];
+                        if src_long { Some(v) } else { Some((v as u16 as i16) as i32 as u32) }
+                    }
+                    _ => None,
+                };
+                if let Some(src_v) = src {
+                    let dst_v = state.a[dn];
+                    let res = dst_v.wrapping_sub(src_v);
+                    set_ccr_sub(state, src_v, dst_v, res, 32);
+                }
+                let ext_words = ea_ext_words(mode as u16, reg as u16).unwrap_or(0);
+                state.pc = pc.saturating_add(2 + ext_words * 2);
+                continue;
+            }
             let size = match opmode {
                 0 => Some(1u32),
                 1 => Some(2u32),
@@ -1587,6 +2092,112 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
             continue;
         }
 
+        // ADD <ea>,Dn subset (needed by Palm glue, e.g. `ADD.L A6,D3`).
+        if (word & 0xF000) == 0xD000 {
+            let opmode = (word >> 6) & 0x0007;
+            let dn = ((word >> 9) & 0x0007) as usize;
+            let mode = (word >> 3) & 0x0007;
+            let reg = (word & 0x0007) as usize;
+            let size_bytes = match opmode {
+                0 => Some(1u32), // ADD.B <ea>,Dn
+                1 => Some(2u32), // ADD.W <ea>,Dn
+                2 => Some(4u32), // ADD.L <ea>,Dn
+                _ => None,
+            };
+            if let Some(size) = size_bytes {
+                let ea_words = ea_ext_words(mode, reg as u16).unwrap_or(0);
+                let mut ext_pc = pc.saturating_add(2);
+                let src = match mode {
+                    0 => Some(state.d[reg]),
+                    1 => Some(state.a[reg]),
+                    2 => {
+                        let addr = state.a[reg];
+                        match size {
+                            1 => memory.read_u8(addr).map(u32::from),
+                            2 => memory.read_u16_be(addr).map(u32::from),
+                            _ => memory.read_u32_be(addr),
+                        }
+                    }
+                    3 => {
+                        let addr = state.a[reg];
+                        let v = match size {
+                            1 => memory.read_u8(addr).map(u32::from),
+                            2 => memory.read_u16_be(addr).map(u32::from),
+                            _ => memory.read_u32_be(addr),
+                        };
+                        let inc = if size == 1 && reg == 7 { 2 } else { size };
+                        state.a[reg] = state.a[reg].wrapping_add(inc);
+                        v
+                    }
+                    4 => {
+                        let dec = if size == 1 && reg == 7 { 2 } else { size };
+                        state.a[reg] = state.a[reg].wrapping_sub(dec);
+                        let addr = state.a[reg];
+                        match size {
+                            1 => memory.read_u8(addr).map(u32::from),
+                            2 => memory.read_u16_be(addr).map(u32::from),
+                            _ => memory.read_u32_be(addr),
+                        }
+                    }
+                    5 => {
+                        let disp = memory.read_u16_be(ext_pc).map(|v| v as i16 as i32);
+                        ext_pc = ext_pc.saturating_add(2);
+                        disp.and_then(|d| {
+                            let addr = add_signed_u32(state.a[reg], d);
+                            match size {
+                                1 => memory.read_u8(addr).map(u32::from),
+                                2 => memory.read_u16_be(addr).map(u32::from),
+                                _ => memory.read_u32_be(addr),
+                            }
+                        })
+                    }
+                    7 if reg == 0 => {
+                        let aw = memory.read_u16_be(ext_pc).map(|v| v as i16 as i32 as u32);
+                        ext_pc = ext_pc.saturating_add(2);
+                        aw.and_then(|addr| match size {
+                            1 => memory.read_u8(addr).map(u32::from),
+                            2 => memory.read_u16_be(addr).map(u32::from),
+                            _ => memory.read_u32_be(addr),
+                        })
+                    }
+                    7 if reg == 1 => {
+                        let al = memory.read_u32_be(ext_pc);
+                        ext_pc = ext_pc.saturating_add(4);
+                        al.and_then(|addr| match size {
+                            1 => memory.read_u8(addr).map(u32::from),
+                            2 => memory.read_u16_be(addr).map(u32::from),
+                            _ => memory.read_u32_be(addr),
+                        })
+                    }
+                    _ => None,
+                };
+                if let Some(s) = src {
+                    match size {
+                        1 => {
+                            let d = (state.d[dn] & 0xFF) as u8;
+                            let r = d.wrapping_add((s & 0xFF) as u8);
+                            state.d[dn] = (state.d[dn] & 0xFFFF_FF00) | (r as u32);
+                            set_ccr_nz(state, (r & 0x80) != 0, r == 0);
+                        }
+                        2 => {
+                            let d = (state.d[dn] & 0xFFFF) as u16;
+                            let r = d.wrapping_add((s & 0xFFFF) as u16);
+                            state.d[dn] = (state.d[dn] & 0xFFFF_0000) | (r as u32);
+                            set_ccr_nz(state, (r & 0x8000) != 0, r == 0);
+                        }
+                        _ => {
+                            let d = state.d[dn];
+                            let r = d.wrapping_add(s);
+                            state.d[dn] = r;
+                            set_ccr_nz(state, (r & 0x8000_0000) != 0, r == 0);
+                        }
+                    }
+                }
+                state.pc = pc.saturating_add(2 + ea_words * 2);
+                continue;
+            }
+        }
+
         // LEA <ea>,Am (addressing modes commonly used in startup stubs).
         if (word & 0xF1C0) == 0x41C0 {
             let am = ((word >> 9) & 0x0007) as usize;
@@ -1645,14 +2256,16 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
                         trace.stop = Some(StopReason::OutOfBounds { pc });
                         return trace;
                     };
-                    (Some(add_signed_u32(pc.saturating_add(4), (disp16 as i16) as i32)), 4u32)
+                    // For d16(PC), 68k uses the extension-word address as PC base.
+                    (Some(add_signed_u32(pc.saturating_add(2), (disp16 as i16) as i32)), 4u32)
                 } // (d16,PC)
                 (7, 3) => {
                     let Some(ext) = memory.read_u16_be(pc + 2) else {
                         trace.stop = Some(StopReason::OutOfBounds { pc });
                         return trace;
                     };
-                    (Some(indexed_addr(pc.saturating_add(4), ext, state)), 4u32)
+                    // For d8(PC,Xn), 68k uses the extension-word address as PC base.
+                    (Some(indexed_addr(pc.saturating_add(2), ext, state)), 4u32)
                 } // (d8,PC,Xn)
                 _ => (None, 2u32),
             };

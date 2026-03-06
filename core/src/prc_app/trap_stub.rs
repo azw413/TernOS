@@ -3,9 +3,8 @@ extern crate alloc;
 use alloc::{vec, vec::Vec};
 
 use crate::prc_app::{
-    bootstrap::seed_prc_launch_registers,
     cpu::{core::CpuState68k, memory::MemoryMap},
-    runtime::{FeatureEntry, MemBlock, PrcRuntimeContext, RuntimeBitmapDraw},
+    runtime::{FeatureEntry, MemBlock, PrcRuntimeContext, RuntimeEvent, EVT_FRM_LOAD, EVT_FRM_OPEN, EVT_NIL},
 };
 
 pub fn is_prc_runtime_trap_handled(trap_word: u16) -> bool {
@@ -69,7 +68,7 @@ pub fn apply_prc_runtime_trap_stub(
     runtime: &mut PrcRuntimeContext,
     memory: &mut MemoryMap,
     trap_word: u16,
-    _pc: u32,
+    pc: u32,
 ) {
     if !runtime.default_stubbed_traps.contains(&trap_word) {
         runtime.default_stubbed_traps.push(trap_word);
@@ -80,9 +79,10 @@ pub fn apply_prc_runtime_trap_stub(
     let s1 = memory.read_u16_be(sp.saturating_add(2)).unwrap_or(0);
     let s2 = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0);
     let s3 = memory.read_u16_be(sp.saturating_add(6)).unwrap_or(0);
-    if runtime.trace_traps {
+    if runtime.trace_traps && runtime.trace_trap_budget > 0 {
         log::info!(
-            "PRC trap call trap=0x{:04X} group={} name={} d0=0x{:08X} d1=0x{:08X} a0=0x{:08X} a1=0x{:08X} a7=0x{:08X} sp[0..8]={:04X} {:04X} {:04X} {:04X}",
+            "PRC trap call pc=0x{:X} trap=0x{:04X} group={} name={} d0=0x{:08X} d1=0x{:08X} a0=0x{:08X} a1=0x{:08X} a7=0x{:08X} sp[0..8]={:04X} {:04X} {:04X} {:04X}",
+            pc,
             trap_word,
             trap_meta.group.as_str(),
             trap_meta.name,
@@ -96,6 +96,7 @@ pub fn apply_prc_runtime_trap_stub(
             s2,
             s3
         );
+        runtime.trace_trap_budget = runtime.trace_trap_budget.saturating_sub(1);
     }
 
     fn resolve_handle(runtime: &PrcRuntimeContext, raw: u32) -> Option<u32> {
@@ -118,25 +119,13 @@ pub fn apply_prc_runtime_trap_stub(
         memory: &MemoryMap,
     ) -> u32 {
         let sp = cpu.a[7];
-        let candidates = [
-            memory.read_u32_be(sp).unwrap_or(0),
-            memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
-            memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
-            cpu.d[0],
-            cpu.a[0],
-            cpu.d[1],
-            cpu.a[1],
-        ];
+        let candidates = [memory.read_u32_be(sp).unwrap_or(0)];
         for raw in candidates {
             if let Some(handle) = resolve_handle(runtime, raw) {
                 return handle;
             }
         }
-        if cpu.d[0] != 0 {
-            cpu.d[0]
-        } else {
-            cpu.a[0]
-        }
+        0
     }
 
     fn alloc_mem(
@@ -330,53 +319,10 @@ pub fn apply_prc_runtime_trap_stub(
         kind_hint: u32,
         id_hint: u16,
     ) -> Option<(u32, u16, Vec<u8>)> {
-        let code_kind = u32::from_be_bytes(*b"code");
-        let has_kind_hint = kind_hint != 0;
-        if let Some(res) = runtime
-            .resources
-            .iter()
-            .find(|res| res.kind == kind_hint && res.id == id_hint)
-        {
-            return Some((res.kind, res.id, res.data.clone()));
-        }
-        if has_kind_hint {
-            if let Some(res) = runtime.resources.iter().find(|res| res.id == id_hint) {
-                return Some((res.kind, res.id, res.data.clone()));
-            }
-        }
-        if has_kind_hint {
-            if let Some(res) = runtime.resources.iter().find(|res| res.kind == kind_hint) {
-                return Some((res.kind, res.id, res.data.clone()));
-            }
-        }
-        if !has_kind_hint {
-            // No decoded hint: bias toward startup globals/preferences blobs first.
-            if let Some(res) = runtime
-                .resources
-                .iter()
-                .find(|res| res.kind == u32::from_be_bytes(*b"data"))
-            {
-                return Some((res.kind, res.id, res.data.clone()));
-            }
-            if let Some(res) = runtime
-                .resources
-                .iter()
-                .find(|res| res.kind == u32::from_be_bytes(*b"pref"))
-            {
-                return Some((res.kind, res.id, res.data.clone()));
-            }
-            return runtime
-                .resources
-                .iter()
-                .filter(|res| res.kind != code_kind)
-                .max_by_key(|res| res.data.len())
-                .or_else(|| runtime.resources.iter().max_by_key(|res| res.data.len()))
-                .map(|res| (res.kind, res.id, res.data.clone()));
-        }
         runtime
             .resources
             .iter()
-            .max_by_key(|res| res.data.len())
+            .find(|res| res.kind == kind_hint && res.id == id_hint)
             .map(|res| (res.kind, res.id, res.data.clone()))
     }
 
@@ -395,83 +341,63 @@ pub fn apply_prc_runtime_trap_stub(
         runtime.dm_get_resource_last_log = Some(tuple);
     }
 
-    fn read_stack_u16(memory: &MemoryMap, sp: u32, off: u32) -> Option<u16> {
-        memory.read_u16_be(sp.saturating_add(off))
-    }
-
-    fn read_stack_u32(memory: &MemoryMap, sp: u32, off: u32) -> Option<u32> {
-        memory.read_u32_be(sp.saturating_add(off))
-    }
-
-    fn looks_fourcc(kind: u32) -> bool {
-        let b = kind.to_be_bytes();
-        b.iter().all(|ch| ch.is_ascii_alphanumeric() || *ch == b' ')
-    }
-
     fn decode_dm_resource_args(
-        runtime: &PrcRuntimeContext,
         cpu: &CpuState68k,
         memory: &MemoryMap,
     ) -> (u32, u16) {
-        fn score_candidate(runtime: &PrcRuntimeContext, kind: u32, id: u16) -> i32 {
-            let mut score = 0i32;
-            if looks_fourcc(kind) {
-                score += 2;
-            }
-            if runtime.resources.iter().any(|r| r.kind == kind) {
-                score += 3;
-            }
-            if runtime.resources.iter().any(|r| r.kind == kind && r.id == id) {
-                score += 2;
-            }
-            score
-        }
-
-        let mut candidates: Vec<(u32, u16)> = Vec::new();
-        let push = |out: &mut Vec<(u32, u16)>, kind: u32, id: u16| {
-            if kind != 0 && !out.iter().any(|(k, i)| *k == kind && *i == id) {
-                out.push((kind, id));
-            }
-        };
-
-        push(&mut candidates, cpu.d[0], (cpu.d[1] & 0xFFFF) as u16);
-        push(&mut candidates, cpu.d[1], (cpu.d[0] & 0xFFFF) as u16);
-        push(&mut candidates, cpu.a[0], (cpu.a[1] & 0xFFFF) as u16);
-        push(&mut candidates, cpu.a[1], (cpu.a[0] & 0xFFFF) as u16);
-
         let sp = cpu.a[7];
-        for off in (0..=24u32).step_by(2) {
-            if let Some(k) = read_stack_u32(memory, sp, off) {
-                push(
-                    &mut candidates,
-                    k,
-                    read_stack_u16(memory, sp, off.saturating_add(4)).unwrap_or(0),
-                );
-                push(
-                    &mut candidates,
-                    k,
-                    read_stack_u16(memory, sp, off.saturating_add(6)).unwrap_or(0),
-                );
-            }
-        }
+        // Palm ABI for DmGetResource/DmGet1Resource:
+        // type (UInt32), id (UInt16).
+        let kind = memory.read_u32_be(sp).unwrap_or(0);
+        let id = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0);
+        (kind, id)
+    }
 
-        let mut best: Option<(u32, u16, i32)> = None;
-        for (k, i) in candidates {
-            let score = score_candidate(runtime, k, i);
-            if score <= 0 {
-                continue;
-            }
-            match best {
-                Some((_, _, s)) if s >= score => {}
-                _ => best = Some((k, i, score)),
-            }
+    fn write_event(memory: &mut MemoryMap, event_p: u32, e_type: u16, data_u16: u16) {
+        if event_p == 0 || !memory.contains_addr(event_p) {
+            return;
         }
+        // EventType starts with eType (UInt16). Palm event union payload
+        // used by frmLoad/frmOpen formID is at +8.
+        let _ = memory.write_u16_be(event_p, e_type);
+        let _ = memory.write_u16_be(event_p.saturating_add(2), 0);
+        let _ = memory.write_u16_be(event_p.saturating_add(4), 0);
+        let _ = memory.write_u16_be(event_p.saturating_add(6), 0);
+        let _ = memory.write_u16_be(event_p.saturating_add(8), data_u16);
+        // Keep a minimal generic payload consistent with eType to help glue code
+        // that aliases the union through generic fields.
+        let _ = memory.write_u16_be(event_p.saturating_add(10), e_type);
+    }
 
-        if let Some((k, i, _)) = best {
-            (k, i)
-        } else {
-            (0, 0)
+    fn decode_ptr_arg_from_stack(
+        cpu: &CpuState68k,
+        memory: &MemoryMap,
+        arg_offset: u32,
+    ) -> u32 {
+        let sp = cpu.a[7];
+        let raw = memory.read_u32_be(sp.saturating_add(arg_offset)).unwrap_or(0);
+        if raw != 0 && memory.contains_addr(raw) {
+            return raw;
         }
+        // Palm 68K glue frequently passes frame-relative locals as 16-bit offsets
+        // (signed or unsigned representation depending on codegen).
+        if raw <= 0xFFFF || (raw & 0xFFFF_0000) == 0xFFFF_0000 {
+            let off_signed = (raw as u16) as i16 as i32;
+            let signed_candidate = if off_signed >= 0 {
+                cpu.a[6].wrapping_add(off_signed as u32)
+            } else {
+                cpu.a[6].wrapping_sub((-off_signed) as u32)
+            };
+            if signed_candidate != 0 && memory.contains_addr(signed_candidate) {
+                return signed_candidate;
+            }
+            let off_unsigned = (raw as u16) as u32;
+            let unsigned_candidate = cpu.a[6].wrapping_add(off_unsigned);
+            if unsigned_candidate != 0 && memory.contains_addr(unsigned_candidate) {
+                return unsigned_candidate;
+            }
+        }
+        raw
     }
 
     match trap_word {
@@ -488,26 +414,47 @@ pub fn apply_prc_runtime_trap_stub(
                 let (_h, ptr) = alloc_mem(runtime, memory, vec![0u8; 128], None, None);
                 runtime.sys_app_info_ptr = ptr;
             }
-            if cpu.a[5] == 0 {
-                // Keep A5 globals world valid for code paths that expect globals after startup.
-                let (_h, ptr) = alloc_mem(runtime, memory, vec![0u8; 256], None, None);
-                cpu.a[5] = ptr;
-            }
-            // SysAppStartup(appInfoPP, prevGlobalsP, globalsPtrP) returns pointers via args.
+            // SysAppStartup(appInfoPP, prevGlobalsP, globalsPtrP)
+            // (matching Pumpkin/Palm contract).
             let sp = cpu.a[7];
             let app_info_pp = memory.read_u32_be(sp).unwrap_or(0);
             let prev_globals_p = memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0);
             let globals_ptr_p = memory.read_u32_be(sp.saturating_add(8)).unwrap_or(0);
-            if app_info_pp != 0 {
+            if runtime.sys_app_info_ptr != 0 {
+                let _ = memory.write_u16_be(runtime.sys_app_info_ptr, runtime.launch_cmd);
+                let _ = memory.write_u32_be(
+                    runtime.sys_app_info_ptr.saturating_add(2),
+                    runtime.cmd_pbp,
+                );
+                let _ = memory.write_u16_be(
+                    runtime.sys_app_info_ptr.saturating_add(6),
+                    runtime.launch_flags,
+                );
+                // codeH: current code#1 handle.
+                let _ = memory.write_u32_be(
+                    runtime.sys_app_info_ptr.saturating_add(12),
+                    runtime.code_handle,
+                );
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    log::info!(
+                        "PRC trap detail SysAppStartup appInfo=0x{:08X} cmd=0x{:04X} cmdPBP=0x{:08X} flags=0x{:04X} codeH=0x{:08X}",
+                        runtime.sys_app_info_ptr,
+                        runtime.launch_cmd,
+                        runtime.cmd_pbp,
+                        runtime.launch_flags,
+                        runtime.code_handle
+                    );
+                }
+            }
+            if app_info_pp != 0 && memory.contains_addr(app_info_pp) {
                 let _ = memory.write_u32_be(app_info_pp, runtime.sys_app_info_ptr);
             }
-            if prev_globals_p != 0 {
-                let _ = memory.write_u32_be(prev_globals_p, 0);
+            if prev_globals_p != 0 && memory.contains_addr(prev_globals_p) {
+                let _ = memory.write_u32_be(prev_globals_p, runtime.prev_globals_ptr);
             }
-            if globals_ptr_p != 0 {
-                let _ = memory.write_u32_be(globals_ptr_p, cpu.a[5]);
+            if globals_ptr_p != 0 && memory.contains_addr(globals_ptr_p) {
+                let _ = memory.write_u32_be(globals_ptr_p, runtime.globals_ptr);
             }
-            seed_prc_launch_registers(cpu, runtime);
             cpu.d[0] = 0;
         }
         0xA090 => {
@@ -515,131 +462,147 @@ pub fn apply_prc_runtime_trap_stub(
             cpu.d[0] = 0;
         }
         0xA19B => {
-            let form_id = (cpu.d[0] & 0xFFFF) as u16;
-            runtime.active_form_id = Some(form_id);
-            runtime.active_form_handle = 0x3000_0000u32.saturating_add(form_id as u32);
-            // FrmGotoForm queues a load/open sequence for the event loop.
-            if form_id != 0 {
-                runtime.event_queue.push(23); // frmLoadEvent
-                runtime.event_queue.push(24); // frmOpenEvent
-            }
+            // FrmGotoForm(formID): queue a deterministic Palm-style transition.
+            let sp = cpu.a[7];
+            let form_id = memory.read_u16_be(sp).unwrap_or(0);
+            runtime.event_queue.push(RuntimeEvent {
+                e_type: EVT_FRM_LOAD,
+                data_u16: form_id,
+            });
+            runtime.event_queue.push(RuntimeEvent {
+                e_type: EVT_FRM_OPEN,
+                data_u16: form_id,
+            });
             cpu.d[0] = 0;
         }
         0xA173 => {
             cpu.a[0] = runtime.active_form_handle;
-            cpu.d[0] = runtime.active_form_handle;
         }
         0xA174 => {
-            if let Some(h) = decode_form_handle(cpu, memory) {
-                let hid = (h & 0xFFFF) as u16;
-                if hid <= 0x2000 {
-                    runtime.active_form_handle = h;
-                    runtime.active_form_id = Some(hid);
+            // void FrmSetActiveForm(FormType *formP)
+            let sp = cpu.a[7];
+            let form_h = memory.read_u32_be(sp).unwrap_or(0);
+            if form_h != 0 {
+                runtime.active_form_handle = form_h;
+                runtime.active_form_id = Some((form_h & 0xFFFF) as u16);
+            }
+        }
+        0xA16F => {
+            let sp = cpu.a[7];
+            let mut form_id = memory.read_u16_be(sp).unwrap_or(0);
+            let evt_type = memory.read_u16_be(runtime.evt_event_p).unwrap_or(0xFFFF);
+            let evt_form = memory
+                .read_u16_be(runtime.evt_event_p.saturating_add(8))
+                .unwrap_or(0);
+            if (evt_type == EVT_FRM_LOAD || evt_type == EVT_FRM_OPEN)
+                && evt_form != 0
+                && form_id != evt_form
+            {
+                form_id = evt_form;
+            }
+            let has_form_resource = runtime
+                .resources
+                .iter()
+                .any(|res| res.kind == u32::from_be_bytes(*b"tFRM") && res.id == form_id);
+            if !has_form_resource {
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    let ep = runtime.evt_event_p;
+                    let e_type = memory.read_u16_be(ep).unwrap_or(0xFFFF);
+                    let e_form = memory.read_u16_be(ep.saturating_add(8)).unwrap_or(0xFFFF);
+                    log::info!(
+                        "PRC trap detail FrmInitForm invalid form_id=0x{:04X} evt_p=0x{:08X} evt_type={} evt_form=0x{:04X}",
+                        form_id,
+                        ep,
+                        e_type,
+                        e_form
+                    );
                 }
+                cpu.a[0] = 0;
+                cpu.d[0] = 0;
+                return;
+            }
+            let form_h = 0x3000_0000u32 | (form_id as u32);
+            cpu.a[0] = form_h;
+            runtime.active_form_id = Some(form_id);
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                let ep = runtime.evt_event_p;
+                let e_type = memory.read_u16_be(ep).unwrap_or(0xFFFF);
+                let e_form = memory.read_u16_be(ep.saturating_add(8)).unwrap_or(0xFFFF);
+                log::info!(
+                    "PRC trap detail FrmInitForm form_id=0x{:04X} evt_p=0x{:08X} evt_type={} evt_form=0x{:04X}",
+                    form_id,
+                    ep,
+                    e_type,
+                    e_form
+                );
+            }
+        }
+        0xA171 => {
+            if runtime.drawn_form_id.is_none() {
                 runtime.drawn_form_id = runtime.active_form_id;
             }
             cpu.d[0] = 0;
         }
-        0xA16F => {
-            // FrmInitForm(formID): return synthetic form handle.
-            let sp = cpu.a[7];
-            let form_id = (cpu.d[0] & 0xFFFF) as u16;
-            let stack_id0 = memory.read_u16_be(sp).unwrap_or(0);
-            let stack_id1 = memory.read_u16_be(sp.saturating_add(2)).unwrap_or(0);
-            let chosen = if form_id != 0 && form_id <= 0x2000 {
-                form_id
-            } else if stack_id0 != 0 && stack_id0 <= 0x2000 {
-                stack_id0
-            } else if stack_id1 != 0 && stack_id1 <= 0x2000 {
-                stack_id1
-            } else {
-                runtime.active_form_id.unwrap_or(1000)
-            };
-            let handle = 0x3000_0000u32.saturating_add(chosen as u32);
-            runtime.active_form_id = Some(chosen);
-            runtime.active_form_handle = handle;
-            cpu.a[0] = handle;
-            cpu.d[0] = handle;
-        }
-        0xA171 => {
-            // FrmDrawForm(formP): remember which form was requested to draw.
-            let form_h = decode_form_handle(cpu, memory).unwrap_or(runtime.active_form_handle);
-            runtime.drawn_form_id = Some((form_h & 0xFFFF) as u16);
-            cpu.d[0] = 0;
-        }
         0xA19F => {
-            runtime.active_form_handler = cpu.a[0];
+            // FrmSetEventHandler(formP, handlerP)
+            let sp = cpu.a[7];
+            runtime.active_form_handle = memory.read_u32_be(sp).unwrap_or(runtime.active_form_handle);
+            runtime.active_form_handler = memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0);
             cpu.d[0] = 0;
         }
         0xA17C => {
-            // FrmGetWindowHandle(formP): return active form's synthetic window.
-            cpu.a[0] = runtime.active_form_handle;
-            cpu.d[0] = runtime.active_form_handle;
+            cpu.a[0] = 0;
+            cpu.d[0] = 0;
         }
         0xA084 => {
             // ErrDisplayFileLineMsg: swallow diagnostics/assert displays in exploratory mode.
             cpu.d[0] = 0;
         }
         0xA1A0 => {
-            // FrmDispatchEvent(eventP): emulate minimal default form behavior.
-            let sp = cpu.a[7];
-            let event_p = [
-                cpu.a[0],
-                memory.read_u32_be(sp).unwrap_or(0),
-                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
-                memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
-                cpu.a[1],
-                cpu.d[0],
-            ]
-            .into_iter()
-            .find(|p| *p != 0 && memory.contains_addr(*p))
-            .unwrap_or(0);
-            let e_type = if event_p != 0 {
-                memory.read_u16_be(event_p).unwrap_or(0)
-            } else {
-                0
-            };
-            if e_type == 24 {
-                // frmOpenEvent => draw active form.
-                runtime.drawn_form_id = runtime.active_form_id;
-            } else if e_type == 0 {
-                // nilEvent: approximate Yoda's timer-driven blink cadence.
-                let has_eyes = runtime.resources.iter().any(|r| {
-                    r.kind == u32::from_be_bytes(*b"Tbmp") && (r.id == 101 || r.id == 102 || r.id == 103)
-                });
-                if has_eyes {
-                    let eye_id = if runtime.ticks >= runtime.blink_next_tick {
-                        match runtime.blink_phase {
-                            0 => {
-                                runtime.blink_phase = 1;
-                                runtime.blink_next_tick = runtime.ticks.saturating_add(2);
-                                102 // closed
-                            }
-                            1 => {
-                                runtime.blink_phase = 2;
-                                runtime.blink_next_tick = runtime.ticks.saturating_add(2);
-                                103 // looking
-                            }
-                            _ => {
-                                runtime.blink_phase = 0;
-                                runtime.blink_next_tick = runtime.ticks.saturating_add(175);
-                                101 // open
-                            }
-                        }
-                    } else {
-                        101
-                    };
-                    runtime
-                        .drawn_bitmaps
-                        .retain(|d| !(d.x == 30 && d.y == 56 && (d.resource_id == 101 || d.resource_id == 102 || d.resource_id == 103)));
-                    runtime.drawn_bitmaps.push(RuntimeBitmapDraw {
-                        resource_id: eye_id,
-                        x: 30,
-                        y: 56,
-                    });
-                }
+            // FrmDispatchEvent(eventP): call active form handler if set.
+            // If no app handler exists, emulate Palm's default frmOpen handling
+            // by drawing the active form once.
+            let mut event_p = decode_ptr_arg_from_stack(cpu, memory, 0);
+            if !memory.contains_addr(event_p) {
+                event_p = runtime.evt_event_p;
             }
-            cpu.d[0] = 0;
+            let evt_type = memory.read_u16_be(event_p).unwrap_or(0xFFFF);
+            if runtime.active_form_handler != 0 {
+                let ret_pc = cpu.pc;
+                cpu.a[7] = cpu.a[7].wrapping_sub(4);
+                let _ = memory.write_u32_be(cpu.a[7], ret_pc);
+                cpu.pc = runtime.active_form_handler;
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    log::info!(
+                        "PRC trap detail FrmDispatchEvent call handler=0x{:08X} eventP=0x{:08X}",
+                        runtime.active_form_handler,
+                        event_p
+                    );
+                }
+                return;
+            }
+            if evt_type == EVT_FRM_OPEN {
+                if runtime.drawn_form_id.is_none() {
+                    runtime.drawn_form_id = runtime.active_form_id;
+                }
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    log::info!(
+                        "PRC trap detail FrmDispatchEvent default-open eventP=0x{:08X} form={:?}",
+                        event_p,
+                        runtime.drawn_form_id
+                    );
+                }
+                cpu.d[0] = 1;
+            } else {
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    log::info!(
+                        "PRC trap detail FrmDispatchEvent default-pass eventP=0x{:08X} eType={}",
+                        event_p,
+                        evt_type
+                    );
+                }
+                cpu.d[0] = 0;
+            }
         }
         0xA0A9 | 0xA1BF => {
             cpu.d[0] = 0;
@@ -647,70 +610,57 @@ pub fn apply_prc_runtime_trap_stub(
         0xA11D => {
             runtime.evt_polls = runtime.evt_polls.saturating_add(1);
             let sp = cpu.a[7];
+            let event_p = decode_ptr_arg_from_stack(cpu, memory, 0);
+            runtime.evt_event_p = event_p;
             // EvtGetEvent(eventP, timeout): advance simulated ticks by timeout.
             let timeout = [
-                memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0),
-                memory.read_u16_be(sp.saturating_add(6)).unwrap_or(0),
-                (cpu.d[0] & 0xFFFF) as u16,
+                memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0),
+                memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as u32,
+                memory.read_u16_be(sp.saturating_add(6)).unwrap_or(0) as u32,
+                cpu.d[0],
+                (cpu.d[0] & 0xFFFF) as u32,
             ]
             .into_iter()
             .find(|v| *v > 0 && *v < 10_000)
-            .unwrap_or(1) as u32;
+            .unwrap_or(1);
+            if let Some(evt) = runtime.event_queue.first().copied() {
+                let _ = runtime.event_queue.remove(0);
+                write_event(memory, event_p, evt.e_type, evt.data_u16);
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    let rb_type = memory.read_u16_be(event_p).unwrap_or(0xFFFF);
+                    let rb_form = memory
+                        .read_u16_be(event_p.saturating_add(8))
+                        .unwrap_or(0xFFFF);
+                    log::info!(
+                        "PRC trap detail EvtGetEvent eventP=0x{:08X} deliver eType={} data=0x{:04X} rb_type={} rb_form=0x{:04X}",
+                        event_p,
+                        evt.e_type,
+                        evt.data_u16,
+                        rb_type,
+                        rb_form
+                    );
+                }
+                runtime.blocked_on_evt_get_event = false;
+                runtime.blocked_evt_timeout_ticks = 0;
+                cpu.d[0] = 0;
+                return;
+            }
             runtime.ticks = runtime.ticks.saturating_add(timeout.max(1));
-            let event_type = if let Some(next) = (!runtime.event_queue.is_empty())
-                .then(|| runtime.event_queue.remove(0))
-            {
-                next
-            } else if runtime.shutting_down || runtime.evt_polls > 64 {
-                runtime.shutting_down = true;
-                22u16 // appStopEvent
-            } else {
-                0u16 // nilEvent
-            };
-            let mut wrote = false;
-            let candidates = [
-                cpu.a[0],
-                cpu.a[1],
-                cpu.a[2],
-                cpu.a[3],
-                cpu.a[5],
-                cpu.a[6],
-                cpu.d[0],
-                cpu.d[1],
-                memory.read_u32_be(sp).unwrap_or(0),
-                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
-                memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
-                memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0),
-                memory.read_u32_be(sp.saturating_add(8)).unwrap_or(0),
-                memory.read_u32_be(sp.saturating_add(10)).unwrap_or(0),
-            ];
-            for event_p in candidates {
-                if event_p == 0 {
-                    continue;
-                }
-                if memory.write_u16_be(event_p, event_type) {
-                    // EventType is a tagged union; mirror form id into nearby offsets
-                    // so frmLoad/formOpen handlers can read a plausible formID.
-                    if matches!(event_type, 23 | 24) {
-                        let form_id = runtime.active_form_id.unwrap_or(1000);
-                        let _ = memory.write_u16_be(event_p.saturating_add(2), form_id);
-                        let _ = memory.write_u16_be(event_p.saturating_add(4), form_id);
-                        let _ = memory.write_u16_be(event_p.saturating_add(6), form_id);
-                        let _ = memory.write_u16_be(event_p.saturating_add(8), form_id);
-                    }
-                    wrote = true;
-                    break;
-                }
+            write_event(memory, event_p, EVT_NIL, 0);
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                let rb_type = memory.read_u16_be(event_p).unwrap_or(0xFFFF);
+                log::info!(
+                    "PRC trap detail EvtGetEvent eventP=0x{:08X} deliver eType={} timeout={} rb_type={}",
+                    event_p,
+                    EVT_NIL,
+                    timeout,
+                    rb_type
+                );
             }
-            // Fallback: if we couldn't locate eventP, force shutdown quickly.
-            if !wrote && runtime.evt_polls > 8 {
-                runtime.shutting_down = true;
-            }
-            // Some apps use wrappers that inspect D0 after EvtGetEvent; mirror event type.
-            cpu.d[0] = event_type as u32;
-            // Cooperative scheduling: once startup events are drained, yield back to host
-            // after at least one nilEvent so we don't spin the emulated loop hot.
-            if runtime.event_queue.is_empty() && event_type == 0 {
+            if runtime.block_on_evt_get_event && !runtime.shutting_down {
+                runtime.blocked_on_evt_get_event = true;
+                runtime.blocked_evt_timeout_ticks = timeout.max(1);
                 runtime.terminate_requested = true;
             }
         }
@@ -719,19 +669,28 @@ pub fn apply_prc_runtime_trap_stub(
             let data = vec![0u8; size as usize];
             let (handle, _ptr) = alloc_mem(runtime, memory, data, None, None);
             cpu.a[0] = handle;
-            cpu.d[0] = handle;
         }
         0xA021 => {
             let handle = decode_handle_arg(runtime, cpu, memory);
             if let Some(ptr) = lock_handle(runtime, memory, handle) {
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    log::info!(
+                        "PRC trap detail MemHandleLock handle=0x{:08X} -> ptr=0x{:08X}",
+                        handle, ptr
+                    );
+                }
                 cpu.a[0] = ptr;
-                cpu.d[0] = ptr;
                 if cpu.a[2] < 0x0001_0000 {
                     cpu.a[2] = ptr;
                 }
             } else {
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    log::info!(
+                        "PRC trap detail MemHandleLock handle=0x{:08X} -> null",
+                        handle
+                    );
+                }
                 cpu.a[0] = 0;
-                cpu.d[0] = 0;
             }
         }
         0xA022 => {
@@ -790,13 +749,38 @@ pub fn apply_prc_runtime_trap_stub(
         }
         0xA060 | 0xA05F => {
             runtime.dm_get_resource_probe_count = runtime.dm_get_resource_probe_count.saturating_add(1);
-            let (kind_hint, id_hint) = decode_dm_resource_args(runtime, cpu, memory);
-            let (kind, id, data) =
-                select_resource_data(runtime, kind_hint, id_hint).unwrap_or((0, 0, vec![0u8; 256]));
-            maybe_log_resource_pick(runtime, kind_hint, id_hint, kind, id, data.len());
-            let (handle, _ptr) = alloc_mem(runtime, memory, data, Some(kind), Some(id));
-            cpu.a[0] = handle;
-            cpu.d[0] = handle;
+            let (kind_hint, id_hint) = decode_dm_resource_args(cpu, memory);
+            if let Some((kind, id, data)) = select_resource_data(runtime, kind_hint, id_hint) {
+                maybe_log_resource_pick(runtime, kind_hint, id_hint, kind, id, data.len());
+                let handle = runtime
+                    .mem_blocks
+                    .iter()
+                    .find(|b| b.resource_kind == Some(kind) && b.resource_id == Some(id))
+                    .map(|b| b.handle)
+                    .unwrap_or_else(|| {
+                        let (h, _ptr) = alloc_mem(runtime, memory, data, Some(kind), Some(id));
+                        h
+                    });
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    let k = kind.to_be_bytes();
+                    let kh = kind_hint.to_be_bytes();
+                    log::info!(
+                        "PRC trap detail DmGetResource req='{}{}{}{}'/{} -> got='{}{}{}{}'/{} handle=0x{:08X}",
+                        kh[0] as char, kh[1] as char, kh[2] as char, kh[3] as char, id_hint,
+                        k[0] as char, k[1] as char, k[2] as char, k[3] as char, id, handle
+                    );
+                }
+                cpu.a[0] = handle;
+            } else {
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    let kh = kind_hint.to_be_bytes();
+                    log::info!(
+                        "PRC trap detail DmGetResource req='{}{}{}{}'/{} -> null",
+                        kh[0] as char, kh[1] as char, kh[2] as char, kh[3] as char, id_hint
+                    );
+                }
+                cpu.a[0] = 0;
+            }
         }
         0xA061 => {
             cpu.d[0] = 0;
@@ -944,8 +928,19 @@ pub fn apply_prc_runtime_trap_stub(
             cpu.d[0] = 100;
         }
         0xA0C2 => {
-            runtime.rand_state = runtime.rand_state.wrapping_mul(1664525).wrapping_add(1013904223);
-            cpu.d[0] = runtime.rand_state;
+            // Int16 SysRandom(Int32 newSeed)
+            // Palm API returns a 15-bit value (0..sysRandomMax-1, sysRandomMax=0x7FFF).
+            let sp = cpu.a[7];
+            let new_seed = memory.read_u32_be(sp).unwrap_or(cpu.d[0]);
+            if new_seed != 0 {
+                runtime.rand_state = new_seed;
+            }
+            runtime.rand_state = runtime
+                .rand_state
+                .wrapping_mul(1_664_525)
+                .wrapping_add(1_013_904_223);
+            let rnd15 = (runtime.rand_state & 0x7FFF_FFFF) % 0x7FFF;
+            cpu.d[0] = rnd15;
         }
         0xA0C7 => {
             let ptr = if cpu.a[0] != 0 { cpu.a[0] } else { cpu.d[0] };
@@ -957,7 +952,7 @@ pub fn apply_prc_runtime_trap_stub(
             let mut bytes = read_c_string(memory, src);
             bytes.push(0);
             write_bytes(runtime, memory, dst, &bytes);
-            cpu.d[0] = dst;
+            cpu.a[0] = dst;
         }
         0xA180 => {
             cpu.d[0] = 0;
@@ -1041,7 +1036,6 @@ pub fn apply_prc_runtime_trap_stub(
         0xA200 => {
             // Return a stable synthetic display window handle.
             cpu.a[0] = 0x4000_0000;
-            cpu.d[0] = cpu.a[0];
         }
         0xA456 => {
             // WinGetBounds(winH, RectangleType* rP)
@@ -1103,11 +1097,9 @@ pub fn apply_prc_runtime_trap_stub(
         }
         0xA183 => {
             cpu.a[0] = 0x3001_0000;
-            cpu.d[0] = cpu.a[0];
         }
         0xA153 => {
             cpu.a[0] = 0x3002_0000;
-            cpu.d[0] = cpu.a[0];
         }
         0xA158 | 0xA135 | 0xA195 | 0xA1A1 | 0xA234 | 0xA9F0 => {
             cpu.d[0] = 0;

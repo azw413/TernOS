@@ -16,7 +16,7 @@ use crate::prc_app::{bootstrap, trap_stub};
 const PRC_EXEC_STEP_LIMIT: usize = 262_144;
 const PRC_EXEC_STUB_STEP_BUDGET: usize = 1_000_000;
 const PRC_EXEC_TRAP_STUB_LIMIT: usize = 65_536;
-const PRC_IDLE_LOOP_POLLS: u32 = 256;
+const PRC_IDLE_LOOP_POLLS: u32 = 4;
 
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeUiSnapshot {
@@ -29,6 +29,312 @@ pub struct RuntimeBitmapDraw {
     pub resource_id: u16,
     pub x: i16,
     pub y: i16,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuntimeRunState {
+    Running,
+    BlockedOnEvent { timeout_ticks: u32 },
+    Stopped(core::StopReason),
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeRunOutput {
+    pub snapshot: RuntimeUiSnapshot,
+    pub state: RuntimeRunState,
+    pub steps: usize,
+}
+
+pub struct PrcRuntimeSession {
+    cpu: core::CpuState68k,
+    memory: memory::MemoryMap,
+    runtime: runtime::PrcRuntimeContext,
+    stopped: bool,
+}
+
+impl PrcRuntimeSession {
+    pub fn from_source<S: AppSource>(
+        source: &mut S,
+        path: &[String],
+        entry: &ImageEntry,
+        info: &PrcInfo,
+        tick_seed: u32,
+    ) -> Result<Self, ImageError> {
+        const PRC_CODE_BASE: u32 = 0x0000_1000;
+        let code_id = info
+            .code_scan
+            .iter()
+            .find(|scan| scan.resource_id == 1)
+            .map(|scan| scan.resource_id)
+            .or_else(|| info.code_scan.first().map(|scan| scan.resource_id))
+            .ok_or(ImageError::Unsupported)?;
+        let code = source.load_prc_code_resource(path, entry, code_id)?;
+        let code0 = source.load_prc_code_resource(path, entry, 0).ok();
+        if code.len() < 2 {
+            return Err(ImageError::Unsupported);
+        }
+        let prc_raw = source.load_prc_bytes(path, entry).ok();
+        let prc_resources = prc_raw
+            .as_deref()
+            .map(bootstrap::parse_prc_resource_blobs)
+            .unwrap_or_default();
+        let system_resources = source.load_prc_system_resources();
+        let system_fonts = source.load_prc_system_fonts();
+
+        let mut cpu = core::CpuState68k::default();
+        let mut runtime_ctx = runtime::PrcRuntimeContext::default();
+        runtime_ctx.launch_cmd = 0;
+        runtime_ctx.launch_flags = 0x008C;
+        runtime_ctx.cmd_pbp = 0;
+        runtime_ctx.ticks = tick_seed;
+        runtime_ctx.trace_traps = true;
+        runtime_ctx.trace_trap_budget = 128;
+        runtime_ctx.block_on_evt_get_event = true;
+        runtime_ctx.resources = prc_resources;
+        runtime_ctx.resources.extend(system_resources);
+        runtime_ctx.fonts = crate::prc_app::font::load_nfnt_fonts(&runtime_ctx.resources);
+        for font in system_fonts {
+            if let Some(existing) = runtime_ctx
+                .fonts
+                .iter_mut()
+                .find(|f| f.font_id == font.font_id)
+            {
+                *existing = font;
+            } else {
+                runtime_ctx.fonts.push(font);
+            }
+        }
+        runtime_ctx.prc_image = prc_raw.unwrap_or_default();
+        let mut memory = memory::MemoryMap::with_data(PRC_CODE_BASE, code.clone());
+        let code_handle = runtime_ctx.next_handle;
+        runtime_ctx.next_handle = runtime_ctx.next_handle.saturating_add(1);
+        runtime_ctx.mem_blocks.push(runtime::MemBlock {
+            handle: code_handle,
+            ptr: PRC_CODE_BASE,
+            size: code.len() as u32,
+            locked: true,
+            data: code,
+            resource_kind: Some(u32::from_be_bytes(*b"code")),
+            resource_id: Some(code_id),
+                });
+        // SysAppInfo.codeH is consumed by startup glue as an opaque pointer-like
+        // value; use the mapped code base address to match Palm/Pumpkin layout.
+        runtime_ctx.code_handle = PRC_CODE_BASE;
+        // Build A5 world from code#0/data#0 layout when available.
+        // Per Palm/Pumpkin contract:
+        // code0[0..4] = aboveA5 size, code0[4..8] = belowA5(data) size.
+        if let Some(code0_bytes) = code0.as_deref() {
+            if code0_bytes.len() >= 8 {
+                let above_size = u32::from_be_bytes([
+                    code0_bytes[0],
+                    code0_bytes[1],
+                    code0_bytes[2],
+                    code0_bytes[3],
+                ]);
+                let data_size = u32::from_be_bytes([
+                    code0_bytes[4],
+                    code0_bytes[5],
+                    code0_bytes[6],
+                    code0_bytes[7],
+                ]);
+                let total = above_size.saturating_add(data_size);
+                if (16..=1_048_576).contains(&total) {
+                    let handle = runtime_ctx.next_handle;
+                    runtime_ctx.next_handle = runtime_ctx.next_handle.saturating_add(1);
+                    let ptr = runtime_ctx.next_ptr;
+                    runtime_ctx.next_ptr = runtime_ctx
+                        .next_ptr
+                        .saturating_add(total.max(16).saturating_add(16));
+                    let data = vec![0u8; total as usize];
+                    memory.upsert_overlay(ptr, data.clone());
+                    runtime_ctx.mem_blocks.push(runtime::MemBlock {
+                        handle,
+                        ptr,
+                        size: total,
+                        locked: true,
+                        data,
+                        resource_kind: None,
+                        resource_id: None,
+                    });
+                    if let Some(data0_blob) = runtime_ctx
+                        .resources
+                        .iter()
+                        .find(|r| r.kind == u32::from_be_bytes(*b"data") && r.id == 0)
+                        .cloned()
+                    {
+                        let _ = bootstrap::decode_data0_globals_into_memory(
+                            code0_bytes,
+                            &data0_blob.data,
+                            &mut memory,
+                            ptr,
+                            PRC_CODE_BASE,
+                        );
+                    }
+                    runtime_ctx.globals_ptr = ptr;
+                    runtime_ctx.prev_globals_ptr = 0;
+                    // A5 points to end of data segment (below-A5 globals).
+                    cpu.a[5] = ptr.saturating_add(data_size);
+                }
+            }
+        }
+
+        // Fallback for PRCs with no usable code#0 metadata.
+        if cpu.a[5] == 0 {
+            if let Some(globals_res) = runtime_ctx
+                .resources
+                .iter()
+                .find(|r| r.kind == u32::from_be_bytes(*b"data") && r.id == 0)
+                .cloned()
+            {
+                let size = globals_res.data.len().max(256) as u32;
+                let handle = runtime_ctx.next_handle;
+                runtime_ctx.next_handle = runtime_ctx.next_handle.saturating_add(1);
+                let ptr = runtime_ctx.next_ptr;
+                runtime_ctx.next_ptr = runtime_ctx
+                    .next_ptr
+                    .saturating_add(size.max(16).saturating_add(16));
+                memory.upsert_overlay(ptr, globals_res.data.clone());
+                runtime_ctx.mem_blocks.push(runtime::MemBlock {
+                    handle,
+                    ptr,
+                    size,
+                    locked: true,
+                    data: globals_res.data,
+                    resource_kind: Some(u32::from_be_bytes(*b"data")),
+                    resource_id: Some(0),
+                });
+                runtime_ctx.globals_ptr = ptr;
+                runtime_ctx.prev_globals_ptr = 0;
+                cpu.a[5] = ptr.saturating_add(size);
+            }
+        }
+
+        let stack_base = 0x00FC_0000u32;
+        let mut stack = Vec::new();
+        let mut stack_len = 0usize;
+        for candidate in [64 * 1024usize, 32 * 1024, 16 * 1024, 8 * 1024, 4 * 1024, 2 * 1024] {
+            if stack.try_reserve_exact(candidate).is_ok() {
+                stack_len = candidate;
+                break;
+            }
+        }
+        if stack_len == 0 {
+            stack_len = 256;
+            let _ = stack.try_reserve_exact(stack_len);
+        }
+        stack.resize(stack_len.min(stack.capacity()), 0);
+        let sp = stack_base + stack.len() as u32 - 16;
+        memory.upsert_overlay(stack_base, stack);
+        // Seed a synthetic caller return so top-level RTS cleanly stops the session.
+        let _ = memory.write_u32_be(sp, u32::MAX);
+        cpu.a[7] = sp;
+        // Match Pumpkin's 68k launch contract: start execution at the beginning
+        // of code #1. code #0 is used for globals/relocation metadata, not entry PC.
+        cpu.pc = PRC_CODE_BASE;
+
+        Ok(Self {
+            cpu,
+            memory,
+            runtime: runtime_ctx,
+            stopped: false,
+        })
+    }
+
+    pub fn resume(&mut self) -> RuntimeRunOutput {
+        if self.stopped {
+            return RuntimeRunOutput {
+                snapshot: self.snapshot(),
+                state: RuntimeRunState::Stopped(core::StopReason::EntryReturn { pc: self.cpu.pc }),
+                steps: 0,
+            };
+        }
+        self.runtime.terminate_requested = false;
+        self.runtime.blocked_on_evt_get_event = false;
+        self.runtime.blocked_evt_timeout_ticks = 0;
+
+        let mut total_steps = 0usize;
+        loop {
+            let trace = core::run_with_config(
+                &mut self.cpu,
+                &mut self.memory,
+                core::ExecConfig {
+                    step_limit: PRC_EXEC_STEP_LIMIT,
+                    max_events: 128,
+                    trap15_action: core::Trap15Action::Continue,
+                    stop_on_atrap: true,
+                    stop_on_unknown: true,
+                },
+            );
+            total_steps = total_steps.saturating_add(trace.steps);
+            let Some(stop) = trace.stop else {
+                break;
+            };
+            match stop {
+                core::StopReason::ATrap { trap_word, pc }
+                    if trap_stub::is_prc_runtime_trap_handled(trap_word)
+                        && total_steps < PRC_EXEC_STUB_STEP_BUDGET =>
+                {
+                    trap_stub::apply_prc_runtime_trap_stub(
+                        &mut self.cpu,
+                        &mut self.runtime,
+                        &mut self.memory,
+                        trap_word,
+                        pc,
+                    );
+                    if self.runtime.terminate_requested {
+                        self.runtime.terminate_requested = false;
+                        if self.runtime.blocked_on_evt_get_event {
+                            return RuntimeRunOutput {
+                                snapshot: self.snapshot(),
+                                state: RuntimeRunState::BlockedOnEvent {
+                                    timeout_ticks: self.runtime.blocked_evt_timeout_ticks.max(1),
+                                },
+                                steps: total_steps,
+                            };
+                        }
+                    }
+                    continue;
+                }
+                other => {
+                    self.stopped = true;
+                    return RuntimeRunOutput {
+                        snapshot: self.snapshot(),
+                        state: RuntimeRunState::Stopped(other),
+                        steps: total_steps,
+                    };
+                }
+            }
+        }
+
+        RuntimeRunOutput {
+            snapshot: self.snapshot(),
+            state: RuntimeRunState::Running,
+            steps: total_steps,
+        }
+    }
+
+    pub fn queue_nil_event(&mut self) {
+        self.runtime.event_queue.push(runtime::RuntimeEvent {
+            e_type: runtime::EVT_NIL,
+            data_u16: 0,
+        });
+    }
+
+    fn snapshot(&self) -> RuntimeUiSnapshot {
+        RuntimeUiSnapshot {
+            form_id: self.runtime.drawn_form_id.or(self.runtime.active_form_id),
+            bitmap_draws: self
+                .runtime
+                .drawn_bitmaps
+                .iter()
+                .map(|d| RuntimeBitmapDraw {
+                    resource_id: d.resource_id,
+                    x: d.x,
+                    y: d.y,
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -67,10 +373,6 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
         log::info!("PRC exec_trace skipped: no code resources");
         return RuntimeUiSnapshot::default();
     };
-
-    let code0 = source
-        .load_prc_code_resource(path, entry, 0)
-        .ok();
 
     let code = match source
         .load_prc_code_resource(path, entry, code_id)
@@ -128,10 +430,7 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
         drawn_bitmaps: Vec<RuntimeBitmapDraw>,
     }
 
-    let primary_entry = code0
-        .as_deref()
-        .and_then(|c0| bootstrap::derive_prc_entry_from_code0(c0, code.len() as u32))
-        .unwrap_or_else(|| bootstrap::derive_prc_entry_in_code1(&code));
+    let primary_entry = 0;
     let mut candidates: Vec<(u32, bool)> = Vec::new();
     let mut push_candidate = |pc: u32, is_primary: bool| {
         if (pc as usize) < code.len() && !candidates.iter().any(|(p, _)| *p == pc) {
@@ -139,21 +438,6 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
         }
     };
     push_candidate(primary_entry, true);
-    // Secondary launch stubs observed in the wild (still validated by trap/lifecycle signals).
-    push_candidate(bootstrap::derive_prc_entry_in_code1(&code), false);
-    push_candidate(0, false);
-    push_candidate(4, false);
-    let mut link_added = 0usize;
-    let scan_limit = code.len().min(4096);
-    let mut i = 0usize;
-    while i + 1 < scan_limit && link_added < 16 {
-        let w = u16::from_be_bytes([code[i], code[i + 1]]);
-        if w == 0x4E56 {
-            push_candidate(i as u32, false);
-            link_added += 1;
-        }
-        i += 2;
-    }
 
     let run_candidate = |entry_pc: u32,
                          is_primary: bool,
@@ -161,7 +445,8 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
                          launch_flags: u16,
                          cmd_pbp: u32,
                          code: &[u8],
-                         trace_traps: bool|
+                         trace_traps: bool,
+                         collect_debug: bool|
      -> BootstrapRun {
         let mut cpu = core::CpuState68k::default();
         cpu.pc = entry_pc;
@@ -218,11 +503,23 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
             });
             cpu.a[5] = ptr;
         }
-        // Seed a simple launch frame so stack-based argument reads can work.
-        // Use a larger synthetic stack region to avoid false frame/return corruption
-        // during deeper app startup paths.
+        // Seed a synthetic stack frame so stack-based argument reads can work.
+        // Keep this allocation adaptive for constrained targets (x4 firmware heap).
         let stack_base = 0x00FC_0000u32;
-        let mut stack = vec![0u8; 256 * 1024];
+        let mut stack = Vec::new();
+        let mut stack_len = 0usize;
+        for candidate in [64 * 1024usize, 32 * 1024, 16 * 1024, 8 * 1024, 4 * 1024, 2 * 1024] {
+            if stack.try_reserve_exact(candidate).is_ok() {
+                stack_len = candidate;
+                break;
+            }
+        }
+        if stack_len == 0 {
+            // Extreme low-memory fallback: keep enough bytes for launch args.
+            stack_len = 256;
+            let _ = stack.try_reserve_exact(stack_len);
+        }
+        stack.resize(stack_len.min(stack.capacity()), 0);
         let mut sp = stack_base + stack.len() as u32;
         let push_u32 = |stack: &mut [u8], sp: &mut u32, v: u32| {
             *sp = sp.saturating_sub(4);
@@ -275,36 +572,38 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
             );
             total_steps = total_steps.saturating_add(trace.steps);
             unknown_total = unknown_total.saturating_add(trace.unknown_count);
-            for sample in trace.unknown_samples {
-                if unknown_samples.len() >= 16 {
-                    break;
+            if collect_debug {
+                for sample in trace.unknown_samples {
+                    if unknown_samples.len() >= 16 {
+                        break;
+                    }
+                    if !unknown_samples.iter().any(|(pc, w)| *pc == sample.0 && *w == sample.1) {
+                        unknown_samples.push(sample);
+                    }
                 }
-                if !unknown_samples.iter().any(|(pc, w)| *pc == sample.0 && *w == sample.1) {
-                    unknown_samples.push(sample);
+                for (pc, cnt) in trace.pc_samples {
+                    if let Some((_, total)) = pc_samples.iter_mut().find(|(p, _)| *p == pc) {
+                        *total = total.saturating_add(cnt);
+                    } else if pc_samples.len() < 64 {
+                        pc_samples.push((pc, cnt));
+                    }
                 }
-            }
-            for (pc, cnt) in trace.pc_samples {
-                if let Some((_, total)) = pc_samples.iter_mut().find(|(p, _)| *p == pc) {
-                    *total = total.saturating_add(cnt);
-                } else if pc_samples.len() < 64 {
-                    pc_samples.push((pc, cnt));
+                if !trace.recent_pcs.is_empty() {
+                    recent_pcs = trace.recent_pcs;
                 }
-            }
-            if !trace.recent_pcs.is_empty() {
-                recent_pcs = trace.recent_pcs;
-            }
-            for (step, pc, a2) in trace.a2_changes {
-                if a2_changes.len() >= 64 {
-                    break;
+                for (step, pc, a2) in trace.a2_changes {
+                    if a2_changes.len() >= 64 {
+                        break;
+                    }
+                    if a2_changes
+                        .last()
+                        .map(|(s, p, v)| *s == step && *p == pc && *v == a2)
+                        .unwrap_or(false)
+                    {
+                        continue;
+                    }
+                    a2_changes.push((step, pc, a2));
                 }
-                if a2_changes
-                    .last()
-                    .map(|(s, p, v)| *s == step && *p == pc && *v == a2)
-                    .unwrap_or(false)
-                {
-                    continue;
-                }
-                a2_changes.push((step, pc, a2));
             }
 
             for event in &trace.events {
@@ -312,15 +611,17 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
                     core::StepEvent::ATrap { trap_word, pc } => {
                         event_count = event_count.saturating_add(1);
                         trap_index = trap_index.saturating_add(1);
-                        if let Some(stat) = trap_stats.iter_mut().find(|s| s.trap_word == *trap_word) {
-                            stat.count = stat.count.saturating_add(1);
-                        } else {
-                            trap_stats.push(TrapStat {
-                                trap_word: *trap_word,
-                                count: 1,
-                                first_pc: *pc,
-                                handled: trap_stub::is_prc_runtime_trap_handled(*trap_word),
-                            });
+                        if collect_debug {
+                            if let Some(stat) = trap_stats.iter_mut().find(|s| s.trap_word == *trap_word) {
+                                stat.count = stat.count.saturating_add(1);
+                            } else {
+                                trap_stats.push(TrapStat {
+                                    trap_word: *trap_word,
+                                    count: 1,
+                                    first_pc: *pc,
+                                    handled: trap_stub::is_prc_runtime_trap_handled(*trap_word),
+                                });
+                            }
                         }
                         if *trap_word == 0xA08F {
                             has_startup_trap = true;
@@ -466,7 +767,7 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
     let mut runs: Vec<BootstrapRun> = candidates
         .iter()
         .copied()
-        .map(|(pc, is_primary)| run_candidate(pc, is_primary, 0, 0x000C, 0, &code, false))
+        .map(|(pc, is_primary)| run_candidate(pc, is_primary, 0, 0x000C, 0, &code, false, verbose_logs))
         .collect();
     runs.sort_by(|a, b| {
         b.drawn_bitmaps.len()
@@ -521,7 +822,7 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
     let best = runs
         .first()
         .cloned()
-        .unwrap_or_else(|| run_candidate(primary_entry, true, 0, 0x000C, 0, &code, false));
+        .unwrap_or_else(|| run_candidate(primary_entry, true, 0, 0x000C, 0, &code, false, false));
     let mut best = best;
     let launch_scenarios = [
         ("normal", 0u16, 0x000C_u16, 0u32),
@@ -535,7 +836,16 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
             .map(|(label, cmd, flags, pbp)| {
                 (
                     *label,
-                    run_candidate(best.entry_pc, best.is_primary, *cmd, *flags, *pbp, &code, false),
+                    run_candidate(
+                        best.entry_pc,
+                        best.is_primary,
+                        *cmd,
+                        *flags,
+                        *pbp,
+                        &code,
+                        false,
+                        false,
+                    ),
                 )
             })
             .collect();
@@ -591,6 +901,7 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
         best.cmd_pbp,
         &code,
         true,
+        false,
     );
     let total_steps = best.total_steps;
     let stop_reason = best.stop_reason;
