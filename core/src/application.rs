@@ -80,6 +80,7 @@ pub struct Application<'a, S: AppSource> {
     prc_runtime_form_id: Option<u16>,
     prc_ui_controller: prc_app::controller::PrcUiController,
     prc_runtime_bitmap_draws: Vec<prc_app::runner::RuntimeBitmapDraw>,
+    prc_runtime_field_draws: Vec<prc_app::runner::RuntimeFieldDraw>,
     prc_system_fonts: Vec<prc_app::runtime::PalmFont>,
     prc_active_entry: Option<ImageEntry>,
     prc_session: Option<prc_app::runner::PrcRuntimeSession>,
@@ -155,6 +156,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_runtime_form_id: None,
             prc_ui_controller: prc_app::controller::PrcUiController::default(),
             prc_runtime_bitmap_draws: Vec::new(),
+            prc_runtime_field_draws: Vec::new(),
             prc_system_fonts: Vec::new(),
             prc_active_entry: None,
             prc_session: None,
@@ -628,10 +630,12 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_runtime_form_id = runtime_snapshot.form_id;
                 self.prc_ui_controller.reset();
                 self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
+                self.prc_runtime_field_draws = runtime_snapshot.field_draws;
                 log::info!(
-                    "PRC runtime_ui form_id={:?} bitmap_draws={}",
+                    "PRC runtime_ui form_id={:?} bitmap_draws={} field_draws={}",
                     self.prc_runtime_form_id,
-                    self.prc_runtime_bitmap_draws.len()
+                    self.prc_runtime_bitmap_draws.len(),
+                    self.prc_runtime_field_draws.len()
                 );
                 self.prc_system_fonts = self.source.load_prc_system_fonts();
                 self.prc_forms.clear();
@@ -682,15 +686,22 @@ impl<'a, S: AppSource> Application<'a, S> {
                 .prc_runtime_bitmap_draws
                 .iter()
                 .zip(runtime_snapshot.bitmap_draws.iter())
-                .any(|(a, b)| a.resource_id != b.resource_id || a.x != b.x || a.y != b.y);
+                .any(|(a, b)| a.resource_id != b.resource_id || a.x != b.x || a.y != b.y)
+            || self.prc_runtime_field_draws != runtime_snapshot.field_draws;
         log::info!(
-            "PRC runtime_ui update form_id={:?} bitmap_draws={} changed={}",
+            "PRC runtime_ui update form_id={:?} bitmap_draws={} field_draws={} first_field={:?} changed={}",
             runtime_snapshot.form_id,
             runtime_snapshot.bitmap_draws.len(),
+            runtime_snapshot.field_draws.len(),
+            runtime_snapshot
+                .field_draws
+                .first()
+                .map(|f| (f.field_id, f.text.len())),
             changed
         );
         self.prc_runtime_form_id = runtime_snapshot.form_id;
         self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
+        self.prc_runtime_field_draws = runtime_snapshot.field_draws;
         {
             let form = self.runtime_prc_form();
             if self.prc_ui_controller.sync_with_form(form.as_ref()) {
@@ -1205,6 +1216,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 &self.prc_system_fonts,
                 &self.prc_bitmaps,
                 &self.prc_runtime_bitmap_draws,
+                &self.prc_runtime_field_draws,
                 self.prc_ui_controller.focused_control_id(),
                 pane_x,
                 pane_y,

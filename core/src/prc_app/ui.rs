@@ -15,7 +15,7 @@ use embedded_graphics::{
 use crate::prc_app::{
     bitmap::PrcBitmap,
     form_preview::{FormPreview, FormPreviewObject},
-    runner::RuntimeBitmapDraw,
+    runner::{RuntimeBitmapDraw, RuntimeFieldDraw},
     runtime::{PalmFont, PalmGlyphBitmap},
 };
 
@@ -117,7 +117,16 @@ fn draw_text<T: DrawTarget<Color = BinaryColor>>(
     scale: i32,
     color: BinaryColor,
 ) {
-    if let Some(font) = find_font(fonts, font_id) {
+    let can_use_bitmap_font = |font: &PalmFont, s: &str| -> bool {
+        s.bytes().all(|ch| {
+            if ch < font.first_char || ch > font.last_char {
+                return false;
+            }
+            let idx = (ch - font.first_char) as usize;
+            matches!(font.glyphs.get(idx), Some(Some(_)))
+        })
+    };
+    if let Some(font) = find_font(fonts, font_id).filter(|f| can_use_bitmap_font(f, text)) {
         draw_bitmap_text(target, text, x, y, font, scale, color);
     } else {
         let style = fallback_text_style(font_id, color);
@@ -260,6 +269,80 @@ fn find_bitmap(bitmaps: &[PrcBitmap], resource_id: u16) -> Option<&PrcBitmap> {
     bitmaps.iter().find(|b| b.resource_id == resource_id)
 }
 
+fn find_field_text<'a>(
+    field_draws: &'a [RuntimeFieldDraw],
+    form_id: u16,
+    field_id: u16,
+) -> Option<&'a str> {
+    field_draws
+        .iter()
+        .find(|f| f.form_id == form_id && f.field_id == field_id)
+        .map(|f| f.text.as_str())
+}
+
+fn draw_wrapped_text_in_rect<T: DrawTarget<Color = BinaryColor>>(
+    target: &mut T,
+    text: &str,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    font_id: u8,
+    fonts: &[PalmFont],
+    color: BinaryColor,
+) {
+    if w <= 2 || h <= 2 || text.is_empty() {
+        return;
+    }
+    let line_h = text_metrics("Mg", font_id, fonts, 1).1.max(8);
+    let max_lines = (h / line_h).max(1);
+    let mut line = alloc::string::String::new();
+    let mut line_idx = 0i32;
+    for word in text.split_whitespace() {
+        let candidate = if line.is_empty() {
+            alloc::string::String::from(word)
+        } else {
+            let mut c = line.clone();
+            c.push(' ');
+            c.push_str(word);
+            c
+        };
+        let (cw, _) = text_metrics(&candidate, font_id, fonts, 1);
+        if cw <= (w - 2) {
+            line = candidate;
+            continue;
+        }
+        if !line.is_empty() {
+            draw_text(target, &line, x + 1, y + 1 + line_idx * line_h, font_id, fonts, 1, color);
+            line_idx += 1;
+            if line_idx >= max_lines {
+                return;
+            }
+            line.clear();
+        }
+        // Word itself doesn't fit: emit truncated line.
+        let mut cur = alloc::string::String::new();
+        for ch in word.chars() {
+            let mut c = cur.clone();
+            c.push(ch);
+            if text_metrics(&c, font_id, fonts, 1).0 > (w - 2) {
+                break;
+            }
+            cur = c;
+        }
+        if !cur.is_empty() {
+            draw_text(target, &cur, x + 1, y + 1 + line_idx * line_h, font_id, fonts, 1, color);
+            line_idx += 1;
+            if line_idx >= max_lines {
+                return;
+            }
+        }
+    }
+    if !line.is_empty() && line_idx < max_lines {
+        draw_text(target, &line, x + 1, y + 1 + line_idx * line_h, font_id, fonts, 1, color);
+    }
+}
+
 fn draw_prc_bitmap<T: DrawTarget<Color = BinaryColor>>(
     target: &mut T,
     bmp: &PrcBitmap,
@@ -290,6 +373,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     fonts: &[PalmFont],
     bitmaps: &[PrcBitmap],
     runtime_bitmap_draws: &[RuntimeBitmapDraw],
+    runtime_field_draws: &[RuntimeFieldDraw],
     focused_control_id: Option<u16>,
     pane_x: i32,
     pane_y: i32,
@@ -378,6 +462,25 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
             FormPreviewObject::Bitmap { x, y, resource_id } => {
                 if let Some(bmp) = find_bitmap(bitmaps, *resource_id) {
                     draw_prc_bitmap(&mut canvas, bmp, map_x(*x), map_y(*y));
+                }
+            }
+            FormPreviewObject::Field { id, x, y, w, h, font } => {
+                let fx = map_x(*x);
+                let fy = map_y(*y);
+                let fw = (*w).max(8) as i32;
+                let fh = (*h).max(8) as i32;
+                if let Some(text) = find_field_text(runtime_field_draws, form.form_id, *id) {
+                    draw_wrapped_text_in_rect(
+                        &mut canvas,
+                        text,
+                        fx,
+                        fy,
+                        fw,
+                        fh,
+                        *font,
+                        fonts,
+                        BinaryColor::Off,
+                    );
                 }
             }
         }

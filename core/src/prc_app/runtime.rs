@@ -37,6 +37,8 @@ pub struct PrcRuntimeContext {
     pub fonts: alloc::vec::Vec<PalmFont>,
     pub drawn_form_id: Option<u16>,
     pub drawn_bitmaps: alloc::vec::Vec<RuntimeBitmapDraw>,
+    pub form_objects: alloc::vec::Vec<RuntimeFormObject>,
+    pub field_draws: alloc::vec::Vec<RuntimeFieldDraw>,
     pub blink_next_tick: u32,
     pub blink_phase: u8,
     pub terminate_requested: bool,
@@ -107,6 +109,29 @@ pub struct RuntimeBitmapDraw {
     pub y: i16,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuntimeFormObjectKind {
+    Field,
+    Other,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeFormObject {
+    pub form_id: u16,
+    pub object_index: u16,
+    pub object_id: u16,
+    pub kind: RuntimeFormObjectKind,
+    pub ptr: u32,
+    pub text_handle: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeFieldDraw {
+    pub form_id: u16,
+    pub field_id: u16,
+    pub text: alloc::string::String,
+}
+
 impl Default for PrcRuntimeContext {
     fn default() -> Self {
         Self {
@@ -137,6 +162,8 @@ impl Default for PrcRuntimeContext {
             fonts: alloc::vec::Vec::new(),
             drawn_form_id: None,
             drawn_bitmaps: alloc::vec::Vec::new(),
+            form_objects: alloc::vec::Vec::new(),
+            field_draws: alloc::vec::Vec::new(),
             blink_next_tick: 175,
             blink_phase: 0,
             terminate_requested: false,

@@ -304,19 +304,12 @@ pub fn apply_prc_runtime_trap_stub(
             })
     }
 
-    fn decode_form_handle(cpu: &CpuState68k, memory: &MemoryMap) -> Option<u32> {
-        let sp = cpu.a[7];
-        let candidates = [
-            cpu.a[0],
-            cpu.d[0],
-            memory.read_u32_be(sp).unwrap_or(0),
-            memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
-            memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
-            memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0),
-        ];
-        candidates
-            .into_iter()
-            .find(|v| (*v & 0xFFFF_0000) == 0x3000_0000)
+    fn decode_form_id_from_handle_or_active(runtime: &PrcRuntimeContext, form_h: u32) -> Option<u16> {
+        if (form_h & 0xFFFF_0000) == 0x3000_0000 {
+            Some((form_h & 0xFFFF) as u16)
+        } else {
+            runtime.active_form_id
+        }
     }
 
     fn select_resource_data(
@@ -344,6 +337,35 @@ pub fn apply_prc_runtime_trap_stub(
             return;
         }
         runtime.dm_get_resource_last_log = Some(tuple);
+    }
+
+    fn normalize_tstr_payload(data: &[u8]) -> Vec<u8> {
+        // Palm string resources may be stored as C strings or length-prefixed.
+        // Convert known length-prefixed encodings into a C-string payload so
+        // StrLen/StrCopy callers behave consistently.
+        if data.is_empty() {
+            return vec![0];
+        }
+        if data.contains(&0) {
+            return data.to_vec();
+        }
+        let len8 = data[0] as usize;
+        if len8 > 0 && len8 + 1 <= data.len() {
+            let mut out = data[1..1 + len8].to_vec();
+            out.push(0);
+            return out;
+        }
+        if data.len() >= 2 {
+            let len16 = u16::from_be_bytes([data[0], data[1]]) as usize;
+            if len16 > 0 && len16 + 2 <= data.len() {
+                let mut out = data[2..2 + len16].to_vec();
+                out.push(0);
+                return out;
+            }
+        }
+        let mut out = data.to_vec();
+        out.push(0);
+        out
     }
 
     fn decode_dm_resource_args(
@@ -426,6 +448,7 @@ pub fn apply_prc_runtime_trap_stub(
             runtime.evt_polls = 0;
             runtime.blink_next_tick = 175;
             runtime.blink_phase = 0;
+            runtime.field_draws.clear();
             if runtime.sys_app_info_ptr == 0 {
                 let (_h, ptr) = alloc_mem(runtime, memory, vec![0u8; 128], None, None);
                 runtime.sys_app_info_ptr = ptr;
@@ -814,17 +837,27 @@ pub fn apply_prc_runtime_trap_stub(
         0xA060 | 0xA05F => {
             runtime.dm_get_resource_probe_count = runtime.dm_get_resource_probe_count.saturating_add(1);
             let (kind_hint, id_hint) = decode_dm_resource_args(cpu, memory);
-            if let Some((kind, id, data)) = select_resource_data(runtime, kind_hint, id_hint) {
+            if let Some((kind, id, mut data)) = select_resource_data(runtime, kind_hint, id_hint) {
+                let tstr = u32::from_be_bytes(*b"tSTR");
+                if kind == tstr {
+                    data = normalize_tstr_payload(&data);
+                }
                 maybe_log_resource_pick(runtime, kind_hint, id_hint, kind, id, data.len());
-                let handle = runtime
+                let handle = if let Some(existing) = runtime
                     .mem_blocks
-                    .iter()
+                    .iter_mut()
                     .find(|b| b.resource_kind == Some(kind) && b.resource_id == Some(id))
-                    .map(|b| b.handle)
-                    .unwrap_or_else(|| {
-                        let (h, _ptr) = alloc_mem(runtime, memory, data, Some(kind), Some(id));
-                        h
-                    });
+                {
+                    if existing.data != data {
+                        existing.data = data.clone();
+                        existing.size = existing.data.len().max(16) as u32;
+                        memory.upsert_overlay(existing.ptr, existing.data.clone());
+                    }
+                    existing.handle
+                } else {
+                    let (h, _ptr) = alloc_mem(runtime, memory, data, Some(kind), Some(id));
+                    h
+                };
                 if runtime.trace_traps && runtime.trace_trap_budget > 0 {
                     let k = kind.to_be_bytes();
                     let kh = kind_hint.to_be_bytes();
@@ -1017,19 +1050,76 @@ pub fn apply_prc_runtime_trap_stub(
             }
         }
         0xA0C7 => {
-            let ptr = if cpu.a[0] != 0 { cpu.a[0] } else { cpu.d[0] };
+            let ptr = decode_ptr_arg_from_stack(cpu, memory, 0);
+            let ptr = if ptr != 0 { ptr } else { cpu.a[0].max(cpu.d[0]) };
             cpu.d[0] = read_c_string(memory, ptr).len() as u32;
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                log::info!(
+                    "PRC trap detail StrLen ptr=0x{:08X} -> {}",
+                    ptr,
+                    cpu.d[0]
+                );
+            }
         }
         0xA0C5 => {
-            let dst = if cpu.a[0] != 0 { cpu.a[0] } else { cpu.d[0] };
-            let src = if cpu.a[1] != 0 { cpu.a[1] } else { cpu.d[1] };
+            let dst = decode_ptr_arg_from_stack(cpu, memory, 0);
+            let src = decode_ptr_arg_from_stack(cpu, memory, 4);
+            let dst = if dst != 0 { dst } else { cpu.a[0].max(cpu.d[0]) };
+            let src = if src != 0 { src } else { cpu.a[1].max(cpu.d[1]) };
             let mut bytes = read_c_string(memory, src);
             bytes.push(0);
             write_bytes(runtime, memory, dst, &bytes);
             cpu.a[0] = dst;
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                log::info!(
+                    "PRC trap detail StrCopy dst=0x{:08X} src=0x{:08X} chars={}",
+                    dst,
+                    src,
+                    bytes.len().saturating_sub(1)
+                );
+            }
         }
         0xA180 => {
-            cpu.d[0] = 0;
+            // UInt16 FrmGetObjectIndex(const FormType *formP, UInt16 objID)
+            let sp = cpu.a[7];
+            let form_h = [
+                memory.read_u32_be(sp).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                cpu.a[0],
+                cpu.d[0],
+            ]
+            .into_iter()
+            .find(|v| (*v & 0xFFFF_0000) == 0x3000_0000)
+            .unwrap_or(runtime.active_form_handle);
+            let obj_id = [
+                memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0),
+                memory.read_u16_be(sp.saturating_add(6)).unwrap_or(0),
+                (cpu.d[1] & 0xFFFF) as u16,
+                (cpu.a[1] & 0xFFFF) as u16,
+            ]
+            .into_iter()
+            .find(|v| *v != 0)
+            .unwrap_or(0);
+            let form_id = decode_form_id_from_handle_or_active(runtime, form_h);
+            let mut idx = 0xFFFFu16;
+            if let Some(fid) = form_id {
+                if let Some(found) = runtime
+                    .form_objects
+                    .iter()
+                    .find(|o| o.form_id == fid && o.object_id == obj_id)
+                {
+                    idx = found.object_index;
+                }
+            }
+            cpu.d[0] = (cpu.d[0] & 0xFFFF_0000) | idx as u32;
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                log::info!(
+                    "PRC trap detail FrmGetObjectIndex form=0x{:08X} obj_id=0x{:04X} -> idx=0x{:04X}",
+                    form_h,
+                    obj_id,
+                    idx
+                );
+            }
         }
         0xA163 => {
             cpu.d[0] = runtime.current_font as u32;
@@ -1170,12 +1260,163 @@ pub fn apply_prc_runtime_trap_stub(
             cpu.d[0] = 0;
         }
         0xA183 => {
-            cpu.a[0] = 0x3001_0000;
+            // void *FrmGetObjectPtr(const FormType *formP, UInt16 objIndex)
+            let sp = cpu.a[7];
+            let form_h = [
+                memory.read_u32_be(sp).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                cpu.a[0],
+                cpu.d[0],
+            ]
+            .into_iter()
+            .find(|v| (*v & 0xFFFF_0000) == 0x3000_0000)
+            .unwrap_or(runtime.active_form_handle);
+            let obj_index = [
+                memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0xFFFF),
+                memory.read_u16_be(sp.saturating_add(6)).unwrap_or(0xFFFF),
+                (cpu.d[1] & 0xFFFF) as u16,
+                (cpu.a[1] & 0xFFFF) as u16,
+            ]
+            .into_iter()
+            .find(|v| *v != 0xFFFF)
+            .unwrap_or(0xFFFF);
+            let form_id = decode_form_id_from_handle_or_active(runtime, form_h);
+            let ptr = if let Some(fid) = form_id {
+                runtime
+                    .form_objects
+                    .iter()
+                    .find(|o| o.form_id == fid && o.object_index == obj_index)
+                    .map(|o| o.ptr)
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+            cpu.a[0] = ptr;
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                log::info!(
+                    "PRC trap detail FrmGetObjectPtr form=0x{:08X} obj_idx=0x{:04X} -> ptr=0x{:08X}",
+                    form_h,
+                    obj_index,
+                    ptr
+                );
+            }
         }
         0xA153 => {
-            cpu.a[0] = 0x3002_0000;
+            // MemHandle FldGetTextHandle(const FieldType *fldP)
+            let sp = cpu.a[7];
+            let fld_p = [
+                memory.read_u32_be(sp).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                cpu.a[0],
+                cpu.d[0],
+            ]
+            .into_iter()
+            .find(|p| runtime.form_objects.iter().any(|o| o.ptr == *p))
+            .unwrap_or(0);
+            let handle = runtime
+                .form_objects
+                .iter()
+                .find(|o| o.ptr == fld_p && o.kind == crate::prc_app::runtime::RuntimeFormObjectKind::Field)
+                .map(|o| o.text_handle)
+                .unwrap_or(0);
+            cpu.a[0] = handle;
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                log::info!(
+                    "PRC trap detail FldGetTextHandle fld=0x{:08X} -> handle=0x{:08X}",
+                    fld_p,
+                    handle
+                );
+            }
         }
-        0xA158 | 0xA135 | 0xA195 | 0xA1A1 | 0xA234 | 0xA9F0 => {
+        0xA158 => {
+            // void FldSetTextHandle(FieldType *fldP, MemHandle textHandle)
+            let sp = cpu.a[7];
+            let fld_p = [
+                memory.read_u32_be(sp).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                cpu.a[0],
+                cpu.d[0],
+            ]
+            .into_iter()
+            .find(|p| runtime.form_objects.iter().any(|o| o.ptr == *p))
+            .unwrap_or(0);
+            let text_h = [
+                memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0),
+                cpu.a[1],
+                cpu.d[1],
+            ]
+            .into_iter()
+            .find(|h| *h == 0 || runtime.mem_blocks.iter().any(|b| b.handle == *h))
+            .unwrap_or(0);
+            if let Some(obj) = runtime
+                .form_objects
+                .iter_mut()
+                .find(|o| o.ptr == fld_p && o.kind == crate::prc_app::runtime::RuntimeFormObjectKind::Field)
+            {
+                obj.text_handle = text_h;
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    log::info!(
+                        "PRC trap detail FldSetTextHandle fld=0x{:08X} field_id=0x{:04X} handle=0x{:08X}",
+                        fld_p,
+                        obj.object_id,
+                        text_h
+                    );
+                }
+            }
+            cpu.d[0] = 0;
+        }
+        0xA135 => {
+            // void FldDrawField(FieldType *fldP)
+            let sp = cpu.a[7];
+            let fld_p = [
+                memory.read_u32_be(sp).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                cpu.a[0],
+                cpu.d[0],
+            ]
+            .into_iter()
+            .find(|p| runtime.form_objects.iter().any(|o| o.ptr == *p))
+            .unwrap_or(0);
+            if let Some(obj) = runtime
+                .form_objects
+                .iter()
+                .find(|o| o.ptr == fld_p && o.kind == crate::prc_app::runtime::RuntimeFormObjectKind::Field)
+                .cloned()
+            {
+                let text = if obj.text_handle == 0 {
+                    alloc::string::String::new()
+                } else if let Some(ptr) = lock_handle(runtime, memory, obj.text_handle) {
+                    let bytes = read_c_string(memory, ptr);
+                    alloc::string::String::from_utf8_lossy(&bytes).into_owned()
+                } else {
+                    alloc::string::String::new()
+                };
+                if let Some(existing) = runtime
+                    .field_draws
+                    .iter_mut()
+                    .find(|f| f.form_id == obj.form_id && f.field_id == obj.object_id)
+                {
+                    existing.text = text.clone();
+                } else {
+                    runtime.field_draws.push(crate::prc_app::runtime::RuntimeFieldDraw {
+                        form_id: obj.form_id,
+                        field_id: obj.object_id,
+                        text: text.clone(),
+                    });
+                }
+                if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                    log::info!(
+                        "PRC trap detail FldDrawField fld=0x{:08X} field_id=0x{:04X} chars={}",
+                        fld_p,
+                        obj.object_id,
+                        text.len()
+                    );
+                }
+            }
+            cpu.d[0] = 0;
+        }
+        0xA195 | 0xA1A1 | 0xA234 | 0xA9F0 => {
             cpu.d[0] = 0;
         }
         _ => {

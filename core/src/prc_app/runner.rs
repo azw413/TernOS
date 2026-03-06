@@ -22,6 +22,7 @@ const PRC_IDLE_LOOP_POLLS: u32 = 4;
 pub struct RuntimeUiSnapshot {
     pub form_id: Option<u16>,
     pub bitmap_draws: Vec<RuntimeBitmapDraw>,
+    pub field_draws: Vec<RuntimeFieldDraw>,
 }
 
 #[derive(Clone, Debug)]
@@ -29,6 +30,13 @@ pub struct RuntimeBitmapDraw {
     pub resource_id: u16,
     pub x: i16,
     pub y: i16,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeFieldDraw {
+    pub form_id: u16,
+    pub field_id: u16,
+    pub text: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,6 +113,32 @@ impl PrcRuntimeSession {
             }
         }
         runtime_ctx.prc_image = prc_raw.unwrap_or_default();
+        if !runtime_ctx.prc_image.is_empty() {
+            let parsed_forms = crate::prc_app::form_preview::parse_form_previews(&runtime_ctx.prc_image);
+            let mut next_ptr = 0x3002_0000u32;
+            for form in &parsed_forms {
+                for (idx, obj) in form.objects.iter().enumerate() {
+                    let (object_id, kind) = match obj {
+                        crate::prc_app::form_preview::FormPreviewObject::Field { id, .. } => {
+                            (*id, runtime::RuntimeFormObjectKind::Field)
+                        }
+                        crate::prc_app::form_preview::FormPreviewObject::Button { id, .. } => {
+                            (*id, runtime::RuntimeFormObjectKind::Other)
+                        }
+                        _ => (0, runtime::RuntimeFormObjectKind::Other),
+                    };
+                    runtime_ctx.form_objects.push(runtime::RuntimeFormObject {
+                        form_id: form.form_id,
+                        object_index: idx as u16,
+                        object_id,
+                        kind,
+                        ptr: next_ptr,
+                        text_handle: 0,
+                    });
+                    next_ptr = next_ptr.saturating_add(0x20);
+                }
+            }
+        }
         let mut memory = memory::MemoryMap::with_data(PRC_CODE_BASE, code.clone());
         let code_handle = runtime_ctx.next_handle;
         runtime_ctx.next_handle = runtime_ctx.next_handle.saturating_add(1);
@@ -373,6 +407,16 @@ impl PrcRuntimeSession {
                     resource_id: d.resource_id,
                     x: d.x,
                     y: d.y,
+                })
+                .collect(),
+            field_draws: self
+                .runtime
+                .field_draws
+                .iter()
+                .map(|f| RuntimeFieldDraw {
+                    form_id: f.form_id,
+                    field_id: f.field_id,
+                    text: f.text.clone(),
                 })
                 .collect(),
         }
@@ -950,6 +994,7 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
     let snapshot = RuntimeUiSnapshot {
         form_id: best.drawn_form_id.or(best.active_form_id),
         bitmap_draws: best.drawn_bitmaps.clone(),
+        field_draws: Vec::new(),
     };
     let stop_text = match stop_reason {
         Some(core::StopReason::ATrap { trap_word, pc }) => {

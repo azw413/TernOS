@@ -22,6 +22,14 @@ pub enum FormPreviewObject {
         font: u8,
         text: String,
     },
+    Field {
+        id: u16,
+        x: i16,
+        y: i16,
+        w: i16,
+        h: i16,
+        font: u8,
+    },
     Bitmap {
         x: i16,
         y: i16,
@@ -104,6 +112,28 @@ fn parse_text_button(data: &[u8], text_off: usize, font_off: usize) -> Option<Fo
     })
 }
 
+fn parse_tfld(data: &[u8]) -> Option<FormPreviewObject> {
+    // tFLD / RCFieldBA16: id, rect, attrs..., font at offset 36.
+    if data.len() < 38 {
+        return None;
+    }
+    let id = read_u16_be(data, 0)?;
+    let x = read_i16_be(data, 2)?;
+    let y = read_i16_be(data, 4)?;
+    let w = read_i16_be(data, 6)?;
+    let h = read_i16_be(data, 8)?;
+    // In packed BA16 field resources used here, font is at the tail.
+    let font = *data.get(38).unwrap_or(&0);
+    Some(FormPreviewObject::Field {
+        id,
+        x,
+        y,
+        w,
+        h,
+        font,
+    })
+}
+
 fn parse_form_object(kind: &str, data: &[u8]) -> Option<FormPreviewObject> {
     match kind {
         "tLBL" => parse_tlbl(data),
@@ -111,12 +141,13 @@ fn parse_form_object(kind: &str, data: &[u8]) -> Option<FormPreviewObject> {
         "tPBN" => parse_text_button(data, 14, 11),
         "tPUT" => parse_text_button(data, 14, 11),
         "tCBX" => parse_text_button(data, 17, 14),
+        "tFLD" => parse_tfld(data),
         _ => None,
     }
 }
 
 fn is_known_form_object_kind(kind: &str) -> bool {
-    matches!(kind, "tLBL" | "tBTN" | "tPBN" | "tPUT" | "tCBX")
+    matches!(kind, "tLBL" | "tBTN" | "tPBN" | "tPUT" | "tCBX" | "tFLD")
 }
 
 fn collect_objects_from_refs(
@@ -265,6 +296,26 @@ fn parse_packed_bitmap(form_data: &[u8], off: usize) -> Option<FormPreviewObject
     })
 }
 
+fn parse_packed_field(form_data: &[u8], off: usize) -> Option<FormPreviewObject> {
+    if off + 40 > form_data.len() {
+        return None;
+    }
+    let id = read_u16_be(form_data, off)?;
+    let x = read_i16_be(form_data, off + 2)?;
+    let y = read_i16_be(form_data, off + 4)?;
+    let w = read_i16_be(form_data, off + 6)?;
+    let h = read_i16_be(form_data, off + 8)?;
+    let font = *form_data.get(off + 38).unwrap_or(&0);
+    Some(FormPreviewObject::Field {
+        id,
+        x,
+        y,
+        w,
+        h,
+        font,
+    })
+}
+
 fn parse_packed_form(resource_id: u16, form_data: &[u8]) -> Option<FormPreview> {
     // PumpkinOS parser layout:
     // RCWindow (40 bytes) + RCForm (28 bytes) + object table (6 bytes each).
@@ -301,6 +352,7 @@ fn parse_packed_form(resource_id: u16, form_data: &[u8]) -> Option<FormPreview> 
             continue;
         }
         let obj = match object_type {
+            0 => parse_packed_field(form_data, obj_off),   // frmFieldObj
             1 => parse_packed_control(form_data, obj_off), // frmControlObj
             4 => parse_packed_bitmap(form_data, obj_off),  // frmBitmapObj
             8 => parse_packed_label(form_data, obj_off),   // frmLabelObj
