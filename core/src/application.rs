@@ -1195,7 +1195,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             let pane_w = 160 * scale;
             let pane_h = 160 * scale;
             let pane_x = ((size.width as i32 - pane_w) / 2).max(0);
-            let pane_y = (LIST_TOP + 18).max(8);
+            let pane_y = 0;
             Rectangle::new(
                 Point::new(pane_x, pane_y),
                 Size::new(pane_w as u32, pane_h as u32),
