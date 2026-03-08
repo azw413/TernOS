@@ -356,27 +356,34 @@ impl PrcRuntimeSession {
     }
 
     pub fn queue_control_select(&mut self, control_id: u16) {
-        let evt = runtime::RuntimeEvent {
-            e_type: runtime::EVT_CTL_SELECT,
-            data_u16: control_id,
-        };
+        self.queue_event(runtime::EVT_CTL_SELECT, control_id, "ctlSelect");
+    }
+
+    pub fn queue_event(&mut self, e_type: u16, data_u16: u16, label: &str) {
+        let evt = runtime::RuntimeEvent { e_type, data_u16 };
         self.runtime.event_queue.insert(0, evt);
         self.runtime.pending_dispatch_event = Some(evt);
         log::info!(
-            "PRC runtime input queued ctlSelect control_id={} qlen={}",
-            control_id,
+            "PRC runtime input queued {} eType={} data=0x{:04X} qlen={}",
+            label,
+            e_type,
+            data_u16,
             self.runtime.event_queue.len()
         );
     }
 
     pub fn inject_control_select_now(&mut self, control_id: u16) {
+        self.inject_event_now(runtime::EVT_CTL_SELECT, control_id, "ctlSelect");
+    }
+
+    pub fn inject_event_now(&mut self, e_type: u16, data_u16: u16, label: &str) {
         let event_p = self.runtime.evt_event_p;
         if event_p != 0 && self.memory.contains_addr(event_p) {
-            let _ = self.memory.write_u16_be(event_p, runtime::EVT_CTL_SELECT);
+            let _ = self.memory.write_u16_be(event_p, e_type);
             let _ = self.memory.write_u16_be(event_p.saturating_add(2), 0);
             let _ = self.memory.write_u16_be(event_p.saturating_add(4), 0);
             let _ = self.memory.write_u16_be(event_p.saturating_add(6), 0);
-            let _ = self.memory.write_u16_be(event_p.saturating_add(8), control_id);
+            let _ = self.memory.write_u16_be(event_p.saturating_add(8), data_u16);
             let _ = self
                 .memory
                 .write_u32_be(event_p.saturating_add(10), 0x3001_0000u32);
@@ -384,17 +391,21 @@ impl PrcRuntimeSession {
             let _ = self.memory.write_u8(event_p.saturating_add(15), 0);
             let _ = self.memory.write_u16_be(event_p.saturating_add(16), 0);
             log::info!(
-                "PRC runtime input injected ctlSelect eventP=0x{:08X} control_id={}",
+                "PRC runtime input injected {} eventP=0x{:08X} eType={} data=0x{:04X}",
+                label,
                 event_p,
-                control_id
+                e_type,
+                data_u16
             );
         } else {
             log::info!(
-                "PRC runtime input inject skipped (no event buffer) control_id={}",
-                control_id
+                "PRC runtime input inject skipped (no event buffer) {} eType={} data=0x{:04X}",
+                label,
+                e_type,
+                data_u16
             );
         }
-        self.queue_control_select(control_id);
+        self.queue_event(e_type, data_u16, label);
     }
 
     fn snapshot(&self) -> RuntimeUiSnapshot {

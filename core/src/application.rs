@@ -82,6 +82,7 @@ pub struct Application<'a, S: AppSource> {
     prc_runtime_bitmap_draws: Vec<prc_app::runner::RuntimeBitmapDraw>,
     prc_runtime_field_draws: Vec<prc_app::runner::RuntimeFieldDraw>,
     prc_system_fonts: Vec<prc_app::runtime::PalmFont>,
+    prc_menu_controller: prc_app::controller::PrcMenuController,
     prc_active_entry: Option<ImageEntry>,
     prc_session: Option<prc_app::runner::PrcRuntimeSession>,
     prc_blocked_timeout_ticks: u32,
@@ -158,6 +159,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_runtime_bitmap_draws: Vec::new(),
             prc_runtime_field_draws: Vec::new(),
             prc_system_fonts: Vec::new(),
+            prc_menu_controller: prc_app::controller::PrcMenuController::default(),
             prc_active_entry: None,
             prc_session: None,
             prc_blocked_timeout_ticks: 0,
@@ -359,6 +361,47 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.dirty = true;
                     }
                 }
+                if self.prc_menu_controller.is_active() {
+                    if buttons.is_pressed(input::Buttons::Back) {
+                        self.prc_menu_controller.close();
+                        self.dirty = true;
+                    } else if buttons.is_pressed(input::Buttons::Left) {
+                        if self.prc_menu_controller.move_menu(-1) {
+                            self.dirty = true;
+                        }
+                    } else if buttons.is_pressed(input::Buttons::Right) {
+                        if self.prc_menu_controller.move_menu(1) {
+                            self.dirty = true;
+                        }
+                    } else if buttons.is_pressed(input::Buttons::Up) {
+                        if self.prc_menu_controller.move_item(-1) {
+                            self.dirty = true;
+                        }
+                    } else if buttons.is_pressed(input::Buttons::Down) {
+                        if self.prc_menu_controller.move_item(1) {
+                            self.dirty = true;
+                        }
+                    } else if buttons.is_pressed(input::Buttons::Confirm) {
+                        let selected = self.prc_menu_controller.selected_item().cloned();
+                        if let (Some(item), Some(session)) = (selected, self.prc_session.as_mut()) {
+                            session.inject_event_now(
+                                prc_app::runtime::EVT_MENU,
+                                item.id,
+                                "menuSelect",
+                            );
+                            self.prc_blocked_elapsed_ms = 0;
+                            self.prc_blocked_timeout_ticks = 0;
+                            self.prc_menu_controller.close();
+                            self.resume_prc_runtime_session();
+                        } else {
+                            self.prc_menu_controller.close();
+                            self.dirty = true;
+                        }
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                    return;
+                }
                 if self.prc_blocked_timeout_ticks > 0 {
                     self.prc_blocked_elapsed_ms = self.prc_blocked_elapsed_ms.saturating_add(elapsed_ms);
                     let wait_ms = self.prc_blocked_timeout_ticks.saturating_mul(10);
@@ -368,7 +411,13 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.resume_prc_runtime_session();
                     }
                 }
-                if buttons.is_pressed(input::Buttons::Up) {
+                if buttons.is_pressed(input::Buttons::Left) {
+                    if self.prc_menu_controller.open() {
+                        self.dirty = true;
+                    } else {
+                        log::info!("PRC menu open requested but no menu resources were parsed");
+                    }
+                } else if buttons.is_pressed(input::Buttons::Up) {
                     let form = self.runtime_prc_form();
                     if !self.prc_ui_controller.move_focus(form.as_ref(), -1) {
                         self.prc_scroll = self.prc_scroll.saturating_sub(1);
@@ -640,14 +689,28 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_system_fonts = self.source.load_prc_system_fonts();
                 self.prc_forms.clear();
                 self.prc_bitmaps.clear();
+                self.prc_menu_controller.set_menu_bar(None);
                 if let Ok(prc_raw) = self.source.load_prc_bytes(&self.home.path, &entry) {
                     self.prc_forms = prc_app::form_preview::parse_form_previews(&prc_raw);
                     self.prc_bitmaps = prc_app::bitmap::parse_prc_bitmaps(&prc_raw);
+                    let menu_bar = prc_app::menu_preview::parse_menu_bar_preview(&prc_raw);
                     log::info!(
-                        "PRC parsed previews forms={} bitmaps={}",
+                        "PRC parsed previews forms={} bitmaps={} menus={}",
                         self.prc_forms.len(),
-                        self.prc_bitmaps.len()
+                        self.prc_bitmaps.len(),
+                        menu_bar.as_ref().map(|m| m.menus.len()).unwrap_or(0)
                     );
+                    if let Some(menu_bar) = menu_bar.as_ref() {
+                        for menu in &menu_bar.menus {
+                            log::info!(
+                                "PRC menu parsed id={} title='{}' items={}",
+                                menu.resource_id,
+                                menu.title,
+                                menu.items.len()
+                            );
+                        }
+                    }
+                    self.prc_menu_controller.set_menu_bar(menu_bar);
                 }
                 if let Ok(session) = prc_app::runner::PrcRuntimeSession::from_source(
                     self.source,
@@ -1032,7 +1095,29 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.dirty = true;
     }
 
+    fn release_prc_resources(&mut self) {
+        self.prc_active_entry = None;
+        self.prc_session = None;
+        self.prc_runtime_form_id = None;
+        self.prc_blocked_timeout_ticks = 0;
+        self.prc_blocked_elapsed_ms = 0;
+        self.prc_scroll = 0;
+        self.prc_form_index = 0;
+        self.prc_ui_controller.reset();
+        self.prc_lines = Vec::new();
+        self.prc_forms = Vec::new();
+        self.prc_bitmaps = Vec::new();
+        self.prc_runtime_bitmap_draws = Vec::new();
+        self.prc_runtime_field_draws = Vec::new();
+        self.prc_system_fonts = Vec::new();
+        self.prc_menu_controller.reset();
+    }
+
     fn set_state_menu(&mut self) {
+        if matches!(self.state, AppState::PrcViewing) {
+            self.release_prc_resources();
+            self.system.full_refresh = true;
+        }
         self.state = AppState::Menu;
         self.dirty = true;
     }
@@ -1178,14 +1263,18 @@ impl<'a, S: AppSource> Application<'a, S> {
                 .ok();
         }
         Text::new(
-            "Up/Down: scroll  Back: return",
+            "Left: menu  Up/Down: nav  OK: select  Back: return",
             Point::new(LIST_MARGIN_X, size.height as i32 - 4),
             style,
         )
         .draw(self.display_buffers)
         .ok();
 
-        if let Some(form) = self.runtime_prc_form() {
+        let draw_form = self
+            .runtime_prc_form()
+            .or_else(|| self.prc_forms.get(self.prc_form_index).cloned())
+            .or_else(|| self.prc_forms.first().cloned());
+        if let Some(form) = draw_form {
             let outline = PrimitiveStyle::with_stroke(BinaryColor::Off, 1);
             let clear = PrimitiveStyle::with_fill(BinaryColor::On);
             let max_scale_w = ((size.width as i32) / 160).max(1);
@@ -1194,20 +1283,18 @@ impl<'a, S: AppSource> Application<'a, S> {
             let scale = if max_scale >= 3 { 3 } else { max_scale };
             let pane_w = 160 * scale;
             let pane_h = 160 * scale;
-            let pane_x = ((size.width as i32 - pane_w) / 2).max(0);
-            let pane_y = 0;
+            let mut pane_x = ((size.width as i32 - pane_w) / 2).max(0);
+            let mut pane_y = 0;
+            if cfg!(target_os = "none") {
+                // Device panel tuning: PRC canvas sits slightly high/left versus desktop.
+                pane_x += 1;
+                pane_y += 11;
+            }
             Rectangle::new(
                 Point::new(pane_x, pane_y),
                 Size::new(pane_w as u32, pane_h as u32),
             )
             .into_styled(clear)
-            .draw(self.display_buffers)
-            .ok();
-            Rectangle::new(
-                Point::new(pane_x, pane_y),
-                Size::new(pane_w as u32, pane_h as u32),
-            )
-            .into_styled(outline)
             .draw(self.display_buffers)
             .ok();
             prc_app::ui::draw_form_preview(
@@ -1218,6 +1305,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 &self.prc_runtime_bitmap_draws,
                 &self.prc_runtime_field_draws,
                 self.prc_ui_controller.focused_control_id(),
+                self.prc_menu_controller.overlay(),
                 pane_x,
                 pane_y,
                 pane_w,
@@ -1227,7 +1315,11 @@ impl<'a, S: AppSource> Application<'a, S> {
             );
 
             Text::new(
-                "runtime draw",
+                if self.prc_runtime_form_id.is_some() {
+                    "runtime draw"
+                } else {
+                    "preview draw"
+                },
                 Point::new(pane_x, pane_y - 4),
                 style,
             )

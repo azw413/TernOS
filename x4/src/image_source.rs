@@ -54,6 +54,18 @@ pub trait UsbStorage {
 
 const USB_MAX_READ_CHUNK: usize = 8 * 1024;
 
+#[track_caller]
+fn oom_error(bytes: usize, context: &'static str) -> ImageError {
+    let loc = core::panic::Location::caller();
+    ImageError::Message(format!(
+        "OOM: reserve {} bytes in {} at {}:{}",
+        bytes,
+        context,
+        loc.file(),
+        loc.line()
+    ))
+}
+
 struct UsbWriteStreamState<FileT> {
     path: String,
     file: FileT,
@@ -660,9 +672,7 @@ fn read_trimg_from_file<R: Read>(reader: &mut R, len: usize) -> Result<ImageData
             }
             let mut bits = Vec::new();
             if bits.try_reserve(plane).is_err() {
-                return Err(ImageError::Message(
-                    "Not enough memory for image buffer.".into(),
-                ));
+                return Err(oom_error(plane, "load_image_data: mono buffer"));
             }
             let mut buffer = [0u8; 512];
             while bits.len() < plane {
@@ -673,9 +683,7 @@ fn read_trimg_from_file<R: Read>(reader: &mut R, len: usize) -> Result<ImageData
                 let remaining = plane - bits.len();
                 let take = read.min(remaining);
                 if bits.try_reserve(take).is_err() {
-                    return Err(ImageError::Message(
-                        "Not enough memory while reading image.".into(),
-                    ));
+                    return Err(oom_error(take, "load_image_data: mono stream growth"));
                 }
                 bits.extend_from_slice(&buffer[..take]);
             }
@@ -690,9 +698,7 @@ fn read_trimg_from_file<R: Read>(reader: &mut R, len: usize) -> Result<ImageData
             }
             let mut data = Vec::new();
             if data.try_reserve(plane * 3).is_err() {
-                return Err(ImageError::Message(
-                    "Not enough memory for grayscale image.".into(),
-                ));
+                return Err(oom_error(plane * 3, "load_image_data: gray2 expansion"));
             }
             data.resize(plane * 3, 0u8);
             read_exact(reader, &mut data)?;
@@ -841,9 +847,7 @@ where
                 }
                 let mut bits = Vec::new();
                 if bits.try_reserve(plane).is_err() {
-                    return Err(ImageError::Message(
-                        "Not enough memory for image buffer.".into(),
-                    ));
+                    return Err(oom_error(plane, "load_gray2_stream: mono buffer"));
                 }
                 let mut buffer = [0u8; 512];
                 while bits.len() < plane {
@@ -854,9 +858,7 @@ where
                     let remaining = plane - bits.len();
                     let take = read.min(remaining);
                     if bits.try_reserve(take).is_err() {
-                        return Err(ImageError::Message(
-                            "Not enough memory while reading image.".into(),
-                        ));
+                        return Err(oom_error(take, "load_gray2_stream: mono stream growth"));
                     }
                     bits.extend_from_slice(&buffer[..take]);
                 }
@@ -911,7 +913,7 @@ where
 
         let mut table = Vec::new();
         if table.try_reserve(table_len).is_err() {
-            return Err(ImageError::Message("Not enough memory for PRC header.".into()));
+            return Err(oom_error(table_len, "load_prc_info: header table"));
         }
         table.resize(table_len, 0);
         read_exact(&mut file, &mut table)?;
@@ -987,7 +989,7 @@ where
                 || kinds.try_reserve(entry_count as usize).is_err()
                 || ids.try_reserve(entry_count as usize).is_err()
             {
-                return Err(ImageError::Message("Not enough memory for PRC index.".into()));
+                return Err(oom_error(entry_count as usize, "load_prc_info: resource index"));
             }
             for i in 0..entry_count as usize {
                 let off = i * 10;
@@ -1029,7 +1031,7 @@ where
         } else {
             let mut offsets = Vec::new();
             if offsets.try_reserve(entry_count as usize).is_err() {
-                return Err(ImageError::Message("Not enough memory for PRC index.".into()));
+                return Err(oom_error(entry_count as usize, "load_prc_info: record index"));
             }
             for i in 0..entry_count as usize {
                 let off = i * 8;
@@ -1102,7 +1104,7 @@ where
         let mut out = Vec::new();
         let sz = res.size as usize;
         if out.try_reserve(sz).is_err() {
-            return Err(ImageError::Message("Not enough memory for PRC code.".into()));
+            return Err(oom_error(sz, "load_prc_code_resource"));
         }
         out.resize(sz, 0);
         read_exact(&mut file, &mut out)?;
@@ -1131,7 +1133,7 @@ where
         }
         let mut out = Vec::new();
         if out.try_reserve(size).is_err() {
-            return Err(ImageError::Message("Not enough memory for PRC bytes.".into()));
+            return Err(oom_error(size, "load_prc_bytes"));
         }
         out.resize(size, 0);
         read_exact(&mut file, &mut out)?;
@@ -1859,9 +1861,7 @@ where
 
         let mut data = Vec::new();
         if data.try_reserve(file_len).is_err() {
-            return Err(ImageError::Message(
-                "Not enough memory for book file.".into(),
-            ));
+            return Err(oom_error(file_len, "load_book_data: initial buffer"));
         }
         let mut buffer = [0u8; 512];
         while data.len() < file_len {
@@ -1872,9 +1872,7 @@ where
             let remaining = file_len - data.len();
             let take = read.min(remaining);
             if data.try_reserve(take).is_err() {
-                return Err(ImageError::Message(
-                    "Not enough memory while reading book.".into(),
-                ));
+                return Err(oom_error(take, "load_book_data: stream growth"));
             }
             data.extend_from_slice(&buffer[..take]);
         }

@@ -5,6 +5,7 @@ pub mod controller;
 pub mod cpu;
 pub mod font;
 pub mod form_preview;
+pub mod menu_preview;
 pub mod prc;
 pub mod runner;
 pub mod runtime;

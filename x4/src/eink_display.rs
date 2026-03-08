@@ -166,6 +166,8 @@ where
     pub const HEIGHT: usize = 480;
     pub const WIDTH_BYTES: usize = Self::WIDTH / 8;
     pub const BUFFER_SIZE: usize = Self::WIDTH_BYTES * Self::HEIGHT;
+    // Panel alignment tweak: positive moves rendered content down.
+    const PANEL_Y_SHIFT: isize = 0;
 
     /// Create a new EInkDisplay instance
     pub fn new(
@@ -387,11 +389,38 @@ where
         );
 
         self.send_command(ram_buffer)?;
-
-        // Write data in chunks to avoid issues with large transfers
-        const CHUNK_SIZE: usize = 4096;
-        for chunk in data.chunks(CHUNK_SIZE) {
-            self.send_data(chunk)?;
+        // Some panels are vertically offset a couple lines in hardware.
+        // Apply a streaming row shift here (no large temp allocation).
+        let row_bytes = Self::WIDTH_BYTES;
+        let shift = Self::PANEL_Y_SHIFT;
+        if shift == 0 {
+            const CHUNK_SIZE: usize = 4096;
+            for chunk in data.chunks(CHUNK_SIZE) {
+                self.send_data(chunk)?;
+            }
+        } else if shift > 0 {
+            let shift_rows = (shift as usize).min(Self::HEIGHT);
+            let blank = [0xFFu8; Self::WIDTH_BYTES];
+            for _ in 0..shift_rows {
+                self.send_data(&blank)?;
+            }
+            let src_rows = Self::HEIGHT.saturating_sub(shift_rows);
+            for row in 0..src_rows {
+                let start = row * row_bytes;
+                let end = start + row_bytes;
+                self.send_data(&data[start..end])?;
+            }
+        } else {
+            let skip_rows = ((-shift) as usize).min(Self::HEIGHT);
+            let blank = [0xFFu8; Self::WIDTH_BYTES];
+            for row in skip_rows..Self::HEIGHT {
+                let start = row * row_bytes;
+                let end = start + row_bytes;
+                self.send_data(&data[start..end])?;
+            }
+            for _ in 0..skip_rows {
+                self.send_data(&blank)?;
+            }
         }
 
         info!("{} RAM write complete", buffer_name);

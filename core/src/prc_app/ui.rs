@@ -15,6 +15,7 @@ use embedded_graphics::{
 use crate::prc_app::{
     bitmap::PrcBitmap,
     form_preview::{FormPreview, FormPreviewObject},
+    menu_preview::MenuBarPreview,
     runner::{RuntimeBitmapDraw, RuntimeFieldDraw},
     runtime::{PalmFont, PalmGlyphBitmap},
 };
@@ -367,6 +368,208 @@ fn draw_prc_bitmap<T: DrawTarget<Color = BinaryColor>>(
     }
 }
 
+fn draw_palm_box(canvas: &mut MonoCanvas160, x: i32, y: i32, w: i32, h: i32, with_shadow: bool) {
+    if w <= 4 || h <= 4 {
+        return;
+    }
+    let _ = Rectangle::new(
+        Point::new(x, y),
+        Size::new(w.max(1) as u32, h.max(1) as u32),
+    )
+    .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+    .draw(canvas);
+    let _ = Rectangle::new(
+        Point::new(x, y),
+        Size::new(w.max(1) as u32, h.max(1) as u32),
+    ).into_styled(PrimitiveStyle::with_fill(BinaryColor::On)).draw(canvas);
+
+    // Rounded-corner look: draw frame with corner pixels omitted.
+    for px in (x + 1)..=(x + w - 2) {
+        let _ = Pixel(Point::new(px, y), BinaryColor::Off).draw(canvas);
+        let _ = Pixel(Point::new(px, y + h - 1), BinaryColor::Off).draw(canvas);
+    }
+    for py in (y + 1)..=(y + h - 2) {
+        let _ = Pixel(Point::new(x, py), BinaryColor::Off).draw(canvas);
+        let _ = Pixel(Point::new(x + w - 1, py), BinaryColor::Off).draw(canvas);
+    }
+
+    if with_shadow {
+        // Palm-like 1px drop shadow lines on right/bottom.
+        let shadow_y = y + h;
+        let shadow_x = x + w;
+        for px in (x + 3)..=(x + w - 3) {
+            let _ = Pixel(Point::new(px, shadow_y), BinaryColor::Off).draw(canvas);
+        }
+        for py in (y + 2)..=(y + h - 3) {
+            let _ = Pixel(Point::new(shadow_x, py), BinaryColor::Off).draw(canvas);
+        }
+    }
+}
+
+fn draw_palm_pull_down_box(canvas: &mut MonoCanvas160, x: i32, y: i32, w: i32, h: i32) {
+    if w <= 1 || h <= 1 {
+        return;
+    }
+    let _ = Rectangle::new(
+        Point::new(x, y),
+        Size::new(w.max(1) as u32, h.max(1) as u32),
+    )
+    .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+    .draw(canvas);
+
+    // Top edge is square on Palm pull-downs.
+    for px in x..=(x + w - 1) {
+        let _ = Pixel(Point::new(px, y), BinaryColor::Off).draw(canvas);
+    }
+    // Bottom edge keeps rounded-corner look.
+    for px in (x + 1)..=(x + w - 2) {
+        let _ = Pixel(Point::new(px, y + h - 1), BinaryColor::Off).draw(canvas);
+    }
+    // Side edges connect at the menu-bar baseline.
+    for py in y..=(y + h - 2) {
+        let _ = Pixel(Point::new(x, py), BinaryColor::Off).draw(canvas);
+        let _ = Pixel(Point::new(x + w - 1, py), BinaryColor::Off).draw(canvas);
+    }
+
+    // Palm-like drop shadow.
+    let shadow_y = y + h;
+    let shadow_x = x + w;
+    for px in (x + 3)..=(x + w - 3) {
+        let _ = Pixel(Point::new(px, shadow_y), BinaryColor::Off).draw(canvas);
+    }
+    for py in y..=(y + h - 3) {
+        let _ = Pixel(Point::new(shadow_x, py), BinaryColor::Off).draw(canvas);
+    }
+}
+
+fn draw_menu_overlay_on_canvas(
+    canvas: &mut MonoCanvas160,
+    menu: &MenuBarPreview,
+    active_menu_index: usize,
+    active_item_index: Option<usize>,
+    fonts: &[PalmFont],
+) {
+    if menu.menus.is_empty() {
+        return;
+    }
+    // Match Palm menu bar proportions more closely:
+    // deeper bar with ~3px text-to-bottom gap.
+    let top_h = 15i32;
+    let menu_font = 1u8; // bold
+    let _ = Rectangle::new(Point::new(0, 0), Size::new(160, top_h as u32))
+        .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+        .draw(canvas);
+    // Menu bar box has a 1px gap from top/left/right edges.
+    draw_palm_box(canvas, 1, 1, 157, top_h - 1, true);
+
+    // First title highlight starts around x=6 on Palm.
+    let mut x = 6i32;
+    let mut active_title_bounds: Option<(i32, i32)> = None;
+    for (idx, m) in menu.menus.iter().enumerate() {
+        let (tw, _) = text_metrics(&m.title, menu_font, fonts, 1);
+        // Title sits 3px inside highlight; highlight extends 3px after text.
+        let pad = 3i32;
+        let w = (tw + pad * 2).clamp(10, 70);
+        if idx == active_menu_index {
+            active_title_bounds = Some((x, w));
+        }
+        if idx == active_menu_index && active_item_index.is_none() {
+            let _ = Rectangle::new(Point::new(x, 2), Size::new(w as u32, (top_h - 3) as u32))
+                .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+                .draw(canvas);
+            draw_text(canvas, &m.title, x + pad, 2, menu_font, fonts, 1, BinaryColor::On);
+        } else {
+            draw_text(canvas, &m.title, x + pad, 2, menu_font, fonts, 1, BinaryColor::Off);
+        }
+        x += w + 1;
+        if x >= 156 {
+            break;
+        }
+    }
+
+    let menu_idx = active_menu_index.min(menu.menus.len().saturating_sub(1));
+    let pull = &menu.menus[menu_idx];
+    if pull.items.is_empty() {
+        return;
+    }
+    let mut max_w = 56i32;
+    for item in &pull.items {
+        let (tw, _) = text_metrics(&item.text, menu_font, fonts, 1);
+        max_w = max_w.max(tw + 28);
+    }
+    max_w = max_w.min(150);
+    let row_h = 12i32;
+    let h = (pull.items.len() as i32 * row_h + 2).min(150 - top_h);
+    let preferred_x = active_title_bounds.map(|(x, _)| x).unwrap_or(0);
+    let x0 = preferred_x.clamp(0, 159 - max_w);
+    // Align one pixel lower.
+    let y0 = top_h - 1;
+    draw_palm_pull_down_box(canvas, x0, y0, max_w, h);
+    for (idx, item) in pull.items.iter().enumerate() {
+        let iy = y0 + 1 + (idx as i32 * row_h);
+        if iy + row_h > y0 + h {
+            break;
+        }
+        if Some(idx) == active_item_index {
+            let _ = Rectangle::new(
+                Point::new(x0 + 1, iy),
+                Size::new((max_w - 2) as u32, row_h as u32),
+            )
+            .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+            .draw(canvas);
+            draw_text(
+                canvas,
+                &item.text,
+                x0 + 3,
+                iy + 1,
+                menu_font,
+                fonts,
+                1,
+                BinaryColor::On,
+            );
+            if let Some(ch) = item.shortcut {
+                let sc = alloc::format!("/{}", ch);
+                let (sw, _) = text_metrics(&sc, menu_font, fonts, 1);
+                draw_text(
+                    canvas,
+                    &sc,
+                    x0 + max_w - sw - 4,
+                    iy + 1,
+                    menu_font,
+                    fonts,
+                    1,
+                    BinaryColor::On,
+                );
+            }
+        } else {
+            draw_text(
+                canvas,
+                &item.text,
+                x0 + 3,
+                iy + 1,
+                menu_font,
+                fonts,
+                1,
+                BinaryColor::Off,
+            );
+            if let Some(ch) = item.shortcut {
+                let sc = alloc::format!("/{}", ch);
+                let (sw, _) = text_metrics(&sc, menu_font, fonts, 1);
+                draw_text(
+                    canvas,
+                    &sc,
+                    x0 + max_w - sw - 4,
+                    iy + 1,
+                    menu_font,
+                    fonts,
+                    1,
+                    BinaryColor::Off,
+                );
+            }
+        }
+    }
+}
+
 pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     target: &mut T,
     form: &FormPreview,
@@ -375,6 +578,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     runtime_bitmap_draws: &[RuntimeBitmapDraw],
     runtime_field_draws: &[RuntimeFieldDraw],
     focused_control_id: Option<u16>,
+    menu_overlay: Option<(&MenuBarPreview, usize, Option<usize>)>,
     pane_x: i32,
     pane_y: i32,
     pane_w: i32,
@@ -393,10 +597,6 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     let mut canvas = MonoCanvas160::new();
     let src_w = form.w.max(20).min(160) as i32;
     let src_h = form.h.max(20).min(160) as i32;
-
-    let _ = Rectangle::new(Point::new(0, 0), Size::new(src_w as u32, src_h as u32))
-        .into_styled(outline)
-        .draw(&mut canvas);
 
     let map_x = |x: i16| (x - form.x).max(0) as i32;
     let map_y = |y: i16| (y - form.y).max(0) as i32;
@@ -490,6 +690,10 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
         if let Some(bmp) = find_bitmap(bitmaps, draw.resource_id) {
             draw_prc_bitmap(&mut canvas, bmp, draw.x as i32, draw.y as i32);
         }
+    }
+
+    if let Some((menu, active_menu_index, active_item_index)) = menu_overlay {
+        draw_menu_overlay_on_canvas(&mut canvas, menu, active_menu_index, active_item_index, fonts);
     }
 
     let s = scale.max(1);

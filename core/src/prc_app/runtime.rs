@@ -6,6 +6,7 @@ use crate::prc_app::traps::{TrapGroup, table};
 pub const SYS_APP_LAUNCH_CMD_NORMAL_LAUNCH: u16 = 0;
 pub const EVT_NIL: u16 = 0;
 pub const EVT_CTL_SELECT: u16 = 9;
+pub const EVT_MENU: u16 = 21;
 pub const EVT_FRM_LOAD: u16 = 23;
 pub const EVT_FRM_OPEN: u16 = 24;
 
