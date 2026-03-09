@@ -79,6 +79,12 @@ pub trait ImageSource {
     fn load_prc_system_fonts(&mut self) -> Vec<crate::prc_app::runtime::PalmFont> {
         Vec::new()
     }
+    /// Optional high-density Palm font set for full-resolution shell UI.
+    ///
+    /// Default falls back to runtime/system PRC fonts.
+    fn load_home_system_fonts(&mut self) -> Vec<crate::prc_app::runtime::PalmFont> {
+        self.load_prc_system_fonts()
+    }
     /// Optional `/install` inbox scan hook.
     ///
     /// Implementations can return `Some(summary)` when they support Palm DB
@@ -86,6 +92,18 @@ pub trait ImageSource {
     fn scan_palm_install_inbox(&mut self) -> Option<crate::palm_db::InstallSummary> {
         None
     }
+
+    /// Optional installed-app catalog for launcher Apps category.
+    fn list_installed_apps(&mut self) -> Vec<InstalledAppEntry> {
+        Vec::new()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct InstalledAppEntry {
+    pub title: String,
+    pub path: String,
+    pub icon: Option<ImageData>,
 }
 
 pub trait BookSource {

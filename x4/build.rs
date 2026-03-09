@@ -155,19 +155,20 @@ fn generate_embedded_prc_fonts() {
         })
     }
 
-    fn font_variant_rank(name: &str) -> u8 {
-        let lower = name.to_ascii_lowercase();
-        // Prefer high-density fonts for full-resolution UI chrome.
-        if lower.ends_with("_144.txt") { 0 } else if lower.ends_with("_72.txt") { 2 } else { 1 }
-    }
-
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR missing"));
     let out_file = out_dir.join("prc_embedded_fonts.rs");
     let fonts_dir = Path::new("assets").join("fonts");
 
     println!("cargo:rerun-if-changed={}", fonts_dir.display());
 
-    let mut candidates: BTreeMap<u16, (u8, String, PathBuf)> = BTreeMap::new();
+    #[derive(Default)]
+    struct FontVariants {
+        f72: Option<(String, PathBuf)>,
+        f144: Option<(String, PathBuf)>,
+        other: Option<(String, PathBuf)>,
+    }
+
+    let mut variants: BTreeMap<u16, FontVariants> = BTreeMap::new();
     if let Ok(rd) = fs::read_dir(&fonts_dir) {
         for dent in rd.flatten() {
             let path = dent.path();
@@ -191,26 +192,64 @@ fn generate_embedded_prc_fonts() {
             if !matches!(font_id, 0 | 1 | 2 | 7) {
                 continue;
             }
-            let rank = font_variant_rank(&name);
-            match candidates.get(&font_id) {
-                Some((cur_rank, _, _)) if *cur_rank <= rank => {}
-                _ => {
-                    candidates.insert(font_id, (rank, name, path));
-                }
+            let lower = name.to_ascii_lowercase();
+            let slot = variants.entry(font_id).or_default();
+            if lower.ends_with("_72.txt") {
+                slot.f72 = Some((name, path));
+            } else if lower.ends_with("_144.txt") {
+                slot.f144 = Some((name, path));
+            } else if slot.other.is_none() {
+                slot.other = Some((name, path));
             }
+        }
+    }
+
+    fn choose_variant(
+        variants: &FontVariants,
+        prefer_144: bool,
+    ) -> Option<(String, PathBuf)> {
+        if prefer_144 {
+            variants
+                .f144
+                .clone()
+                .or_else(|| variants.other.clone())
+                .or_else(|| variants.f72.clone())
+        } else {
+            variants
+                .f72
+                .clone()
+                .or_else(|| variants.other.clone())
+                .or_else(|| variants.f144.clone())
+        }
+    }
+
+    let mut chosen_72: BTreeMap<u16, (String, PathBuf)> = BTreeMap::new();
+    let mut chosen_144: BTreeMap<u16, (String, PathBuf)> = BTreeMap::new();
+    for (font_id, v) in &variants {
+        if let Some(chosen) = choose_variant(v, false) {
+            chosen_72.insert(*font_id, chosen);
+        }
+        if let Some(chosen) = choose_variant(v, true) {
+            chosen_144.insert(*font_id, chosen);
         }
     }
 
     let mut body = String::new();
     body.push_str("use tern_core::prc_app::runtime::{PalmFont, PalmWidths, PalmGlyphs, PalmGlyphStatic};\n");
-    for (font_id, (_rank, _name, path)) in &candidates {
-        let Ok(text) = fs::read_to_string(path) else {
-            continue;
-        };
-        let Some(parsed) = parse_pumpkin_txt_font(&text, *font_id) else {
-            continue;
-        };
-        let prefix = format!("F{}", font_id);
+    let mut emitted: BTreeMap<String, u16> = BTreeMap::new();
+    for (tag, map) in [("72", &chosen_72), ("144", &chosen_144)] {
+        for (font_id, (_name, path)) in map.iter() {
+            let Ok(text) = fs::read_to_string(path) else {
+                continue;
+            };
+            let Some(parsed) = parse_pumpkin_txt_font(&text, *font_id) else {
+                continue;
+            };
+            let prefix = format!("F{}_{}", font_id, tag);
+            if emitted.contains_key(&prefix) {
+                continue;
+            }
+            emitted.insert(prefix.clone(), *font_id);
         body.push_str(&format!("static {}_WIDTHS: &[u8] = &{:?};\n", prefix, parsed.widths));
         for (idx, g) in parsed.glyphs.iter().enumerate() {
             if let Some((_, rows)) = g {
@@ -241,14 +280,25 @@ fn generate_embedded_prc_fonts() {
             prefix,
             prefix
         ));
+        }
     }
-    body.push_str("pub fn load_embedded_prc_fonts() -> alloc::vec::Vec<PalmFont> {\n");
+    body.push_str("pub fn load_embedded_prc_fonts_72() -> alloc::vec::Vec<PalmFont> {\n");
     body.push_str("    let mut out = alloc::vec::Vec::new();\n");
-    for (font_id, _,) in candidates.iter().map(|(id, v)| (id, v)) {
-        let prefix = format!("F{}", font_id).to_ascii_lowercase();
+    for font_id in chosen_72.keys() {
+        let prefix = format!("F{}_72", font_id).to_ascii_lowercase();
         body.push_str(&format!("    out.push(make_{}());\n", prefix));
     }
     body.push_str("    out\n}\n");
+    body.push_str("pub fn load_embedded_prc_fonts_144() -> alloc::vec::Vec<PalmFont> {\n");
+    body.push_str("    let mut out = alloc::vec::Vec::new();\n");
+    for font_id in chosen_144.keys() {
+        let prefix = format!("F{}_144", font_id).to_ascii_lowercase();
+        body.push_str(&format!("    out.push(make_{}());\n", prefix));
+    }
+    body.push_str("    out\n}\n");
+    body.push_str("pub fn load_embedded_prc_fonts() -> alloc::vec::Vec<PalmFont> {\n");
+    body.push_str("    load_embedded_prc_fonts_72()\n");
+    body.push_str("}\n");
 
     let _ = fs::create_dir_all(&out_dir);
     fs::write(out_file, body).expect("failed to write generated embedded font table");

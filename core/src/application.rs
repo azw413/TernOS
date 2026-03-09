@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use alloc::{format, string::String};
+use alloc::{format, string::{String, ToString}};
 use alloc::vec::Vec;
 use alloc::vec;
 
@@ -28,7 +28,8 @@ fn is_epub(name: &str) -> bool {
 }
 
 fn is_prc(name: &str) -> bool {
-    name.to_ascii_lowercase().ends_with(".prc")
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".prc") || lower.ends_with(".tdb")
 }
 
 use crate::{
@@ -48,9 +49,9 @@ use crate::{
         system::{ApplyResumeOutcome, ResumeContext, SleepWallpaperIcons, SystemRenderContext, SystemState},
     },
     build_info,
-    display::RefreshMode,
+    display::{GrayscaleMode, RefreshMode},
     framebuffer::{DisplayBuffers, Rotation},
-    image_viewer::{AppSource, ImageEntry, ImageError},
+    image_viewer::{AppSource, EntryKind, ImageEntry, ImageError},
     input,
     prc_app,
     ui::{flush_queue, Rect, RenderQueue},
@@ -82,12 +83,15 @@ pub struct Application<'a, S: AppSource> {
     prc_runtime_bitmap_draws: Vec<prc_app::runner::RuntimeBitmapDraw>,
     prc_runtime_field_draws: Vec<prc_app::runner::RuntimeFieldDraw>,
     prc_system_fonts: Vec<prc_app::runtime::PalmFont>,
+    home_system_fonts: Vec<prc_app::runtime::PalmFont>,
     prc_menu_controller: prc_app::controller::PrcMenuController,
     prc_help_controller: prc_app::controller::PrcHelpDialogController,
     prc_active_entry: Option<ImageEntry>,
     prc_session: Option<prc_app::runner::PrcRuntimeSession>,
     prc_blocked_timeout_ticks: u32,
     prc_blocked_elapsed_ms: u32,
+    prc_return_to_start_menu: bool,
+    prc_reserved_gray_initialized: bool,
     gray2_lsb: Vec<u8>,
     gray2_msb: Vec<u8>,
     exit_from: ExitFrom,
@@ -160,12 +164,15 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_runtime_bitmap_draws: Vec::new(),
             prc_runtime_field_draws: Vec::new(),
             prc_system_fonts: Vec::new(),
+            home_system_fonts: Vec::new(),
             prc_menu_controller: prc_app::controller::PrcMenuController::default(),
             prc_help_controller: prc_app::controller::PrcHelpDialogController::default(),
             prc_active_entry: None,
             prc_session: None,
             prc_blocked_timeout_ticks: 0,
             prc_blocked_elapsed_ms: 0,
+            prc_return_to_start_menu: false,
+            prc_reserved_gray_initialized: false,
             gray2_lsb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
             gray2_msb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
             exit_from: ExitFrom::Image,
@@ -192,6 +199,10 @@ impl<'a, S: AppSource> Application<'a, S> {
             summary.skipped,
             summary.failed
         );
+        if summary.installed > 0 || summary.upgraded > 0 || summary.failed > 0 {
+            self.home.show_install_summary_dialog(summary);
+            self.dirty = true;
+        }
     }
 
     pub fn update(&mut self, buttons: &input::ButtonState, elapsed_ms: u32) {
@@ -242,19 +253,28 @@ impl<'a, S: AppSource> Application<'a, S> {
                 let recents = self.system.collect_recent_paths(self.last_viewed_entry.as_ref());
                 match self.home.handle_start_menu_input(&recents, buttons) {
                     HomeAction::OpenRecent(path) => {
-                        match self.home.open_recent_path(self.source, &path) {
-                            Ok(()) => {
-                                let index = self.home.selected;
-                                self.open_index(index);
-                            }
-                            Err(err) => {
-                                if self.system.remove_recent(&path) {
-                                    if self.last_viewed_entry.as_deref() == Some(path.as_str()) {
-                                        self.last_viewed_entry = None;
-                                    }
-                                    self.system.save_recent_entries_now(self.source);
-                                }
+                        if path.to_ascii_lowercase().ends_with(".tdb")
+                            || path.to_ascii_lowercase().ends_with(".prc")
+                        {
+                            if let Err(err) = self.open_prc_path(&path) {
                                 self.set_error(err);
+                            }
+                        } else {
+                            match self.home.open_recent_path(self.source, &path) {
+                                Ok(()) => {
+                                    let index = self.home.selected;
+                                    self.open_index(index);
+                                }
+                                Err(err) => {
+                                    if self.system.remove_recent(&path) {
+                                        if self.last_viewed_entry.as_deref() == Some(path.as_str())
+                                        {
+                                            self.last_viewed_entry = None;
+                                        }
+                                        self.system.save_recent_entries_now(self.source);
+                                    }
+                                    self.set_error(err);
+                                }
                             }
                         }
                     }
@@ -471,20 +491,12 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 } else if buttons.is_pressed(input::Buttons::Up) {
                     let form = self.runtime_prc_form();
-                    if !self.prc_ui_controller.move_focus(form.as_ref(), -1) {
-                        self.prc_scroll = self.prc_scroll.saturating_sub(1);
-                        self.dirty = true;
-                    } else {
+                    if self.prc_ui_controller.move_focus(form.as_ref(), -1) {
                         self.dirty = true;
                     }
                 } else if buttons.is_pressed(input::Buttons::Down) {
                     let form = self.runtime_prc_form();
-                    if !self.prc_ui_controller.move_focus(form.as_ref(), 1) {
-                        if self.prc_scroll + 1 < self.prc_lines.len() {
-                            self.prc_scroll += 1;
-                        }
-                        self.dirty = true;
-                    } else {
+                    if self.prc_ui_controller.move_focus(form.as_ref(), 1) {
                         self.dirty = true;
                     }
                 } else if buttons.is_pressed(input::Buttons::Confirm) {
@@ -499,7 +511,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.set_state_menu();
                     }
                 } else if buttons.is_pressed(input::Buttons::Back) {
-                    self.set_state_menu();
+                    self.exit_prc_viewer_to_origin();
                 } else if self.system.add_idle(elapsed_ms) {
                     self.start_sleep_request();
                 }
@@ -722,6 +734,7 @@ impl<'a, S: AppSource> Application<'a, S> {
     fn open_prc_entry(&mut self, entry: ImageEntry) {
         match self.source.load_prc_info(&self.home.path, &entry) {
             Ok(info) => {
+                self.prc_return_to_start_menu = matches!(self.state, AppState::StartMenu);
                 self.prc_active_entry = Some(entry.clone());
                 self.prc_session = None;
                 self.prc_blocked_timeout_ticks = 0;
@@ -787,6 +800,64 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.set_state_prc_viewing();
             }
             Err(err) => self.set_error(err),
+        }
+    }
+
+    fn open_prc_path(&mut self, full_path: &str) -> Result<(), ImageError> {
+        let mut parts: Vec<String> = full_path
+            .split('/')
+            .filter(|p| !p.is_empty())
+            .map(|p| p.to_string())
+            .collect();
+        if parts.is_empty() {
+            return Err(ImageError::Message("Invalid app path.".into()));
+        }
+        let name = parts.pop().unwrap_or_default();
+        let path = parts;
+        let entry = ImageEntry {
+            name,
+            kind: EntryKind::File,
+        };
+        match self.source.load_prc_info(&path, &entry) {
+            Ok(info) => {
+                self.prc_return_to_start_menu = true;
+                self.prc_active_entry = Some(entry.clone());
+                self.prc_session = None;
+                self.prc_blocked_timeout_ticks = 0;
+                self.prc_blocked_elapsed_ms = 0;
+                self.prc_lines = prc_app::format_info_lines(&info);
+                let runtime_snapshot = self.log_prc_info(&entry, &info);
+                self.prc_runtime_form_id = runtime_snapshot.form_id;
+                self.prc_ui_controller.reset();
+                self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
+                self.prc_runtime_field_draws = runtime_snapshot.field_draws;
+                self.prc_system_fonts = self.source.load_prc_system_fonts();
+                self.prc_forms.clear();
+                self.prc_bitmaps.clear();
+                self.prc_menu_controller.set_menu_bar(None);
+                if let Ok(prc_raw) = self.source.load_prc_bytes(&path, &entry) {
+                    self.prc_forms = prc_app::form_preview::parse_form_previews(&prc_raw);
+                    self.prc_bitmaps = prc_app::bitmap::parse_prc_bitmaps(&prc_raw);
+                    let menu_bar = prc_app::menu_preview::parse_menu_bar_preview(&prc_raw);
+                    self.prc_menu_controller.set_menu_bar(menu_bar);
+                }
+                if let Ok(session) = prc_app::runner::PrcRuntimeSession::from_source(
+                    self.source,
+                    &path,
+                    &entry,
+                    &info,
+                    0,
+                )
+                {
+                    self.prc_session = Some(session);
+                    self.resume_prc_runtime_session();
+                }
+                self.prc_form_index = self.best_prc_form_index().unwrap_or(0);
+                self.prc_scroll = 0;
+                self.set_state_prc_viewing();
+                Ok(())
+            }
+            Err(err) => Err(err),
         }
     }
 
@@ -1167,11 +1238,26 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_runtime_field_draws = Vec::new();
         self.prc_system_fonts = Vec::new();
         self.prc_menu_controller.reset();
+        self.prc_reserved_gray_initialized = false;
+    }
+
+    fn exit_prc_viewer_to_origin(&mut self) {
+        let to_start_menu = self.prc_return_to_start_menu;
+        self.prc_return_to_start_menu = false;
+        self.release_prc_resources();
+        self.system.full_refresh = true;
+        if to_start_menu {
+            self.set_state_start_menu(true);
+        } else {
+            self.state = AppState::Menu;
+            self.dirty = true;
+        }
     }
 
     fn set_state_menu(&mut self) {
         if matches!(self.state, AppState::PrcViewing) {
             self.release_prc_resources();
+            self.prc_return_to_start_menu = false;
             self.system.full_refresh = true;
         }
         self.state = AppState::Menu;
@@ -1197,6 +1283,7 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn set_state_prc_viewing(&mut self) {
         self.state = AppState::PrcViewing;
+        self.prc_reserved_gray_initialized = false;
         self.system.full_refresh = true;
         self.dirty = true;
     }
@@ -1209,8 +1296,11 @@ impl<'a, S: AppSource> Application<'a, S> {
 
 
     fn draw_start_menu(&mut self, display: &mut impl crate::display::Display) {
-        if self.prc_system_fonts.is_empty() {
-            self.prc_system_fonts = self.source.load_prc_system_fonts();
+        if self.home_system_fonts.is_empty() {
+            self.home_system_fonts = self.source.load_home_system_fonts();
+            if self.home_system_fonts.is_empty() {
+                self.home_system_fonts = self.source.load_prc_system_fonts();
+            }
         }
         let recents = self.system.collect_recent_paths(self.last_viewed_entry.as_ref());
         let icons = HomeIcons {
@@ -1229,7 +1319,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             source: self.source,
             full_refresh: self.system.full_refresh,
             battery_percent: self.system.battery_percent,
-            palm_fonts: self.prc_system_fonts.as_slice(),
+            palm_fonts: self.home_system_fonts.as_slice(),
             icons,
             draw_trbk_image,
         };
@@ -1292,44 +1382,64 @@ impl<'a, S: AppSource> Application<'a, S> {
     }
 
     fn draw_prc_viewer(&mut self, display: &mut impl crate::display::Display) {
-        const LIST_TOP: i32 = 64;
-        const LINE_HEIGHT: i32 = 22;
+        const STATUS_H: i32 = 34;
         self.display_buffers.clear(BinaryColor::On).ok();
-        let style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
-        Text::new("Palm App (.prc)", Point::new(LIST_MARGIN_X, HEADER_Y), style)
-            .draw(self.display_buffers)
-            .ok();
-        let forms_line = if let Some(fid) = self.prc_runtime_form_id {
-            format!("runtime form: {}", fid)
-        } else {
-            format!(
-                "runtime form: none (parsed:{})",
-                self.prc_forms.len()
-            )
-        };
-        Text::new(&forms_line, Point::new(LIST_MARGIN_X + 240, HEADER_Y), style)
-            .draw(self.display_buffers)
-            .ok();
-
         let size = self.display_buffers.size();
-        let rows = ((size.height as i32 - LIST_TOP - 24) / LINE_HEIGHT).max(1) as usize;
-        for row in 0..rows {
-            let idx = self.prc_scroll + row;
-            let Some(line) = self.prc_lines.get(idx) else {
-                break;
-            };
-            let y = LIST_TOP + (row as i32 * LINE_HEIGHT);
-            Text::new(line, Point::new(LIST_MARGIN_X, y), style)
-                .draw(self.display_buffers)
-                .ok();
-        }
-        Text::new(
-            "Left: menu  Up/Down: nav  OK: select  Back: return",
-            Point::new(LIST_MARGIN_X, size.height as i32 - 4),
-            style,
+        Rectangle::new(
+            Point::new(0, 0),
+            Size::new(size.width, STATUS_H as u32),
         )
+        .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
         .draw(self.display_buffers)
         .ok();
+        let battery = self.system.battery_percent.unwrap_or(100);
+        let battery_text = format!("{}%", battery);
+        let batt_w = 34 * 3;
+        let batt_h = 8 * 3;
+        let cap_w = 2 * 3;
+        let cap_h = 4 * 3;
+        let batt_total_w = batt_w + cap_w;
+        let batt_x = (size.width as i32 - batt_total_w) / 2;
+        let batt_y = ((STATUS_H - batt_h) / 2) + 2;
+        Rectangle::new(
+            Point::new(batt_x, batt_y),
+            Size::new(batt_w as u32, batt_h as u32),
+        )
+        .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+        .draw(self.display_buffers)
+        .ok();
+        Rectangle::new(
+            Point::new(batt_x + batt_w, batt_y + (batt_h - cap_h) / 2),
+            Size::new(cap_w as u32, cap_h as u32),
+        )
+        .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+        .draw(self.display_buffers)
+        .ok();
+        if !self.home_system_fonts.is_empty() {
+            let tw = crate::ui::prc_components::palm_text_width(
+                &battery_text,
+                0,
+                self.home_system_fonts.as_slice(),
+                1,
+            );
+            let th = crate::ui::prc_components::palm_text_height(
+                0,
+                self.home_system_fonts.as_slice(),
+                1,
+            );
+            let tx = batt_x + (batt_w - tw) / 2;
+            let ty = batt_y + (batt_h - th) / 2;
+            crate::ui::prc_components::draw_palm_text(
+                self.display_buffers,
+                &battery_text,
+                tx,
+                ty,
+                0,
+                self.home_system_fonts.as_slice(),
+                1,
+                BinaryColor::On,
+            );
+        }
 
         let draw_form = self
             .runtime_prc_form()
@@ -1339,18 +1449,15 @@ impl<'a, S: AppSource> Application<'a, S> {
             let outline = PrimitiveStyle::with_stroke(BinaryColor::Off, 1);
             let clear = PrimitiveStyle::with_fill(BinaryColor::On);
             let max_scale_w = ((size.width as i32) / 160).max(1);
-            let max_scale_h = ((size.height as i32 - LIST_TOP - 34) / 160).max(1);
+            let content_top = STATUS_H + 2;
+            let content_h = (size.height as i32 - content_top).max(1);
+            let max_scale_h = (content_h / 160).max(1);
             let max_scale = max_scale_w.min(max_scale_h).max(1);
             let scale = if max_scale >= 3 { 3 } else { max_scale };
             let pane_w = 160 * scale;
             let pane_h = 160 * scale;
-            let mut pane_x = ((size.width as i32 - pane_w) / 2).max(0);
-            let mut pane_y = 0;
-            if cfg!(target_os = "none") {
-                // Device panel tuning: PRC canvas sits slightly high/left versus desktop.
-                pane_x += 1;
-                pane_y += 11;
-            }
+            let pane_x = ((size.width as i32 - pane_w) / 2).max(0);
+            let pane_y = content_top;
             Rectangle::new(
                 Point::new(pane_x, pane_y),
                 Size::new(pane_w as u32, pane_h as u32),
@@ -1378,37 +1485,45 @@ impl<'a, S: AppSource> Application<'a, S> {
                 scale.max(1),
                 outline,
             );
+        }
 
-            Text::new(
-                if self.prc_runtime_form_id.is_some() {
-                    "runtime draw"
-                } else {
-                    "preview draw"
-                },
-                Point::new(pane_x, pane_y - 4),
-                style,
-            )
-            .draw(self.display_buffers)
-            .ok();
-            let meta = format!(
-                "x{} res:{} form:{} obj:{}/{}",
-                scale,
-                form.resource_id,
-                form.form_id,
-                form.objects.len(),
-                form.object_count
+        let content_top = STATUS_H + 2;
+        let max_scale_w = ((size.width as i32) / 160).max(1);
+        let max_scale_h = ((size.height as i32 - content_top) / 160).max(1);
+        let max_scale = max_scale_w.min(max_scale_h).max(1);
+        let scale = if max_scale >= 3 { 3 } else { max_scale };
+        let pane_h = 160 * scale;
+        let strip_top = (content_top + pane_h).clamp(0, size.height as i32);
+        let strip_h = (size.height as i32 - strip_top).max(0);
+
+        if strip_h > 0 && !self.prc_reserved_gray_initialized {
+            self.gray2_lsb.fill(0);
+            self.gray2_msb.fill(0);
+            fill_gray2_rect(
+                self.display_buffers.rotation(),
+                self.gray2_lsb.as_mut_slice(),
+                self.gray2_msb.as_mut_slice(),
+                0,
+                strip_top,
+                size.width as i32,
+                strip_h,
+                true,
+                false,
             );
-            Text::new(&meta, Point::new(pane_x, pane_y + pane_h + 16), style)
-                .draw(self.display_buffers)
-                .ok();
-        } else {
-            Text::new(
-                "runtime draw: none",
-                Point::new(LIST_MARGIN_X + 240, HEADER_Y + 22),
-                style,
-            )
-            .draw(self.display_buffers)
-            .ok();
+            crate::app::home::merge_bw_into_gray2(
+                self.display_buffers,
+                self.gray2_lsb.as_mut_slice(),
+                self.gray2_msb.as_mut_slice(),
+            );
+            let lsb: &[u8; crate::framebuffer::BUFFER_SIZE] =
+                self.gray2_lsb.as_slice().try_into().unwrap();
+            let msb: &[u8; crate::framebuffer::BUFFER_SIZE] =
+                self.gray2_msb.as_slice().try_into().unwrap();
+            display.copy_grayscale_buffers(lsb, msb);
+            display.display_absolute_grayscale(GrayscaleMode::Fast);
+            self.display_buffers.copy_active_to_inactive();
+            self.prc_reserved_gray_initialized = true;
+            return;
         }
 
         let mode = if self.system.full_refresh {
@@ -1417,10 +1532,12 @@ impl<'a, S: AppSource> Application<'a, S> {
             RefreshMode::Fast
         };
         let mut rq = RenderQueue::default();
-        rq.push(
-            Rect::new(0, 0, size.width as i32, size.height as i32),
-            mode,
-        );
+        let update_h = if strip_h > 0 {
+            strip_top
+        } else {
+            size.height as i32
+        };
+        rq.push(Rect::new(0, 0, size.width as i32, update_h), mode);
         flush_queue(display, self.display_buffers, &mut rq, mode);
     }
 
@@ -1673,5 +1790,65 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.state = AppState::SleepingPending;
         self.dirty = true;
     }
+}
 
+fn fill_gray2_rect(
+    rotation: Rotation,
+    gray2_lsb: &mut [u8],
+    gray2_msb: &mut [u8],
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    lsb_on: bool,
+    msb_on: bool,
+) {
+    let x0 = x.max(0);
+    let y0 = y.max(0);
+    let x1 = (x + w).min(crate::framebuffer::HEIGHT as i32);
+    let y1 = (y + h).min(crate::framebuffer::WIDTH as i32);
+    if x1 <= x0 || y1 <= y0 {
+        return;
+    }
+    for py in y0..y1 {
+        for px in x0..x1 {
+            let Some((fx, fy)) = map_display_point(rotation, px, py) else {
+                continue;
+            };
+            let idx = fy * crate::framebuffer::WIDTH + fx;
+            let byte = idx / 8;
+            let bit = 7 - (idx % 8);
+            let mask = 1 << bit;
+            if lsb_on {
+                gray2_lsb[byte] |= mask;
+            } else {
+                gray2_lsb[byte] &= !mask;
+            }
+            if msb_on {
+                gray2_msb[byte] |= mask;
+            } else {
+                gray2_msb[byte] &= !mask;
+            }
+        }
+    }
+}
+
+fn map_display_point(rotation: Rotation, x: i32, y: i32) -> Option<(usize, usize)> {
+    if x < 0 || y < 0 {
+        return None;
+    }
+    let (x, y) = match rotation {
+        Rotation::Rotate0 => (x as usize, y as usize),
+        Rotation::Rotate90 => (y as usize, crate::framebuffer::HEIGHT - 1 - x as usize),
+        Rotation::Rotate180 => (
+            crate::framebuffer::WIDTH - 1 - x as usize,
+            crate::framebuffer::HEIGHT - 1 - y as usize,
+        ),
+        Rotation::Rotate270 => (crate::framebuffer::WIDTH - 1 - y as usize, x as usize),
+    };
+    if x >= crate::framebuffer::WIDTH || y >= crate::framebuffer::HEIGHT {
+        None
+    } else {
+        Some((x, y))
+    }
 }

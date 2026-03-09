@@ -3,8 +3,10 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use log::error;
+use tern_core::palm_db::{DbKind, InstallDecision, InstallInboxEntry, InstallPlanner, InstallSummary, InstalledDbIdentity, InstalledDbMeta};
 use tern_core::image_viewer::{
     BookSource, EntryKind, Gray2StreamSource, ImageData, ImageEntry, ImageError, ImageSource,
+    InstalledAppEntry,
     PersistenceSource, PowerSource,
 };
 
@@ -38,6 +40,7 @@ impl DesktopImageSource {
             || name.ends_with(".tri")
             || name.ends_with(".trbk")
             || name.ends_with(".prc")
+            || name.ends_with(".tdb")
     }
 
     fn resume_path(&self) -> PathBuf {
@@ -106,6 +109,291 @@ impl DesktopImageSource {
         self.root.join("fonts")
     }
 
+    fn install_dir(&self) -> PathBuf {
+        self.root.join("install")
+    }
+
+    fn palmdb_root(&self) -> PathBuf {
+        self.root.join("palmdb").join("v1")
+    }
+
+    fn palmdb_catalog_path(&self) -> PathBuf {
+        self.palmdb_root().join("catalog.txt")
+    }
+
+    fn palmdb_db_dir(&self) -> PathBuf {
+        self.palmdb_root().join("db")
+    }
+
+    fn load_prc_fonts_with_variant(
+        &self,
+        prefer_144: bool,
+    ) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+        let mut out = Vec::new();
+        fn font_variant_rank(name: &str, prefer_144: bool) -> u8 {
+            let lower = name.to_ascii_lowercase();
+            if prefer_144 {
+                if lower.ends_with("_144.txt") {
+                    0
+                } else if lower.ends_with("_72.txt") {
+                    2
+                } else {
+                    1
+                }
+            } else if lower.ends_with("_72.txt") {
+                0
+            } else if lower.ends_with("_144.txt") {
+                2
+            } else {
+                1
+            }
+        }
+        let mut embedded: std::collections::BTreeMap<u16, (&str, &str, u8)> =
+            std::collections::BTreeMap::new();
+        for (name, text) in embedded_prc_fonts::EMBEDDED_PRC_FONT_TXT {
+            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(name) else {
+                continue;
+            };
+            let font_id = resource_id.saturating_sub(9100);
+            let rank = font_variant_rank(name, prefer_144);
+            match embedded.get(&font_id) {
+                Some((_, _, cur_rank)) if *cur_rank <= rank => {}
+                _ => {
+                    embedded.insert(font_id, (name, text, rank));
+                }
+            }
+        }
+        for (font_id, (_name, text, _rank)) in embedded.into_iter() {
+            if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(text, font_id) {
+                out.push(font);
+            }
+        }
+        let embedded_loaded = out.len();
+        if embedded_loaded > 0 {
+            log::info!(
+                "Loaded {} embedded text system fonts from app image",
+                embedded_loaded
+            );
+        }
+
+        let dir = self.fonts_dir();
+        let Ok(read_dir) = fs::read_dir(&dir) else {
+            return out;
+        };
+        let mut sd_candidates: std::collections::BTreeMap<u16, (String, u8)> =
+            std::collections::BTreeMap::new();
+        for dent in read_dir.flatten() {
+            let Ok(ft) = dent.file_type() else {
+                continue;
+            };
+            if !ft.is_file() {
+                continue;
+            }
+            let name = dent.file_name().to_string_lossy().to_string();
+            if !name.to_ascii_lowercase().ends_with(".txt") {
+                continue;
+            }
+            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(&name) else {
+                continue;
+            };
+            let font_id = resource_id.saturating_sub(9100);
+            let rank = font_variant_rank(&name, prefer_144);
+            match sd_candidates.get(&font_id) {
+                Some((_, cur_rank)) if *cur_rank <= rank => {}
+                _ => {
+                    sd_candidates.insert(font_id, (dent.path().to_string_lossy().to_string(), rank));
+                }
+            }
+        }
+        for (font_id, (path, _rank)) in sd_candidates {
+            let Ok(text) = fs::read_to_string(path) else {
+                continue;
+            };
+            if let Some(pos) = out
+                .iter()
+                .position(|f: &tern_core::prc_app::runtime::PalmFont| f.font_id == font_id)
+            {
+                if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(&text, font_id) {
+                    out[pos] = font;
+                }
+            } else if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(&text, font_id) {
+                out.push(font);
+            }
+        }
+        if out.len() > embedded_loaded {
+            log::info!(
+                "Loaded {} text system fonts from {}",
+                out.len() - embedded_loaded,
+                dir.display()
+            );
+        }
+        out
+    }
+
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0f) as usize] as char);
+    }
+    out
+}
+
+fn hex_decode_fixed<const N: usize>(s: &str) -> Option<[u8; N]> {
+    if s.len() != N * 2 {
+        return None;
+    }
+    let mut out = [0u8; N];
+    let bytes = s.as_bytes();
+    for i in 0..N {
+        let hi = (bytes[i * 2] as char).to_digit(16)? as u8;
+        let lo = (bytes[i * 2 + 1] as char).to_digit(16)? as u8;
+        out[i] = (hi << 4) | lo;
+    }
+    Some(out)
+}
+
+fn payload_hash_32(data: &[u8]) -> [u8; 32] {
+    let mut s0: u64 = 0xcbf29ce484222325;
+    let mut s1: u64 = 0x9e3779b97f4a7c15;
+    let mut s2: u64 = 0x243f6a8885a308d3;
+    let mut s3: u64 = 0x13198a2e03707344;
+    for (i, b) in data.iter().enumerate() {
+        let v = *b as u64 + (i as u64).wrapping_mul(0x100000001b3);
+        s0 = (s0 ^ v).wrapping_mul(0x100000001b3);
+        s1 = (s1 ^ (v.rotate_left(13))).wrapping_mul(0x100000001b3);
+        s2 = (s2 ^ (v.rotate_left(29))).wrapping_mul(0x100000001b3);
+        s3 = (s3 ^ (v.rotate_left(47))).wrapping_mul(0x100000001b3);
+    }
+    let mut out = [0u8; 32];
+    out[0..8].copy_from_slice(&s0.to_le_bytes());
+    out[8..16].copy_from_slice(&s1.to_le_bytes());
+    out[16..24].copy_from_slice(&s2.to_le_bytes());
+    out[24..32].copy_from_slice(&s3.to_le_bytes());
+    out
+}
+
+fn identity_from_prc(info: &tern_core::prc_app::PrcInfo) -> InstalledDbIdentity {
+    let mut name = [0u8; 32];
+    let raw_name = info.db_name.as_bytes();
+    let copy_n = raw_name.len().min(name.len());
+    name[..copy_n].copy_from_slice(&raw_name[..copy_n]);
+    let mut db_type = [0u8; 4];
+    let mut creator = [0u8; 4];
+    db_type.copy_from_slice(info.type_code.as_bytes().get(..4).unwrap_or(b"????"));
+    creator.copy_from_slice(info.creator_code.as_bytes().get(..4).unwrap_or(b"????"));
+    InstalledDbIdentity {
+        name,
+        db_type,
+        creator,
+        version: info.version,
+    }
+}
+
+fn extract_app_icon(raw: &[u8]) -> Option<ImageData> {
+    let bitmaps = tern_core::prc_app::bitmap::parse_prc_bitmaps(raw);
+    let best = bitmaps
+        .iter()
+        .filter(|b| b.width > 0 && b.height > 0)
+        .filter(|b| b.width <= 64 && b.height <= 64)
+        .min_by_key(|b| (b.width.abs_diff(32), b.height.abs_diff(32), b.resource_id))
+        .or_else(|| bitmaps.first())?;
+    Some(ImageData::Mono1 {
+        width: best.width as u32,
+        height: best.height as u32,
+        bits: best.bits.clone(),
+    })
+}
+
+fn same_db_key(a: &InstalledDbIdentity, b: &InstalledDbIdentity) -> bool {
+    a.name == b.name && a.db_type == b.db_type && a.creator == b.creator
+}
+
+fn load_catalog(path: &Path) -> Vec<InstalledDbMeta> {
+    let Ok(text) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let cols: Vec<&str> = line.split('\t').collect();
+        if cols.len() != 10 {
+            continue;
+        }
+        let Some(name) = hex_decode_fixed::<32>(cols[6]) else {
+            continue;
+        };
+        let Some(db_type) = hex_decode_fixed::<4>(cols[7]) else {
+            continue;
+        };
+        let Some(creator) = hex_decode_fixed::<4>(cols[8]) else {
+            continue;
+        };
+        let Some(payload_hash) = hex_decode_fixed::<32>(cols[9]) else {
+            continue;
+        };
+        let kind = if cols[2] == "resource" {
+            DbKind::Resource
+        } else {
+            DbKind::Record
+        };
+        let Ok(uid) = cols[0].parse::<u64>() else {
+            continue;
+        };
+        let Ok(card_no) = cols[1].parse::<u16>() else {
+            continue;
+        };
+        let Ok(attributes) = cols[3].parse::<u16>() else {
+            continue;
+        };
+        let Ok(mod_number) = cols[4].parse::<u32>() else {
+            continue;
+        };
+        let Ok(version) = cols[5].parse::<u16>() else {
+            continue;
+        };
+        out.push(InstalledDbMeta {
+            uid,
+            card_no,
+            identity: InstalledDbIdentity {
+                name,
+                db_type,
+                creator,
+                version,
+            },
+            kind,
+            attributes,
+            mod_number,
+            payload_hash,
+        });
+    }
+    out
+}
+
+fn save_catalog(path: &Path, entries: &[InstalledDbMeta]) -> Result<(), ImageError> {
+    let mut text = String::new();
+    for e in entries {
+        let kind = match e.kind {
+            DbKind::Resource => "resource",
+            DbKind::Record => "record",
+        };
+        text.push_str(&format!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            e.uid,
+            e.card_no,
+            kind,
+            e.attributes,
+            e.mod_number,
+            e.identity.version,
+            hex_encode(&e.identity.name),
+            hex_encode(&e.identity.db_type),
+            hex_encode(&e.identity.creator),
+            hex_encode(&e.payload_hash)
+        ));
+    }
+    fs::write(path, text).map_err(|_| ImageError::Io)
 }
 
 impl ImageSource for DesktopImageSource {
@@ -188,7 +476,8 @@ impl ImageSource for DesktopImageSource {
         path: &[String],
         entry: &ImageEntry,
     ) -> Result<tern_core::prc_app::PrcInfo, ImageError> {
-        if entry.kind != EntryKind::File || !entry.name.to_ascii_lowercase().ends_with(".prc") {
+        let lower = entry.name.to_ascii_lowercase();
+        if entry.kind != EntryKind::File || (!lower.ends_with(".prc") && !lower.ends_with(".tdb")) {
             return Err(ImageError::Unsupported);
         }
         let base = path.iter().fold(self.root.clone(), |acc, part| acc.join(part));
@@ -203,7 +492,8 @@ impl ImageSource for DesktopImageSource {
         entry: &ImageEntry,
         resource_id: u16,
     ) -> Result<Vec<u8>, ImageError> {
-        if entry.kind != EntryKind::File || !entry.name.to_ascii_lowercase().ends_with(".prc") {
+        let lower = entry.name.to_ascii_lowercase();
+        if entry.kind != EntryKind::File || (!lower.ends_with(".prc") && !lower.ends_with(".tdb")) {
             return Err(ImageError::Unsupported);
         }
         let base = path.iter().fold(self.root.clone(), |acc, part| acc.join(part));
@@ -226,7 +516,8 @@ impl ImageSource for DesktopImageSource {
         path: &[String],
         entry: &ImageEntry,
     ) -> Result<Vec<u8>, ImageError> {
-        if entry.kind != EntryKind::File || !entry.name.to_ascii_lowercase().ends_with(".prc") {
+        let lower = entry.name.to_ascii_lowercase();
+        if entry.kind != EntryKind::File || (!lower.ends_with(".prc") && !lower.ends_with(".tdb")) {
             return Err(ImageError::Unsupported);
         }
         let base = path.iter().fold(self.root.clone(), |acc, part| acc.join(part));
@@ -274,96 +565,141 @@ impl ImageSource for DesktopImageSource {
     }
 
     fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
-        let mut out = Vec::new();
-        fn font_variant_rank(name: &str) -> u8 {
-            let lower = name.to_ascii_lowercase();
-            if lower.ends_with("_144.txt") {
-                0
-            } else if lower.ends_with("_72.txt") {
-                2
-            } else {
-                1
-            }
+        self.load_prc_fonts_with_variant(false)
+    }
+
+    fn load_home_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+        self.load_prc_fonts_with_variant(true)
+    }
+
+    fn scan_palm_install_inbox(&mut self) -> Option<InstallSummary> {
+        let install_dir = self.install_dir();
+        let Ok(read_dir) = fs::read_dir(&install_dir) else {
+            return Some(InstallSummary::default());
+        };
+
+        let db_dir = self.palmdb_db_dir();
+        if fs::create_dir_all(&db_dir).is_err() {
+            return Some(InstallSummary {
+                scanned: 0,
+                installed: 0,
+                upgraded: 0,
+                skipped: 0,
+                failed: 1,
+            });
         }
-        let mut embedded: std::collections::BTreeMap<u16, (&str, &str, u8)> =
-            std::collections::BTreeMap::new();
-        for (name, text) in embedded_prc_fonts::EMBEDDED_PRC_FONT_TXT {
-            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(name) else {
+        let catalog_path = self.palmdb_catalog_path();
+        let mut catalog = load_catalog(&catalog_path);
+        let mut summary = InstallSummary::default();
+
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.to_ascii_lowercase())
+                .unwrap_or_default();
+            if ext != "prc" && ext != "pdb" {
+                continue;
+            }
+            summary.scanned += 1;
+            let Ok(data) = fs::read(&path) else {
+                summary.failed += 1;
                 continue;
             };
-            let font_id = resource_id.saturating_sub(9100);
-            let rank = font_variant_rank(name);
-            match embedded.get(&font_id) {
-                Some((_, _, cur_rank)) if *cur_rank <= rank => {}
-                _ => {
-                    embedded.insert(font_id, (name, text, rank));
+            let Some(info) = tern_core::prc_app::parse_prc(&data) else {
+                summary.failed += 1;
+                continue;
+            };
+            let identity = identity_from_prc(&info);
+            let payload_hash = payload_hash_32(&data);
+            let existing_idx = catalog
+                .iter()
+                .position(|m| same_db_key(&m.identity, &identity));
+            let decision = InstallPlanner::decide(
+                &InstallInboxEntry {
+                    path: path.to_string_lossy().into_owned(),
+                    size: data.len() as u64,
+                    identity,
+                    payload_hash,
+                },
+                existing_idx.and_then(|i| catalog.get(i)),
+            );
+
+            match decision {
+                InstallDecision::SkipAlreadyInstalled => {
+                    summary.skipped += 1;
+                }
+                InstallDecision::InstallNew => {
+                    let uid = catalog.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
+                    let db_path = db_dir.join(format!("{uid:016x}.tdb"));
+                    if fs::write(&db_path, &data).is_err() {
+                        summary.failed += 1;
+                        continue;
+                    }
+                    let kind = match info.kind {
+                        tern_core::prc_app::PrcDbKind::Resource => DbKind::Resource,
+                        tern_core::prc_app::PrcDbKind::Record => DbKind::Record,
+                    };
+                    catalog.push(InstalledDbMeta {
+                        uid,
+                        card_no: 0,
+                        identity,
+                        kind,
+                        attributes: info.attributes,
+                        mod_number: 1,
+                        payload_hash,
+                    });
+                    summary.installed += 1;
+                }
+                InstallDecision::UpgradeExisting { existing_uid } => {
+                    let db_path = db_dir.join(format!("{existing_uid:016x}.tdb"));
+                    if fs::write(&db_path, &data).is_err() {
+                        summary.failed += 1;
+                        continue;
+                    }
+                    if let Some(meta) = catalog.iter_mut().find(|m| m.uid == existing_uid) {
+                        meta.identity = identity;
+                        meta.attributes = info.attributes;
+                        meta.kind = match info.kind {
+                            tern_core::prc_app::PrcDbKind::Resource => DbKind::Resource,
+                            tern_core::prc_app::PrcDbKind::Record => DbKind::Record,
+                        };
+                        meta.mod_number = meta.mod_number.saturating_add(1);
+                        meta.payload_hash = payload_hash;
+                    }
+                    summary.upgraded += 1;
                 }
             }
-        }
-        for (font_id, (_name, text, _rank)) in embedded.into_iter() {
-            if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(text, font_id) {
-                out.push(font);
-            }
-        }
-        let embedded_loaded = out.len();
-        if embedded_loaded > 0 {
-            log::info!(
-                "Loaded {} embedded text system fonts from app image",
-                embedded_loaded
-            );
         }
 
-        let dir = self.fonts_dir();
-        let Ok(read_dir) = fs::read_dir(&dir) else {
-            return out;
-        };
-        let mut sd_candidates: std::collections::BTreeMap<u16, (String, u8)> =
-            std::collections::BTreeMap::new();
-        for dent in read_dir.flatten() {
-            let Ok(ft) = dent.file_type() else {
-                continue;
-            };
-            if !ft.is_file() {
-                continue;
-            }
-            let name = dent.file_name().to_string_lossy().to_string();
-            if !name.to_ascii_lowercase().ends_with(".txt") {
-                continue;
-            }
-            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(&name) else {
-                continue;
-            };
-            let font_id = resource_id.saturating_sub(9100);
-            let rank = font_variant_rank(&name);
-            match sd_candidates.get(&font_id) {
-                Some((_, cur_rank)) if *cur_rank <= rank => {}
-                _ => {
-                    sd_candidates.insert(font_id, (dent.path().to_string_lossy().to_string(), rank));
-                }
-            }
+        if summary.scanned > 0 && save_catalog(&catalog_path, &catalog).is_err() {
+            summary.failed = summary.failed.saturating_add(1);
         }
-        for (font_id, (path, _rank)) in sd_candidates {
-            let Ok(text) = fs::read_to_string(path) else {
+        Some(summary)
+    }
+
+    fn list_installed_apps(&mut self) -> Vec<InstalledAppEntry> {
+        let catalog = load_catalog(&self.palmdb_catalog_path());
+        let mut out = Vec::new();
+        for meta in catalog {
+            if meta.identity.db_type != *b"appl" {
                 continue;
-            };
-            if let Some(pos) = out
-                .iter()
-                .position(|f: &tern_core::prc_app::runtime::PalmFont| f.font_id == font_id)
-            {
-                if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(&text, font_id) {
-                    out[pos] = font;
-                }
-            } else if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(&text, font_id) {
-                out.push(font);
             }
+            let path = format!("palmdb/v1/db/{:016x}.tdb", meta.uid);
+            let icon = fs::read(self.root.join(&path))
+                .ok()
+                .and_then(|raw| extract_app_icon(&raw));
+            out.push(InstalledAppEntry {
+                title: meta.identity.display_name(),
+                path,
+                icon,
+            });
         }
-        if out.len() > embedded_loaded {
-            log::info!(
-                "Loaded {} text system fonts from {}",
-                out.len() - embedded_loaded,
-                dir.display()
-            );
-        }
+        out.sort_by(|a, b| a.title.cmp(&b.title));
         out
     }
 }
@@ -499,6 +835,7 @@ impl PersistenceSource for DesktopImageSource {
         let path = self.thumbnail_title_path(key);
         let _ = fs::write(path, title.as_bytes());
     }
+
 }
 
 impl BookSource for DesktopImageSource {

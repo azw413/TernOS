@@ -9,10 +9,12 @@ use alloc::vec::Vec;
 
 use embedded_io::{Read, Seek, SeekFrom, Write};
 use tern_core::fs::{DirEntry, Directory, File, Filesystem, Mode};
+use tern_core::palm_db::{DbKind, InstallDecision, InstallInboxEntry, InstallPlanner, InstallSummary, InstalledDbIdentity, InstalledDbMeta};
 use tern_core::prc_app::{PrcCodeScan, PrcDbKind, PrcInfo, PrcResourceEntry, PrcSectionStat};
 use crate::sdspi_fs::UsbFsOps;
 use tern_core::image_viewer::{
     BookSource, EntryKind, Gray2StreamSource, ImageData, ImageEntry, ImageError, ImageSource,
+    InstalledAppEntry,
     PersistenceSource, PowerSource,
 };
 
@@ -156,6 +158,7 @@ where
             || name.ends_with(".epub")
             || name.ends_with(".epb")
             || name.ends_with(".prc")
+            || name.ends_with(".tdb")
     }
 
     fn resume_filename() -> &'static str {
@@ -206,6 +209,22 @@ where
         name.push_str(short);
         name.push_str(".TXT");
         name
+    }
+
+    fn install_dirname() -> &'static str {
+        "install"
+    }
+
+    fn palmdb_root_dirname() -> &'static str {
+        "palmdb/v1"
+    }
+
+    fn palmdb_catalog_filename() -> &'static str {
+        "palmdb/v1/catalog.txt"
+    }
+
+    fn palmdb_db_dirname() -> &'static str {
+        "palmdb/v1/db"
     }
 
     fn read_resume(&self) -> Option<String> {
@@ -495,6 +514,118 @@ where
         }
         Ok(())
     }
+
+    fn load_palm_catalog(&self) -> Vec<InstalledDbMeta> {
+        let mut file = match self.fs.open_file(Self::palmdb_catalog_filename(), Mode::Read) {
+            Ok(file) => file,
+            Err(_) => return Vec::new(),
+        };
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 256];
+        loop {
+            let read = match file.read(&mut chunk) {
+                Ok(v) => v,
+                Err(_) => return Vec::new(),
+            };
+            if read == 0 {
+                break;
+            }
+            if buf.try_reserve(read).is_err() {
+                return Vec::new();
+            }
+            buf.extend_from_slice(&chunk[..read]);
+        }
+        let Ok(text) = core::str::from_utf8(&buf) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for line in text.lines() {
+            let mut cols = line.split('\t');
+            let Some(uid_s) = cols.next() else { continue };
+            let Some(card_s) = cols.next() else { continue };
+            let Some(kind_s) = cols.next() else { continue };
+            let Some(attrs_s) = cols.next() else { continue };
+            let Some(mod_s) = cols.next() else { continue };
+            let Some(ver_s) = cols.next() else { continue };
+            let Some(name_s) = cols.next() else { continue };
+            let Some(type_s) = cols.next() else { continue };
+            let Some(creator_s) = cols.next() else { continue };
+            let Some(hash_s) = cols.next() else { continue };
+            let (Ok(uid), Ok(card_no), Ok(attributes), Ok(mod_number), Ok(version)) = (
+                uid_s.parse::<u64>(),
+                card_s.parse::<u16>(),
+                attrs_s.parse::<u16>(),
+                mod_s.parse::<u32>(),
+                ver_s.parse::<u16>(),
+            ) else {
+                continue;
+            };
+            let Some(name) = hex_decode_fixed::<32>(name_s) else {
+                continue;
+            };
+            let Some(db_type) = hex_decode_fixed::<4>(type_s) else {
+                continue;
+            };
+            let Some(creator) = hex_decode_fixed::<4>(creator_s) else {
+                continue;
+            };
+            let Some(payload_hash) = hex_decode_fixed::<32>(hash_s) else {
+                continue;
+            };
+            let kind = if kind_s == "resource" {
+                DbKind::Resource
+            } else {
+                DbKind::Record
+            };
+            out.push(InstalledDbMeta {
+                uid,
+                card_no,
+                identity: InstalledDbIdentity {
+                    name,
+                    db_type,
+                    creator,
+                    version,
+                },
+                kind,
+                attributes,
+                mod_number,
+                payload_hash,
+            });
+        }
+        out
+    }
+
+    fn save_palm_catalog(&self, catalog: &[InstalledDbMeta]) -> Result<(), ImageError> {
+        self.fs
+            .create_dir_all(Self::palmdb_root_dirname())
+            .map_err(|_| ImageError::Io)?;
+        let mut file = self
+            .fs
+            .open_file(Self::palmdb_catalog_filename(), Mode::Write)
+            .map_err(|_| ImageError::Io)?;
+        for meta in catalog {
+            let kind = match meta.kind {
+                DbKind::Resource => "resource",
+                DbKind::Record => "record",
+            };
+            let line = format!(
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                meta.uid,
+                meta.card_no,
+                kind,
+                meta.attributes,
+                meta.mod_number,
+                meta.identity.version,
+                hex_encode(&meta.identity.name),
+                hex_encode(&meta.identity.db_type),
+                hex_encode(&meta.identity.creator),
+                hex_encode(&meta.payload_hash),
+            );
+            write_all(&mut file, line.as_bytes())?;
+        }
+        let _ = file.flush();
+        Ok(())
+    }
 }
 
 fn read_exact<R: Read + ?Sized>(reader: &mut R, mut buf: &mut [u8]) -> Result<(), ImageError> {
@@ -536,6 +667,93 @@ fn thumb_hash_hex(key: &str) -> String {
         out.push(ch);
     }
     out
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::new();
+    if out.try_reserve(bytes.len() * 2).is_err() {
+        return out;
+    }
+    for b in bytes {
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0f) as usize] as char);
+    }
+    out
+}
+
+fn hex_decode_fixed<const N: usize>(s: &str) -> Option<[u8; N]> {
+    if s.len() != N * 2 {
+        return None;
+    }
+    let mut out = [0u8; N];
+    let bytes = s.as_bytes();
+    for i in 0..N {
+        let hi = (bytes[i * 2] as char).to_digit(16)? as u8;
+        let lo = (bytes[i * 2 + 1] as char).to_digit(16)? as u8;
+        out[i] = (hi << 4) | lo;
+    }
+    Some(out)
+}
+
+fn payload_hash_32(data: &[u8]) -> [u8; 32] {
+    let mut s0: u64 = 0xcbf29ce484222325;
+    let mut s1: u64 = 0x9e3779b97f4a7c15;
+    let mut s2: u64 = 0x243f6a8885a308d3;
+    let mut s3: u64 = 0x13198a2e03707344;
+    for (i, b) in data.iter().enumerate() {
+        let v = *b as u64 + (i as u64).wrapping_mul(0x100000001b3);
+        s0 = (s0 ^ v).wrapping_mul(0x100000001b3);
+        s1 = (s1 ^ v.rotate_left(13)).wrapping_mul(0x100000001b3);
+        s2 = (s2 ^ v.rotate_left(29)).wrapping_mul(0x100000001b3);
+        s3 = (s3 ^ v.rotate_left(47)).wrapping_mul(0x100000001b3);
+    }
+    let mut out = [0u8; 32];
+    out[0..8].copy_from_slice(&s0.to_le_bytes());
+    out[8..16].copy_from_slice(&s1.to_le_bytes());
+    out[16..24].copy_from_slice(&s2.to_le_bytes());
+    out[24..32].copy_from_slice(&s3.to_le_bytes());
+    out
+}
+
+fn identity_from_prc(info: &PrcInfo) -> InstalledDbIdentity {
+    let mut name = [0u8; 32];
+    let raw = info.db_name.as_bytes();
+    let copy_n = raw.len().min(32);
+    name[..copy_n].copy_from_slice(&raw[..copy_n]);
+    let mut db_type = [0u8; 4];
+    let mut creator = [0u8; 4];
+    let ty = info.type_code.as_bytes();
+    let cr = info.creator_code.as_bytes();
+    for i in 0..4 {
+        db_type[i] = *ty.get(i).unwrap_or(&b'?');
+        creator[i] = *cr.get(i).unwrap_or(&b'?');
+    }
+    InstalledDbIdentity {
+        name,
+        db_type,
+        creator,
+        version: info.version,
+    }
+}
+
+fn extract_app_icon(raw: &[u8]) -> Option<ImageData> {
+    let bitmaps = tern_core::prc_app::bitmap::parse_prc_bitmaps(raw);
+    let best = bitmaps
+        .iter()
+        .filter(|b| b.width > 0 && b.height > 0)
+        .filter(|b| b.width <= 64 && b.height <= 64)
+        .min_by_key(|b| (b.width.abs_diff(32), b.height.abs_diff(32), b.resource_id))
+        .or_else(|| bitmaps.first())?;
+    Some(ImageData::Mono1 {
+        width: best.width as u32,
+        height: best.height as u32,
+        bits: best.bits.clone(),
+    })
+}
+
+fn same_db_key(a: &InstalledDbIdentity, b: &InstalledDbIdentity) -> bool {
+    a.name == b.name && a.db_type == b.db_type && a.creator == b.creator
 }
 
 fn serialize_thumbnail(image: &ImageData) -> Option<Vec<u8>> {
@@ -886,7 +1104,8 @@ where
         if entry.kind != EntryKind::File {
             return Err(ImageError::Message("Select a file, not a folder.".into()));
         }
-        if !entry.name.to_ascii_lowercase().ends_with(".prc") {
+        let lower = entry.name.to_ascii_lowercase();
+        if !lower.ends_with(".prc") && !lower.ends_with(".tdb") {
             return Err(ImageError::Unsupported);
         }
 
@@ -1123,7 +1342,8 @@ where
         if entry.kind != EntryKind::File {
             return Err(ImageError::Message("Select a file, not a folder.".into()));
         }
-        if !entry.name.to_ascii_lowercase().ends_with(".prc") {
+        let lower = entry.name.to_ascii_lowercase();
+        if !lower.ends_with(".prc") && !lower.ends_with(".tdb") {
             return Err(ImageError::Unsupported);
         }
         let file_path = Self::build_path(path, &entry.name);
@@ -1206,7 +1426,7 @@ where
     }
 
     fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
-        let mut out = embedded_prc_fonts::load_embedded_prc_fonts();
+        let mut out = embedded_prc_fonts::load_embedded_prc_fonts_72();
         let embedded_loaded = out.len();
         if embedded_loaded > 0 {
             log::info!(
@@ -1216,6 +1436,198 @@ where
         } else {
             log::warn!("No embedded PRC text fonts found in firmware image");
         }
+        out
+    }
+
+    fn load_home_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+        let mut out = embedded_prc_fonts::load_embedded_prc_fonts_144();
+        if out.is_empty() {
+            out = embedded_prc_fonts::load_embedded_prc_fonts_72();
+        }
+        if !out.is_empty() {
+            log::info!(
+                "Loaded {} embedded home fonts from firmware image",
+                out.len()
+            );
+        }
+        out
+    }
+
+    fn scan_palm_install_inbox(&mut self) -> Option<InstallSummary> {
+        let listed = {
+            let Ok(dir) = self.fs.open_directory(Self::install_dirname()) else {
+                return Some(InstallSummary::default());
+            };
+            let Ok(items) = dir.list() else {
+                return Some(InstallSummary::default());
+            };
+            items
+        };
+
+        if self.fs.create_dir_all(Self::palmdb_db_dirname()).is_err() {
+            return Some(InstallSummary {
+                scanned: 0,
+                installed: 0,
+                upgraded: 0,
+                skipped: 0,
+                failed: 1,
+            });
+        }
+
+        let mut catalog = self.load_palm_catalog();
+        let mut summary = InstallSummary::default();
+
+        for entry in listed {
+            if entry.is_directory() {
+                continue;
+            }
+            let name = entry.name().to_string();
+            let lower = name.to_ascii_lowercase();
+            if !lower.ends_with(".prc") && !lower.ends_with(".pdb") {
+                continue;
+            }
+            summary.scanned = summary.scanned.saturating_add(1);
+            let full_path = format!("{}/{}", Self::install_dirname(), name);
+            let mut file = match self.fs.open_file(&full_path, Mode::Read) {
+                Ok(f) => f,
+                Err(_) => {
+                    summary.failed = summary.failed.saturating_add(1);
+                    continue;
+                }
+            };
+            let size = file.size();
+            if size < 78 {
+                summary.failed = summary.failed.saturating_add(1);
+                continue;
+            }
+            let mut data = Vec::new();
+            if data.try_reserve(size).is_err() {
+                summary.failed = summary.failed.saturating_add(1);
+                continue;
+            }
+            data.resize(size, 0);
+            if read_exact(&mut file, &mut data).is_err() {
+                summary.failed = summary.failed.saturating_add(1);
+                continue;
+            }
+            let Some(info) = tern_core::prc_app::parse_prc(&data) else {
+                summary.failed = summary.failed.saturating_add(1);
+                continue;
+            };
+            let identity = identity_from_prc(&info);
+            let payload_hash = payload_hash_32(&data);
+            let existing_idx = catalog
+                .iter()
+                .position(|m| same_db_key(&m.identity, &identity));
+            let decision = InstallPlanner::decide(
+                &InstallInboxEntry {
+                    path: full_path,
+                    size: data.len() as u64,
+                    identity,
+                    payload_hash,
+                },
+                existing_idx.and_then(|idx| catalog.get(idx)),
+            );
+
+            match decision {
+                InstallDecision::SkipAlreadyInstalled => {
+                    summary.skipped = summary.skipped.saturating_add(1);
+                }
+                InstallDecision::InstallNew => {
+                    let uid = catalog.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
+                    let out_path = format!("{}/{:016x}.tdb", Self::palmdb_db_dirname(), uid);
+                    let mut out = match self.fs.open_file(&out_path, Mode::Write) {
+                        Ok(f) => f,
+                        Err(_) => {
+                            summary.failed = summary.failed.saturating_add(1);
+                            continue;
+                        }
+                    };
+                    if write_all(&mut out, &data).is_err() {
+                        summary.failed = summary.failed.saturating_add(1);
+                        continue;
+                    }
+                    let _ = out.flush();
+                    let kind = match info.kind {
+                        PrcDbKind::Resource => DbKind::Resource,
+                        PrcDbKind::Record => DbKind::Record,
+                    };
+                    catalog.push(InstalledDbMeta {
+                        uid,
+                        card_no: 0,
+                        identity,
+                        kind,
+                        attributes: info.attributes,
+                        mod_number: 1,
+                        payload_hash,
+                    });
+                    summary.installed = summary.installed.saturating_add(1);
+                }
+                InstallDecision::UpgradeExisting { existing_uid } => {
+                    let out_path = format!("{}/{:016x}.tdb", Self::palmdb_db_dirname(), existing_uid);
+                    let mut out = match self.fs.open_file(&out_path, Mode::Write) {
+                        Ok(f) => f,
+                        Err(_) => {
+                            summary.failed = summary.failed.saturating_add(1);
+                            continue;
+                        }
+                    };
+                    if write_all(&mut out, &data).is_err() {
+                        summary.failed = summary.failed.saturating_add(1);
+                        continue;
+                    }
+                    let _ = out.flush();
+                    if let Some(meta) = catalog.iter_mut().find(|m| m.uid == existing_uid) {
+                        meta.identity = identity;
+                        meta.attributes = info.attributes;
+                        meta.kind = match info.kind {
+                            PrcDbKind::Resource => DbKind::Resource,
+                            PrcDbKind::Record => DbKind::Record,
+                        };
+                        meta.mod_number = meta.mod_number.saturating_add(1);
+                        meta.payload_hash = payload_hash;
+                    }
+                    summary.upgraded = summary.upgraded.saturating_add(1);
+                }
+            }
+        }
+
+        if summary.scanned > 0 && self.save_palm_catalog(&catalog).is_err() {
+            summary.failed = summary.failed.saturating_add(1);
+        }
+        Some(summary)
+    }
+
+    fn list_installed_apps(&mut self) -> Vec<InstalledAppEntry> {
+        let mut out = Vec::new();
+        for meta in self.load_palm_catalog() {
+            if meta.identity.db_type != *b"appl" {
+                continue;
+            }
+            let path = format!("palmdb/v1/db/{:016x}.tdb", meta.uid);
+            let icon = (|| {
+                let mut file = self.fs.open_file(&path, Mode::Read).ok()?;
+                let size = file.size();
+                if size == 0 || size > 2 * 1024 * 1024 {
+                    return None;
+                }
+                let mut raw = Vec::new();
+                if raw.try_reserve(size).is_err() {
+                    return None;
+                }
+                raw.resize(size, 0);
+                if read_exact(&mut file, &mut raw).is_err() {
+                    return None;
+                }
+                extract_app_icon(&raw)
+            })();
+            out.push(InstalledAppEntry {
+                title: meta.identity.display_name(),
+                path,
+                icon,
+            });
+        }
+        out.sort_by(|a, b| a.title.cmp(&b.title));
         out
     }
 
