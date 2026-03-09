@@ -275,7 +275,6 @@ impl ImageSource for DesktopImageSource {
 
     fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
         let mut out = Vec::new();
-        let mut embedded_loaded = 0usize;
         fn font_variant_rank(name: &str) -> u8 {
             let lower = name.to_ascii_lowercase();
             if lower.ends_with("_72.txt") {
@@ -286,41 +285,27 @@ impl ImageSource for DesktopImageSource {
                 1
             }
         }
-        fn add_font(
-            out: &mut Vec<tern_core::prc_app::runtime::PalmFont>,
-            ranks: &mut std::collections::BTreeMap<u16, u8>,
-            name: &str,
-            text: &str,
-        ) -> bool {
+        let mut embedded: std::collections::BTreeMap<u16, (&str, &str, u8)> =
+            std::collections::BTreeMap::new();
+        for (name, text) in embedded_prc_fonts::EMBEDDED_PRC_FONT_TXT {
             let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(name) else {
-                return false;
+                continue;
             };
             let font_id = resource_id.saturating_sub(9100);
-            let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(text, font_id) else {
-                return false;
-            };
             let rank = font_variant_rank(name);
-            if let Some(pos) = out
-                .iter()
-                .position(|f: &tern_core::prc_app::runtime::PalmFont| f.font_id == font_id)
-            {
-                let cur_rank = *ranks.get(&font_id).unwrap_or(&u8::MAX);
-                if rank < cur_rank {
-                    out[pos] = font;
-                    ranks.insert(font_id, rank);
+            match embedded.get(&font_id) {
+                Some((_, _, cur_rank)) if *cur_rank <= rank => {}
+                _ => {
+                    embedded.insert(font_id, (name, text, rank));
                 }
-                return false;
-            }
-            out.push(font);
-            ranks.insert(font_id, rank);
-            true
-        }
-        let mut ranks: std::collections::BTreeMap<u16, u8> = std::collections::BTreeMap::new();
-        for (name, text) in embedded_prc_fonts::EMBEDDED_PRC_FONT_TXT {
-            if add_font(&mut out, &mut ranks, name, text) {
-                embedded_loaded += 1;
             }
         }
+        for (font_id, (_name, text, _rank)) in embedded.into_iter() {
+            if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(text, font_id) {
+                out.push(font);
+            }
+        }
+        let embedded_loaded = out.len();
         if embedded_loaded > 0 {
             log::info!(
                 "Loaded {} embedded text system fonts from app image",
@@ -332,6 +317,8 @@ impl ImageSource for DesktopImageSource {
         let Ok(read_dir) = fs::read_dir(&dir) else {
             return out;
         };
+        let mut sd_candidates: std::collections::BTreeMap<u16, (String, u8)> =
+            std::collections::BTreeMap::new();
         for dent in read_dir.flatten() {
             let Ok(ft) = dent.file_type() else {
                 continue;
@@ -343,10 +330,32 @@ impl ImageSource for DesktopImageSource {
             if !name.to_ascii_lowercase().ends_with(".txt") {
                 continue;
             }
-            let Ok(text) = fs::read_to_string(dent.path()) else {
+            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(&name) else {
                 continue;
             };
-            let _ = add_font(&mut out, &mut ranks, &name, &text);
+            let font_id = resource_id.saturating_sub(9100);
+            let rank = font_variant_rank(&name);
+            match sd_candidates.get(&font_id) {
+                Some((_, cur_rank)) if *cur_rank <= rank => {}
+                _ => {
+                    sd_candidates.insert(font_id, (dent.path().to_string_lossy().to_string(), rank));
+                }
+            }
+        }
+        for (font_id, (path, _rank)) in sd_candidates {
+            let Ok(text) = fs::read_to_string(path) else {
+                continue;
+            };
+            if let Some(pos) = out
+                .iter()
+                .position(|f: &tern_core::prc_app::runtime::PalmFont| f.font_id == font_id)
+            {
+                if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(&text, font_id) {
+                    out[pos] = font;
+                }
+            } else if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(&text, font_id) {
+                out.push(font);
+            }
         }
         if out.len() > embedded_loaded {
             log::info!(

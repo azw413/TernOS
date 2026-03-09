@@ -94,14 +94,80 @@ pub struct PalmFont {
     pub max_width: u8,
     pub avg_width: u8,
     pub rect_height: u8,
-    pub widths: alloc::vec::Vec<u8>,
-    pub glyphs: alloc::vec::Vec<Option<PalmGlyphBitmap>>,
+    pub widths: PalmWidths,
+    pub glyphs: PalmGlyphs,
 }
 
 #[derive(Clone, Debug)]
 pub struct PalmGlyphBitmap {
     pub width: u8,
-    pub rows: alloc::vec::Vec<u16>,
+    pub rows: PalmGlyphRows,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PalmGlyphStatic {
+    pub width: u8,
+    pub rows: &'static [u16],
+}
+
+#[derive(Clone, Debug)]
+pub enum PalmGlyphRows {
+    Owned(alloc::vec::Vec<u16>),
+    Static(&'static [u16]),
+}
+
+#[derive(Clone, Debug)]
+pub enum PalmWidths {
+    Owned(alloc::vec::Vec<u8>),
+    Static(&'static [u8]),
+}
+
+#[derive(Clone, Debug)]
+pub enum PalmGlyphs {
+    Owned(alloc::vec::Vec<Option<PalmGlyphBitmap>>),
+    Static(&'static [Option<PalmGlyphStatic>]),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PalmGlyphRef<'a> {
+    pub width: u8,
+    pub rows: &'a [u16],
+}
+
+impl PalmGlyphRows {
+    pub fn as_slice(&self) -> &[u16] {
+        match self {
+            PalmGlyphRows::Owned(v) => v.as_slice(),
+            PalmGlyphRows::Static(s) => s,
+        }
+    }
+}
+
+impl PalmWidths {
+    pub fn get(&self, idx: usize) -> Option<u8> {
+        match self {
+            PalmWidths::Owned(v) => v.get(idx).copied(),
+            PalmWidths::Static(s) => s.get(idx).copied(),
+        }
+    }
+}
+
+impl PalmGlyphs {
+    pub fn get(&self, idx: usize) -> Option<PalmGlyphRef<'_>> {
+        match self {
+            PalmGlyphs::Owned(v) => v
+                .get(idx)
+                .and_then(|g| g.as_ref())
+                .map(|g| PalmGlyphRef {
+                    width: g.width,
+                    rows: g.rows.as_slice(),
+                }),
+            PalmGlyphs::Static(s) => s.get(idx).and_then(|g| g.as_ref()).map(|g| PalmGlyphRef {
+                width: g.width,
+                rows: g.rows,
+            }),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

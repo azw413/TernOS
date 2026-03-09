@@ -189,7 +189,7 @@ pub fn apply_prc_runtime_trap_stub(
         if let Some(f) = get_font(runtime, runtime.current_font) {
             if ch >= f.first_char && ch <= f.last_char {
                 let idx = (ch - f.first_char) as usize;
-                return f.widths.get(idx).copied().unwrap_or(f.avg_width).max(1) as u32;
+                return f.widths.get(idx).unwrap_or(f.avg_width).max(1) as u32;
             }
             // Palm uses a missing symbol width; use avg/max as practical fallback.
             return f.avg_width.max(f.max_width).max(1) as u32;

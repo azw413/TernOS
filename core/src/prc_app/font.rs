@@ -2,7 +2,7 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
 
-use crate::prc_app::runtime::{PalmFont, ResourceBlob};
+use crate::prc_app::runtime::{PalmFont, PalmGlyphBitmap, PalmGlyphRows, PalmGlyphs, PalmWidths, ResourceBlob};
 
 fn be_u16(data: &[u8], off: usize) -> Option<u16> {
     let b0 = *data.get(off)?;
@@ -56,8 +56,8 @@ fn parse_nfnt_font(font_id: u16, data: &[u8]) -> Option<PalmFont> {
         max_width,
         avg_width: avg_width.max(1),
         rect_height: rect_height.max(1),
-        widths,
-        glyphs: vec![None; count],
+        widths: PalmWidths::Owned(widths),
+        glyphs: PalmGlyphs::Owned(vec![None; count]),
     })
 }
 
@@ -193,9 +193,9 @@ pub fn parse_pumpkin_txt_font(text: &str, font_id: u16) -> Option<PalmFont> {
     for (ch, (w, rows)) in glyphs {
         let idx = (ch - first_char) as usize;
         widths[idx] = w.max(1);
-        bitmaps[idx] = Some(crate::prc_app::runtime::PalmGlyphBitmap {
+        bitmaps[idx] = Some(PalmGlyphBitmap {
             width: w.max(1),
-            rows,
+            rows: PalmGlyphRows::Owned(rows),
         });
     }
     let max_width = widths.iter().copied().max().unwrap_or(1).max(1);
@@ -212,7 +212,7 @@ pub fn parse_pumpkin_txt_font(text: &str, font_id: u16) -> Option<PalmFont> {
         max_width,
         avg_width,
         rect_height,
-        widths,
-        glyphs: bitmaps,
+        widths: PalmWidths::Owned(widths),
+        glyphs: PalmGlyphs::Owned(bitmaps),
     })
 }

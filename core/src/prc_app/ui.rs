@@ -17,7 +17,7 @@ use crate::prc_app::{
     form_preview::{FormPreview, FormPreviewObject},
     menu_preview::MenuBarPreview,
     runner::{RuntimeBitmapDraw, RuntimeFieldDraw, RuntimeHelpDialog},
-    runtime::{PalmFont, PalmGlyphBitmap},
+    runtime::PalmFont,
 };
 use crate::ui::{prc_alert, prc_components};
 
@@ -47,11 +47,11 @@ fn draw_bitmap_text<T: DrawTarget<Color = BinaryColor>>(
     for ch in text.bytes() {
         let w = if ch >= font.first_char && ch <= font.last_char {
             let idx = (ch - font.first_char) as usize;
-            if let Some(Some(glyph)) = font.glyphs.get(idx) {
-                draw_bitmap_glyph(target, pen_x, y, glyph, s, color);
+            if let Some(glyph) = font.glyphs.get(idx) {
+                draw_bitmap_glyph(target, pen_x, y, glyph.width, glyph.rows, s, color);
                 glyph.width.max(1) as i32
             } else {
-                font.widths.get(idx).copied().unwrap_or(font.avg_width).max(1) as i32
+                font.widths.get(idx).unwrap_or(font.avg_width).max(1) as i32
             }
         } else {
             font.avg_width.max(1) as i32
@@ -64,12 +64,13 @@ fn draw_bitmap_glyph<T: DrawTarget<Color = BinaryColor>>(
     target: &mut T,
     x: i32,
     y: i32,
-    glyph: &PalmGlyphBitmap,
+    glyph_width: u8,
+    glyph_rows: &[u16],
     scale: i32,
     color: BinaryColor,
 ) {
-    for (ry, row_bits) in glyph.rows.iter().enumerate() {
-        for rx in 0..(glyph.width as i32) {
+    for (ry, row_bits) in glyph_rows.iter().enumerate() {
+        for rx in 0..(glyph_width as i32) {
             if rx >= 16 {
                 break;
             }
@@ -95,7 +96,7 @@ fn text_metrics(text: &str, font_id: u8, fonts: &[PalmFont], scale: i32) -> (i32
         for ch in text.bytes() {
             let w = if ch >= font.first_char && ch <= font.last_char {
                 let idx = (ch - font.first_char) as usize;
-                font.widths.get(idx).copied().unwrap_or(font.avg_width).max(1) as i32
+                font.widths.get(idx).unwrap_or(font.avg_width).max(1) as i32
             } else {
                 font.avg_width.max(1) as i32
             };
@@ -125,7 +126,7 @@ fn draw_text<T: DrawTarget<Color = BinaryColor>>(
                 return false;
             }
             let idx = (ch - font.first_char) as usize;
-            matches!(font.glyphs.get(idx), Some(Some(_)))
+            font.glyphs.get(idx).is_some()
         })
     };
     if let Some(font) = find_font(fonts, font_id).filter(|f| can_use_bitmap_font(f, text)) {

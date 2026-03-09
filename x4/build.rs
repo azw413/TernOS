@@ -20,17 +20,144 @@ fn main() {
 fn generate_embedded_prc_fonts() {
     use std::fs;
     use std::path::{Path, PathBuf};
+    use std::collections::BTreeMap;
 
-    fn esc(s: &str) -> String {
-        let mut out = String::with_capacity(s.len() + 8);
-        for ch in s.chars() {
-            match ch {
-                '\\' => out.push_str("\\\\"),
-                '"' => out.push_str("\\\""),
-                _ => out.push(ch),
+    #[derive(Clone)]
+    struct ParsedFont {
+        font_id: u16,
+        first_char: u8,
+        last_char: u8,
+        max_width: u8,
+        avg_width: u8,
+        rect_height: u8,
+        widths: Vec<u8>,
+        glyphs: Vec<Option<(u8, Vec<u16>)>>,
+    }
+
+    fn parse_font_resource_id_from_name(file_name: &str) -> Option<u16> {
+        let mut nums: Vec<u16> = Vec::new();
+        let mut cur = String::new();
+        for ch in file_name.chars() {
+            if ch.is_ascii_digit() {
+                cur.push(ch);
+            } else if !cur.is_empty() {
+                if let Ok(v) = cur.parse::<u16>() {
+                    nums.push(v);
+                }
+                cur.clear();
             }
         }
-        out
+        if !cur.is_empty() {
+            if let Ok(v) = cur.parse::<u16>() {
+                nums.push(v);
+            }
+        }
+        for v in nums {
+            if (9000..=9099).contains(&v) {
+                return Some(v.saturating_add(100));
+            }
+            if (9100..=9999).contains(&v) {
+                return Some(v);
+            }
+            if v <= 255 {
+                return Some(9100u16.saturating_add(v));
+            }
+        }
+        None
+    }
+
+    fn parse_pumpkin_txt_font(text: &str, font_id: u16) -> Option<ParsedFont> {
+        let mut ascent: u8 = 0;
+        let mut descent: u8 = 0;
+        let mut glyphs: BTreeMap<u8, (u8, Vec<u16>)> = BTreeMap::new();
+
+        let mut lines = text.lines().peekable();
+        while let Some(raw_line) = lines.next() {
+            let line = raw_line.trim();
+            if let Some(rest) = line.strip_prefix("ascent ") {
+                if let Ok(v) = rest.trim().parse::<u8>() {
+                    ascent = v;
+                }
+                continue;
+            }
+            if let Some(rest) = line.strip_prefix("descent ") {
+                if let Ok(v) = rest.trim().parse::<u8>() {
+                    descent = v;
+                }
+                continue;
+            }
+            if let Some(rest) = line.strip_prefix("GLYPH ") {
+                let Ok(code_u16) = rest.trim().parse::<u16>() else {
+                    continue;
+                };
+                if code_u16 > 255 {
+                    continue;
+                }
+                let code = code_u16 as u8;
+                let mut rows: Vec<&str> = Vec::new();
+                while let Some(row) = lines.peek().copied() {
+                    let row_trim = row.trim();
+                    if row_trim.is_empty() || row_trim.starts_with("GLYPH ") {
+                        break;
+                    }
+                    rows.push(row);
+                    let _ = lines.next();
+                }
+                let mut width = 0usize;
+                let mut row_bits: Vec<u16> = Vec::new();
+                for row in &rows {
+                    let bytes = row.as_bytes();
+                    let mut last_hash: Option<usize> = None;
+                    let mut bits = 0u16;
+                    for (idx, b) in bytes.iter().enumerate() {
+                        if *b == b'#' {
+                            last_hash = Some(idx);
+                            if idx < 16 {
+                                bits |= 1u16 << idx;
+                            }
+                        }
+                    }
+                    let w = if let Some(last) = last_hash { last + 1 } else { bytes.len() };
+                    width = width.max(w);
+                    row_bits.push(bits);
+                }
+                glyphs.insert(code, (width.min(255) as u8, row_bits));
+                continue;
+            }
+        }
+
+        if glyphs.is_empty() {
+            return None;
+        }
+        let first_char = *glyphs.keys().next()?;
+        let last_char = *glyphs.keys().next_back()?;
+        let mut widths = vec![0u8; (last_char - first_char) as usize + 1];
+        let mut bitmaps = vec![None; widths.len()];
+        for (ch, (w, rows)) in glyphs {
+            let idx = (ch - first_char) as usize;
+            widths[idx] = w.max(1);
+            bitmaps[idx] = Some((w.max(1), rows));
+        }
+        let max_width = widths.iter().copied().max().unwrap_or(1).max(1);
+        let sum: u32 = widths.iter().map(|w| *w as u32).sum();
+        let avg_width = ((sum / widths.len().max(1) as u32) as u8).max(1);
+        let rect_height = ascent.saturating_add(descent).max(1);
+
+        Some(ParsedFont {
+            font_id,
+            first_char,
+            last_char,
+            max_width,
+            avg_width,
+            rect_height,
+            widths,
+            glyphs: bitmaps,
+        })
+    }
+
+    fn font_variant_rank(name: &str) -> u8 {
+        let lower = name.to_ascii_lowercase();
+        if lower.ends_with("_72.txt") { 0 } else if lower.ends_with("_144.txt") { 2 } else { 1 }
     }
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR missing"));
@@ -39,7 +166,7 @@ fn generate_embedded_prc_fonts() {
 
     println!("cargo:rerun-if-changed={}", fonts_dir.display());
 
-    let mut entries: Vec<(String, PathBuf)> = Vec::new();
+    let mut candidates: BTreeMap<u16, (u8, String, PathBuf)> = BTreeMap::new();
     if let Ok(rd) = fs::read_dir(&fonts_dir) {
         for dent in rd.flatten() {
             let path = dent.path();
@@ -56,24 +183,71 @@ fn generate_embedded_prc_fonts() {
             if !name.to_ascii_lowercase().ends_with(".txt") {
                 continue;
             }
-            entries.push((name, path));
+            let Some(resource_id) = parse_font_resource_id_from_name(&name) else {
+                continue;
+            };
+            let font_id = resource_id.saturating_sub(9100);
+            if !matches!(font_id, 0 | 1 | 2 | 7) {
+                continue;
+            }
+            let rank = font_variant_rank(&name);
+            match candidates.get(&font_id) {
+                Some((cur_rank, _, _)) if *cur_rank <= rank => {}
+                _ => {
+                    candidates.insert(font_id, (rank, name, path));
+                }
+            }
         }
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
     }
 
     let mut body = String::new();
-    body.push_str("pub const EMBEDDED_PRC_FONT_TXT: &[(&str, &str)] = &[\n");
-    for (name, path) in entries {
-        let include_path = fs::canonicalize(&path).unwrap_or(path);
-        let name_e = esc(&name);
-        let path_e = esc(&include_path.to_string_lossy());
-        body.push_str("    (\"");
-        body.push_str(&name_e);
-        body.push_str("\", include_str!(\"");
-        body.push_str(&path_e);
-        body.push_str("\")),\n");
+    body.push_str("use tern_core::prc_app::runtime::{PalmFont, PalmWidths, PalmGlyphs, PalmGlyphStatic};\n");
+    for (font_id, (_rank, _name, path)) in &candidates {
+        let Ok(text) = fs::read_to_string(path) else {
+            continue;
+        };
+        let Some(parsed) = parse_pumpkin_txt_font(&text, *font_id) else {
+            continue;
+        };
+        let prefix = format!("F{}", font_id);
+        body.push_str(&format!("static {}_WIDTHS: &[u8] = &{:?};\n", prefix, parsed.widths));
+        for (idx, g) in parsed.glyphs.iter().enumerate() {
+            if let Some((_, rows)) = g {
+                body.push_str(&format!("static {}_G{}_ROWS: &[u16] = &{:?};\n", prefix, idx, rows));
+            }
+        }
+        body.push_str(&format!("static {}_GLYPHS: &[Option<PalmGlyphStatic>] = &[\n", prefix));
+        for (idx, g) in parsed.glyphs.iter().enumerate() {
+            if let Some((w, _rows)) = g {
+                body.push_str(&format!(
+                    "    Some(PalmGlyphStatic {{ width: {}, rows: {}_G{}_ROWS }}),\n",
+                    w, prefix, idx
+                ));
+            } else {
+                body.push_str("    None,\n");
+            }
+        }
+        body.push_str("];\n");
+        body.push_str(&format!(
+            "fn make_{}() -> PalmFont {{ PalmFont {{ font_id: {}, first_char: {}, last_char: {}, max_width: {}, avg_width: {}, rect_height: {}, widths: PalmWidths::Static({}_WIDTHS), glyphs: PalmGlyphs::Static({}_GLYPHS) }} }}\n",
+            prefix.to_ascii_lowercase(),
+            parsed.font_id,
+            parsed.first_char,
+            parsed.last_char,
+            parsed.max_width,
+            parsed.avg_width,
+            parsed.rect_height,
+            prefix,
+            prefix
+        ));
     }
-    body.push_str("];\n");
+    body.push_str("pub fn load_embedded_prc_fonts() -> alloc::vec::Vec<PalmFont> {\n");
+    body.push_str("    let mut out = alloc::vec::Vec::new();\n");
+    for (font_id, _,) in candidates.iter().map(|(id, v)| (id, v)) {
+        let prefix = format!("F{}", font_id).to_ascii_lowercase();
+        body.push_str(&format!("    out.push(make_{}());\n", prefix));
+    }
+    body.push_str("    out\n}\n");
 
     let _ = fs::create_dir_all(&out_dir);
     fs::write(out_file, body).expect("failed to write generated embedded font table");
