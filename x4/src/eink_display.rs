@@ -400,9 +400,9 @@ where
             }
         } else if shift > 0 {
             let shift_rows = (shift as usize).min(Self::HEIGHT);
-            let blank = [0xFFu8; Self::WIDTH_BYTES];
+            const BLANK_ROW: [u8; 100] = [0xFFu8; 100];
             for _ in 0..shift_rows {
-                self.send_data(&blank)?;
+                self.send_data(&BLANK_ROW[..row_bytes])?;
             }
             let src_rows = Self::HEIGHT.saturating_sub(shift_rows);
             for row in 0..src_rows {
@@ -412,14 +412,14 @@ where
             }
         } else {
             let skip_rows = ((-shift) as usize).min(Self::HEIGHT);
-            let blank = [0xFFu8; Self::WIDTH_BYTES];
+            const BLANK_ROW: [u8; 100] = [0xFFu8; 100];
             for row in skip_rows..Self::HEIGHT {
                 let start = row * row_bytes;
                 let end = start + row_bytes;
                 self.send_data(&data[start..end])?;
             }
             for _ in 0..skip_rows {
-                self.send_data(&blank)?;
+                self.send_data(&BLANK_ROW[..row_bytes])?;
             }
         }
 

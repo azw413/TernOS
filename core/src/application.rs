@@ -92,6 +92,8 @@ pub struct Application<'a, S: AppSource> {
     prc_blocked_elapsed_ms: u32,
     prc_return_to_start_menu: bool,
     prc_reserved_gray_initialized: bool,
+    install_scan_elapsed_ms: u32,
+    install_last_summary: Option<(u32, u32, u32, u32, u32)>,
     gray2_lsb: Vec<u8>,
     gray2_msb: Vec<u8>,
     exit_from: ExitFrom,
@@ -173,13 +175,14 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_blocked_elapsed_ms: 0,
             prc_return_to_start_menu: false,
             prc_reserved_gray_initialized: false,
+            install_scan_elapsed_ms: 0,
+            install_last_summary: None,
             gray2_lsb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
             gray2_msb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
             exit_from: ExitFrom::Image,
             exit_overlay_drawn: false,
         };
         app.refresh_entries();
-        app.scan_palm_install_inbox();
         app.try_resume();
         app
     }
@@ -188,7 +191,18 @@ impl<'a, S: AppSource> Application<'a, S> {
         let Some(summary) = self.source.scan_palm_install_inbox() else {
             return;
         };
-        if summary.scanned == 0 {
+        let sig = (
+            summary.scanned,
+            summary.installed,
+            summary.upgraded,
+            summary.skipped,
+            summary.failed,
+        );
+        if self.install_last_summary == Some(sig) {
+            return;
+        }
+        self.install_last_summary = Some(sig);
+        if summary.scanned == 0 && summary.failed == 0 {
             return;
         }
         log::info!(
@@ -206,6 +220,14 @@ impl<'a, S: AppSource> Application<'a, S> {
     }
 
     pub fn update(&mut self, buttons: &input::ButtonState, elapsed_ms: u32) {
+        if self.state == AppState::StartMenu {
+            self.install_scan_elapsed_ms = self.install_scan_elapsed_ms.saturating_add(elapsed_ms);
+            if self.install_scan_elapsed_ms >= 2000 {
+                self.install_scan_elapsed_ms = 0;
+                self.scan_palm_install_inbox();
+            }
+        }
+
         if self.state == AppState::Sleeping
             && (buttons.is_pressed(input::Buttons::Power)
                 || buttons.is_held(input::Buttons::Power))
@@ -1214,6 +1236,7 @@ impl<'a, S: AppSource> Application<'a, S> {
     fn set_state_start_menu(&mut self, need_base_refresh: bool) {
         self.state = AppState::StartMenu;
         self.home.start_menu_need_base_refresh = need_base_refresh;
+        self.install_scan_elapsed_ms = 2000;
         self.dirty = true;
     }
 

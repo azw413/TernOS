@@ -632,6 +632,7 @@ impl ImageSource for DesktopImageSource {
             match decision {
                 InstallDecision::SkipAlreadyInstalled => {
                     summary.skipped += 1;
+                    let _ = fs::remove_file(&path);
                 }
                 InstallDecision::InstallNew => {
                     let uid = catalog.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
@@ -654,6 +655,7 @@ impl ImageSource for DesktopImageSource {
                         payload_hash,
                     });
                     summary.installed += 1;
+                    let _ = fs::remove_file(&path);
                 }
                 InstallDecision::UpgradeExisting { existing_uid } => {
                     let db_path = db_dir.join(format!("{existing_uid:016x}.tdb"));
@@ -672,6 +674,7 @@ impl ImageSource for DesktopImageSource {
                         meta.payload_hash = payload_hash;
                     }
                     summary.upgraded += 1;
+                    let _ = fs::remove_file(&path);
                 }
             }
         }

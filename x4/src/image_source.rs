@@ -212,19 +212,19 @@ where
     }
 
     fn install_dirname() -> &'static str {
-        "install"
+        "/install"
     }
 
     fn palmdb_root_dirname() -> &'static str {
-        "palmdb/v1"
+        "/palmdb/v1"
     }
 
     fn palmdb_catalog_filename() -> &'static str {
-        "palmdb/v1/catalog.txt"
+        "/palmdb/v1/catalog.txt"
     }
 
     fn palmdb_db_dirname() -> &'static str {
-        "palmdb/v1/db"
+        "/palmdb/v1/db"
     }
 
     fn read_resume(&self) -> Option<String> {
@@ -596,9 +596,9 @@ where
     }
 
     fn save_palm_catalog(&self, catalog: &[InstalledDbMeta]) -> Result<(), ImageError> {
-        self.fs
-            .create_dir_all(Self::palmdb_root_dirname())
-            .map_err(|_| ImageError::Io)?;
+        // FatFs mkdir returns an error when the directory already exists; tolerate that.
+        let _ = self.fs.create_dir_all("/palmdb");
+        let _ = self.fs.create_dir_all(Self::palmdb_root_dirname());
         let mut file = self
             .fs
             .open_file(Self::palmdb_catalog_filename(), Mode::Write)
@@ -716,6 +716,36 @@ fn payload_hash_32(data: &[u8]) -> [u8; 32] {
     out
 }
 
+fn payload_hash_32_stream<R: Read + Seek>(reader: &mut R) -> Result<[u8; 32], ImageError> {
+    let _ = reader.seek(SeekFrom::Start(0)).map_err(|_| ImageError::Io)?;
+    let mut s0: u64 = 0xcbf29ce484222325;
+    let mut s1: u64 = 0x9e3779b97f4a7c15;
+    let mut s2: u64 = 0x243f6a8885a308d3;
+    let mut s3: u64 = 0x13198a2e03707344;
+    let mut idx: u64 = 0;
+    let mut chunk = [0u8; 512];
+    loop {
+        let read = reader.read(&mut chunk).map_err(|_| ImageError::Io)?;
+        if read == 0 {
+            break;
+        }
+        for b in &chunk[..read] {
+            let v = *b as u64 + idx.wrapping_mul(0x100000001b3);
+            s0 = (s0 ^ v).wrapping_mul(0x100000001b3);
+            s1 = (s1 ^ v.rotate_left(13)).wrapping_mul(0x100000001b3);
+            s2 = (s2 ^ v.rotate_left(29)).wrapping_mul(0x100000001b3);
+            s3 = (s3 ^ v.rotate_left(47)).wrapping_mul(0x100000001b3);
+            idx = idx.saturating_add(1);
+        }
+    }
+    let mut out = [0u8; 32];
+    out[0..8].copy_from_slice(&s0.to_le_bytes());
+    out[8..16].copy_from_slice(&s1.to_le_bytes());
+    out[16..24].copy_from_slice(&s2.to_le_bytes());
+    out[24..32].copy_from_slice(&s3.to_le_bytes());
+    Ok(out)
+}
+
 fn identity_from_prc(info: &PrcInfo) -> InstalledDbIdentity {
     let mut name = [0u8; 32];
     let raw = info.db_name.as_bytes();
@@ -737,6 +767,40 @@ fn identity_from_prc(info: &PrcInfo) -> InstalledDbIdentity {
     }
 }
 
+fn identity_from_prc_header(data: &[u8]) -> Option<(InstalledDbIdentity, DbKind, u16)> {
+    if data.len() < 78 {
+        return None;
+    }
+    let mut name = [0u8; 32];
+    let mut end = 32usize;
+    for (idx, b) in data[0..32].iter().enumerate() {
+        if *b == 0 {
+            end = idx;
+            break;
+        }
+    }
+    name[..end].copy_from_slice(&data[0..end]);
+    let attributes = u16::from_be_bytes([data[32], data[33]]);
+    let version = u16::from_be_bytes([data[34], data[35]]);
+    let db_type = [data[60], data[61], data[62], data[63]];
+    let creator = [data[64], data[65], data[66], data[67]];
+    let kind = if (attributes & 0x0001) != 0 {
+        DbKind::Resource
+    } else {
+        DbKind::Record
+    };
+    Some((
+        InstalledDbIdentity {
+            name,
+            db_type,
+            creator,
+            version,
+        },
+        kind,
+        attributes,
+    ))
+}
+
 fn extract_app_icon(raw: &[u8]) -> Option<ImageData> {
     let bitmaps = tern_core::prc_app::bitmap::parse_prc_bitmaps(raw);
     let best = bitmaps
@@ -749,6 +813,219 @@ fn extract_app_icon(raw: &[u8]) -> Option<ImageData> {
         width: best.width as u32,
         height: best.height as u32,
         bits: best.bits.clone(),
+    })
+}
+
+#[derive(Clone)]
+struct ParsedBitmap {
+    resource_id: u16,
+    width: u16,
+    height: u16,
+    row_bytes: u16,
+    bits: Vec<u8>,
+}
+
+fn read_u16_be_opt(data: &[u8], off: usize) -> Option<u16> {
+    let b0 = *data.get(off)?;
+    let b1 = *data.get(off + 1)?;
+    Some(u16::from_be_bytes([b0, b1]))
+}
+
+fn parse_bitmap_blob_light(resource_id: u16, data: &[u8]) -> Option<ParsedBitmap> {
+    if data.len() < 16 {
+        return None;
+    }
+    let width = read_u16_be_opt(data, 0)?;
+    let height = read_u16_be_opt(data, 2)?;
+    let row_bytes_raw = read_u16_be_opt(data, 4)?;
+    let flags = read_u16_be_opt(data, 6).unwrap_or(0);
+    let row_bytes = row_bytes_raw & 0x3FFF;
+    let pixel_size = *data.get(8)?;
+    let version = *data.get(9)?;
+    if width == 0 || height == 0 || row_bytes == 0 || pixel_size != 1 {
+        return None;
+    }
+    let bits_len = row_bytes as usize * height as usize;
+    let compressed = (flags & 0x8000) != 0;
+    let compression = if compressed {
+        if version <= 1 {
+            0
+        } else {
+            *data.get(13).unwrap_or(&0)
+        }
+    } else {
+        0xFF
+    };
+    let header_size = if version >= 3 { 24usize } else { 16usize };
+    let bits = if !compressed {
+        data.get(header_size..header_size.saturating_add(bits_len))
+            .or_else(|| data.get(16..16usize.saturating_add(bits_len)))?
+            .to_vec()
+    } else {
+        let mut src = data.get(header_size..)?;
+        src = match version {
+            0 | 1 | 2 => src.get(2..)?,
+            3 => src.get(4..)?,
+            _ => src,
+        };
+        let mut out = vec![0u8; bits_len];
+        match compression {
+            0 => {
+                let mut si = 0usize;
+                for row in 0..height as usize {
+                    let row_base = row * row_bytes as usize;
+                    let mut j = 0usize;
+                    while j < row_bytes as usize {
+                        let diff = *src.get(si)?;
+                        si += 1;
+                        let chunk = core::cmp::min(8usize, row_bytes as usize - j);
+                        for k in 0..chunk {
+                            let idx = row_base + j + k;
+                            if row == 0 || (diff & (1 << (7 - k))) != 0 {
+                                out[idx] = *src.get(si)?;
+                                si += 1;
+                            } else {
+                                out[idx] = out[(row - 1) * row_bytes as usize + j + k];
+                            }
+                        }
+                        j += 8;
+                    }
+                }
+            }
+            1 => {
+                let mut si = 0usize;
+                let mut di = 0usize;
+                while di < out.len() {
+                    let len = *src.get(si)? as usize;
+                    let b = *src.get(si + 1)?;
+                    si += 2;
+                    let end = core::cmp::min(di + len, out.len());
+                    out[di..end].fill(b);
+                    di = end;
+                }
+            }
+            2 => {
+                let mut si = 0usize;
+                let mut di = 0usize;
+                while di < out.len() {
+                    let count = *src.get(si)? as i8;
+                    si += 1;
+                    if (-127..=-1).contains(&count) {
+                        let len = (-count as i16 + 1) as usize;
+                        let b = *src.get(si)?;
+                        si += 1;
+                        let end = core::cmp::min(di + len, out.len());
+                        out[di..end].fill(b);
+                        di = end;
+                    } else if (0..=127).contains(&count) {
+                        let len = count as usize + 1;
+                        let end = core::cmp::min(di + len, out.len());
+                        let src_end = si + (end - di);
+                        out[di..end].copy_from_slice(src.get(si..src_end)?);
+                        di = end;
+                        si = src_end;
+                    }
+                }
+            }
+            _ => return None,
+        }
+        out
+    };
+    Some(ParsedBitmap {
+        resource_id,
+        width,
+        height,
+        row_bytes,
+        bits,
+    })
+}
+
+fn extract_app_icon_streaming<R: File>(file: &mut R) -> Option<ImageData> {
+    let file_size = file.size() as u32;
+    if file_size < 78 {
+        return None;
+    }
+    let mut header = [0u8; 78];
+    let _ = file.seek(SeekFrom::Start(0)).ok()?;
+    read_exact(file, &mut header).ok()?;
+    let attrs = u16::from_be_bytes([header[32], header[33]]);
+    if (attrs & 0x0001) == 0 {
+        return None;
+    }
+    let entry_count = u16::from_be_bytes([header[76], header[77]]) as usize;
+    if entry_count == 0 || entry_count > 4096 {
+        return None;
+    }
+    let table_len = entry_count.saturating_mul(10);
+    let mut table = vec![0u8; table_len];
+    let _ = file.seek(SeekFrom::Start(78)).ok()?;
+    read_exact(file, &mut table).ok()?;
+
+    let mut best: Option<ParsedBitmap> = None;
+    for i in 0..entry_count {
+        let off = i * 10;
+        let kind = &table[off..off + 4];
+        if kind != b"Tbmp" && kind != b"tAIB" {
+            continue;
+        }
+        let id = u16::from_be_bytes([table[off + 4], table[off + 5]]);
+        let start = u32::from_be_bytes([table[off + 6], table[off + 7], table[off + 8], table[off + 9]]);
+        if start >= file_size {
+            continue;
+        }
+        let next = if i + 1 < entry_count {
+            u32::from_be_bytes([
+                table[(i + 1) * 10 + 6],
+                table[(i + 1) * 10 + 7],
+                table[(i + 1) * 10 + 8],
+                table[(i + 1) * 10 + 9],
+            ])
+        } else {
+            file_size
+        };
+        let end = next.min(file_size);
+        if end <= start {
+            continue;
+        }
+        let size = (end - start) as usize;
+        if size < 16 || size > 8192 {
+            continue;
+        }
+        let mut blob = vec![0u8; size];
+        let _ = file.seek(SeekFrom::Start(start as u64)).ok()?;
+        read_exact(file, &mut blob).ok()?;
+        let Some(parsed) = parse_bitmap_blob_light(id, &blob) else {
+            continue;
+        };
+        if parsed.width > 64 || parsed.height > 64 {
+            continue;
+        }
+        let take = match &best {
+            None => true,
+            Some(cur) => {
+                let cur_key = (
+                    cur.width.abs_diff(32),
+                    cur.height.abs_diff(32),
+                    cur.resource_id,
+                );
+                let new_key = (
+                    parsed.width.abs_diff(32),
+                    parsed.height.abs_diff(32),
+                    parsed.resource_id,
+                );
+                new_key < cur_key
+            }
+        };
+        if take {
+            best = Some(parsed);
+        }
+    }
+
+    let bmp = best?;
+    Some(ImageData::Mono1 {
+        width: bmp.width as u32,
+        height: bmp.height as u32,
+        bits: bmp.bits,
     })
 }
 
@@ -945,7 +1222,7 @@ fn read_string(data: &[u8], cursor: &mut usize) -> Result<String, ImageError> {
 
 impl<F> ImageSource for SdImageSource<F>
 where
-    F: Filesystem,
+    F: Filesystem + UsbFsOps,
 {
     fn refresh(&mut self, path: &[String]) -> Result<Vec<ImageEntry>, ImageError> {
         let path_str = if path.is_empty() {
@@ -1426,7 +1703,7 @@ where
     }
 
     fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
-        let mut out = embedded_prc_fonts::load_embedded_prc_fonts_72();
+        let out = embedded_prc_fonts::load_embedded_prc_fonts_72();
         let embedded_loaded = out.len();
         if embedded_loaded > 0 {
             log::info!(
@@ -1454,17 +1731,28 @@ where
     }
 
     fn scan_palm_install_inbox(&mut self) -> Option<InstallSummary> {
+        // FatFs backend's `create_dir_all` is single-level; ensure parents explicitly.
+        let _ = self.fs.create_dir_all("palmdb");
+        let _ = self.fs.create_dir_all("palmdb/v1");
+        let _ = self.fs.create_dir_all(Self::palmdb_db_dirname());
+
         let listed = {
             let Ok(dir) = self.fs.open_directory(Self::install_dirname()) else {
+                log::warn!("Palm install inbox missing: {}", Self::install_dirname());
                 return Some(InstallSummary::default());
             };
             let Ok(items) = dir.list() else {
+                log::warn!("Palm install inbox unreadable: {}", Self::install_dirname());
                 return Some(InstallSummary::default());
             };
             items
         };
 
-        if self.fs.create_dir_all(Self::palmdb_db_dirname()).is_err() {
+        if self.fs.open_directory(Self::palmdb_db_dirname()).is_err() {
+            log::warn!(
+                "Palm DB directory unavailable after mkdir: {}",
+                Self::palmdb_db_dirname()
+            );
             return Some(InstallSummary {
                 scanned: 0,
                 installed: 0,
@@ -1476,6 +1764,9 @@ where
 
         let mut catalog = self.load_palm_catalog();
         let mut summary = InstallSummary::default();
+        let mut delete_after_commit: Vec<String> = Vec::new();
+        let mut seen_inbox_names: Vec<String> = Vec::new();
+        let mut seen_signatures: Vec<([u8; 4], [u8; 4], [u8; 32])> = Vec::new();
 
         for entry in listed {
             if entry.is_directory() {
@@ -1486,7 +1777,10 @@ where
             if !lower.ends_with(".prc") && !lower.ends_with(".pdb") {
                 continue;
             }
-            summary.scanned = summary.scanned.saturating_add(1);
+            if seen_inbox_names.iter().any(|n| n == &lower) {
+                continue;
+            }
+            seen_inbox_names.push(lower.clone());
             let full_path = format!("{}/{}", Self::install_dirname(), name);
             let mut file = match self.fs.open_file(&full_path, Mode::Read) {
                 Ok(f) => f,
@@ -1500,40 +1794,63 @@ where
                 summary.failed = summary.failed.saturating_add(1);
                 continue;
             }
-            let mut data = Vec::new();
-            if data.try_reserve(size).is_err() {
+            let mut header = [0u8; 78];
+            if read_exact(&mut file, &mut header).is_err() {
                 summary.failed = summary.failed.saturating_add(1);
                 continue;
             }
-            data.resize(size, 0);
-            if read_exact(&mut file, &mut data).is_err() {
-                summary.failed = summary.failed.saturating_add(1);
-                continue;
-            }
-            let Some(info) = tern_core::prc_app::parse_prc(&data) else {
+            let Some((identity, kind, attributes)) = identity_from_prc_header(&header) else {
                 summary.failed = summary.failed.saturating_add(1);
                 continue;
             };
-            let identity = identity_from_prc(&info);
-            let payload_hash = payload_hash_32(&data);
+            let payload_hash = match payload_hash_32_stream(&mut file) {
+                Ok(v) => v,
+                Err(_) => {
+                    summary.failed = summary.failed.saturating_add(1);
+                    continue;
+                }
+            };
+            let sig = (identity.db_type, identity.creator, payload_hash);
+            if seen_signatures.iter().any(|s| *s == sig) {
+                continue;
+            }
+            seen_signatures.push(sig);
+            summary.scanned = summary.scanned.saturating_add(1);
             let existing_idx = catalog
                 .iter()
                 .position(|m| same_db_key(&m.identity, &identity));
             let decision = InstallPlanner::decide(
                 &InstallInboxEntry {
-                    path: full_path,
-                    size: data.len() as u64,
-                    identity,
+                    path: full_path.clone(),
+                    size: size as u64,
+                    identity: identity.clone(),
                     payload_hash,
                 },
                 existing_idx.and_then(|idx| catalog.get(idx)),
             );
+            let type_code = core::str::from_utf8(&identity.db_type).unwrap_or("????");
+            let creator = core::str::from_utf8(&identity.creator).unwrap_or("????");
 
             match decision {
                 InstallDecision::SkipAlreadyInstalled => {
+                    log::info!(
+                        "Palm install skip path={} name='{}' type='{}' creator='{}'",
+                        full_path,
+                        identity.display_name(),
+                        type_code,
+                        creator
+                    );
                     summary.skipped = summary.skipped.saturating_add(1);
+                    delete_after_commit.push(full_path.clone());
                 }
                 InstallDecision::InstallNew => {
+                    log::info!(
+                        "Palm install new path={} name='{}' type='{}' creator='{}'",
+                        full_path,
+                        identity.display_name(),
+                        type_code,
+                        creator
+                    );
                     let uid = catalog.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
                     let out_path = format!("{}/{:016x}.tdb", Self::palmdb_db_dirname(), uid);
                     let mut out = match self.fs.open_file(&out_path, Mode::Write) {
@@ -1543,27 +1860,57 @@ where
                             continue;
                         }
                     };
-                    if write_all(&mut out, &data).is_err() {
+                    let mut src = match self.fs.open_file(&full_path, Mode::Read) {
+                        Ok(f) => f,
+                        Err(_) => {
+                            summary.failed = summary.failed.saturating_add(1);
+                            continue;
+                        }
+                    };
+                    let mut chunk = [0u8; 512];
+                    let mut copy_failed = false;
+                    loop {
+                        let read = match src.read(&mut chunk) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                copy_failed = true;
+                                break;
+                            }
+                        };
+                        if read == 0 {
+                            break;
+                        }
+                        if write_all(&mut out, &chunk[..read]).is_err() {
+                            copy_failed = true;
+                            break;
+                        }
+                    }
+                    if copy_failed {
                         summary.failed = summary.failed.saturating_add(1);
                         continue;
                     }
                     let _ = out.flush();
-                    let kind = match info.kind {
-                        PrcDbKind::Resource => DbKind::Resource,
-                        PrcDbKind::Record => DbKind::Record,
-                    };
                     catalog.push(InstalledDbMeta {
                         uid,
                         card_no: 0,
                         identity,
                         kind,
-                        attributes: info.attributes,
+                        attributes,
                         mod_number: 1,
                         payload_hash,
                     });
                     summary.installed = summary.installed.saturating_add(1);
+                    delete_after_commit.push(full_path.clone());
                 }
                 InstallDecision::UpgradeExisting { existing_uid } => {
+                    log::info!(
+                        "Palm install upgrade path={} uid={} name='{}' type='{}' creator='{}'",
+                        full_path,
+                        existing_uid,
+                        identity.display_name(),
+                        type_code,
+                        creator
+                    );
                     let out_path = format!("{}/{:016x}.tdb", Self::palmdb_db_dirname(), existing_uid);
                     let mut out = match self.fs.open_file(&out_path, Mode::Write) {
                         Ok(f) => f,
@@ -1572,28 +1919,58 @@ where
                             continue;
                         }
                     };
-                    if write_all(&mut out, &data).is_err() {
+                    let mut src = match self.fs.open_file(&full_path, Mode::Read) {
+                        Ok(f) => f,
+                        Err(_) => {
+                            summary.failed = summary.failed.saturating_add(1);
+                            continue;
+                        }
+                    };
+                    let mut chunk = [0u8; 512];
+                    let mut copy_failed = false;
+                    loop {
+                        let read = match src.read(&mut chunk) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                copy_failed = true;
+                                break;
+                            }
+                        };
+                        if read == 0 {
+                            break;
+                        }
+                        if write_all(&mut out, &chunk[..read]).is_err() {
+                            copy_failed = true;
+                            break;
+                        }
+                    }
+                    if copy_failed {
                         summary.failed = summary.failed.saturating_add(1);
                         continue;
                     }
                     let _ = out.flush();
                     if let Some(meta) = catalog.iter_mut().find(|m| m.uid == existing_uid) {
                         meta.identity = identity;
-                        meta.attributes = info.attributes;
-                        meta.kind = match info.kind {
-                            PrcDbKind::Resource => DbKind::Resource,
-                            PrcDbKind::Record => DbKind::Record,
-                        };
+                        meta.attributes = attributes;
+                        meta.kind = kind;
                         meta.mod_number = meta.mod_number.saturating_add(1);
                         meta.payload_hash = payload_hash;
                     }
                     summary.upgraded = summary.upgraded.saturating_add(1);
+                    delete_after_commit.push(full_path.clone());
                 }
             }
         }
 
-        if summary.scanned > 0 && self.save_palm_catalog(&catalog).is_err() {
-            summary.failed = summary.failed.saturating_add(1);
+        if summary.scanned > 0 {
+            if self.save_palm_catalog(&catalog).is_err() {
+                log::warn!("Failed to save Palm DB catalog");
+                summary.failed = summary.failed.saturating_add(1);
+            } else {
+                for path in delete_after_commit {
+                    let _ = self.fs.delete_file(&path);
+                }
+            }
         }
         Some(summary)
     }
@@ -1604,22 +1981,10 @@ where
             if meta.identity.db_type != *b"appl" {
                 continue;
             }
-            let path = format!("palmdb/v1/db/{:016x}.tdb", meta.uid);
+            let path = format!("/palmdb/v1/db/{:016x}.tdb", meta.uid);
             let icon = (|| {
                 let mut file = self.fs.open_file(&path, Mode::Read).ok()?;
-                let size = file.size();
-                if size == 0 || size > 2 * 1024 * 1024 {
-                    return None;
-                }
-                let mut raw = Vec::new();
-                if raw.try_reserve(size).is_err() {
-                    return None;
-                }
-                raw.resize(size, 0);
-                if read_exact(&mut file, &mut raw).is_err() {
-                    return None;
-                }
-                extract_app_icon(&raw)
+                extract_app_icon_streaming(&mut file)
             })();
             out.push(InstalledAppEntry {
                 title: meta.identity.display_name(),
