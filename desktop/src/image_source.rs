@@ -8,6 +8,10 @@ use tern_core::image_viewer::{
     PersistenceSource, PowerSource,
 };
 
+mod embedded_prc_fonts {
+    include!(concat!(env!("OUT_DIR"), "/prc_embedded_fonts.rs"));
+}
+
 pub struct DesktopImageSource {
     root: PathBuf,
     trbk_pages: Option<Vec<tern_core::trbk::TrbkPage>>,
@@ -270,11 +274,64 @@ impl ImageSource for DesktopImageSource {
     }
 
     fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+        let mut out = Vec::new();
+        let mut embedded_loaded = 0usize;
+        fn font_variant_rank(name: &str) -> u8 {
+            let lower = name.to_ascii_lowercase();
+            if lower.ends_with("_72.txt") {
+                0
+            } else if lower.ends_with("_144.txt") {
+                2
+            } else {
+                1
+            }
+        }
+        fn add_font(
+            out: &mut Vec<tern_core::prc_app::runtime::PalmFont>,
+            ranks: &mut std::collections::BTreeMap<u16, u8>,
+            name: &str,
+            text: &str,
+        ) -> bool {
+            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(name) else {
+                return false;
+            };
+            let font_id = resource_id.saturating_sub(9100);
+            let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(text, font_id) else {
+                return false;
+            };
+            let rank = font_variant_rank(name);
+            if let Some(pos) = out
+                .iter()
+                .position(|f: &tern_core::prc_app::runtime::PalmFont| f.font_id == font_id)
+            {
+                let cur_rank = *ranks.get(&font_id).unwrap_or(&u8::MAX);
+                if rank < cur_rank {
+                    out[pos] = font;
+                    ranks.insert(font_id, rank);
+                }
+                return false;
+            }
+            out.push(font);
+            ranks.insert(font_id, rank);
+            true
+        }
+        let mut ranks: std::collections::BTreeMap<u16, u8> = std::collections::BTreeMap::new();
+        for (name, text) in embedded_prc_fonts::EMBEDDED_PRC_FONT_TXT {
+            if add_font(&mut out, &mut ranks, name, text) {
+                embedded_loaded += 1;
+            }
+        }
+        if embedded_loaded > 0 {
+            log::info!(
+                "Loaded {} embedded text system fonts from app image",
+                embedded_loaded
+            );
+        }
+
         let dir = self.fonts_dir();
         let Ok(read_dir) = fs::read_dir(&dir) else {
-            return Vec::new();
+            return out;
         };
-        let mut out = Vec::new();
         for dent in read_dir.flatten() {
             let Ok(ft) = dent.file_type() else {
                 continue;
@@ -286,20 +343,17 @@ impl ImageSource for DesktopImageSource {
             if !name.to_ascii_lowercase().ends_with(".txt") {
                 continue;
             }
-            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(&name) else {
-                continue;
-            };
-            // Palm FontID in traps/forms is usually 0..N, while NFNT resource IDs are 9100+FontID.
-            let font_id = resource_id.saturating_sub(9100);
             let Ok(text) = fs::read_to_string(dent.path()) else {
                 continue;
             };
-            if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(&text, font_id) {
-                out.push(font);
-            }
+            let _ = add_font(&mut out, &mut ranks, &name, &text);
         }
-        if !out.is_empty() {
-            log::info!("Loaded {} text system fonts from {}", out.len(), dir.display());
+        if out.len() > embedded_loaded {
+            log::info!(
+                "Loaded {} text system fonts from {}",
+                out.len() - embedded_loaded,
+                dir.display()
+            );
         }
         out
     }
