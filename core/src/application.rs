@@ -172,8 +172,26 @@ impl<'a, S: AppSource> Application<'a, S> {
             exit_overlay_drawn: false,
         };
         app.refresh_entries();
+        app.scan_palm_install_inbox();
         app.try_resume();
         app
+    }
+
+    fn scan_palm_install_inbox(&mut self) {
+        let Some(summary) = self.source.scan_palm_install_inbox() else {
+            return;
+        };
+        if summary.scanned == 0 {
+            return;
+        }
+        log::info!(
+            "Palm install inbox scanned={} installed={} upgraded={} skipped={} failed={}",
+            summary.scanned,
+            summary.installed,
+            summary.upgraded,
+            summary.skipped,
+            summary.failed
+        );
     }
 
     pub fn update(&mut self, buttons: &input::ButtonState, elapsed_ms: u32) {
@@ -239,15 +257,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                                 self.set_error(err);
                             }
                         }
-                    }
-                    HomeAction::OpenFileBrowser => {
-                        self.state = AppState::Menu;
-                        self.home.selected = 0;
-                        self.refresh_entries();
-                        self.dirty = true;
-                    }
-                    HomeAction::OpenSettings => {
-                        self.set_state_settings();
                     }
                     HomeAction::None => {
                         if Self::has_input(buttons) {
@@ -1200,6 +1209,9 @@ impl<'a, S: AppSource> Application<'a, S> {
 
 
     fn draw_start_menu(&mut self, display: &mut impl crate::display::Display) {
+        if self.prc_system_fonts.is_empty() {
+            self.prc_system_fonts = self.source.load_prc_system_fonts();
+        }
         let recents = self.system.collect_recent_paths(self.last_viewed_entry.as_ref());
         let icons = HomeIcons {
             icon_size: generated_icons::ICON_SIZE as i32,
@@ -1217,6 +1229,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             source: self.source,
             full_refresh: self.system.full_refresh,
             battery_percent: self.system.battery_percent,
+            palm_fonts: self.prc_system_fonts.as_slice(),
             icons,
             draw_trbk_image,
         };
@@ -1242,6 +1255,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             source: self.source,
             full_refresh: self.system.full_refresh,
             battery_percent: self.system.battery_percent,
+            palm_fonts: self.prc_system_fonts.as_slice(),
             icons,
             draw_trbk_image,
         };

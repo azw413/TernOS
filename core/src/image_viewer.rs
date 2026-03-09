@@ -79,6 +79,13 @@ pub trait ImageSource {
     fn load_prc_system_fonts(&mut self) -> Vec<crate::prc_app::runtime::PalmFont> {
         Vec::new()
     }
+    /// Optional `/install` inbox scan hook.
+    ///
+    /// Implementations can return `Some(summary)` when they support Palm DB
+    /// install scanning, or `None` to opt out.
+    fn scan_palm_install_inbox(&mut self) -> Option<crate::palm_db::InstallSummary> {
+        None
+    }
 }
 
 pub trait BookSource {

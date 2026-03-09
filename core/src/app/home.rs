@@ -3,7 +3,7 @@ extern crate alloc;
 use alloc::{format, string::{String, ToString}, vec, vec::Vec};
 
 use embedded_graphics::{
-    mono_font::{ascii::FONT_10X20, MonoTextStyle},
+    mono_font::{ascii::{FONT_10X20, FONT_6X10}, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::{DrawTarget, OriginDimensions, Point, Primitive, Size},
     primitives::Rectangle,
@@ -14,15 +14,31 @@ use embedded_graphics::{
 use crate::display::{Display, GrayscaleMode, RefreshMode};
 use crate::framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
 use crate::image_viewer::{AppSource, ImageData, ImageEntry, ImageError};
-use crate::ui::{flush_queue, ListItem, ListView, Rect, RenderQueue, UiContext, View};
+use crate::ui::{flush_queue, prc_components::{draw_form_title_bar, draw_palm_pull_down_box, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, ListItem, ListView, Rect, RenderQueue, UiContext, View};
 
 const START_MENU_MARGIN: i32 = 16;
 const START_MENU_RECENT_THUMB: i32 = 74;
-const START_MENU_ACTION_GAP: i32 = 12;
-const HEADER_Y: i32 = 28;
+const START_MENU_STATUS_H: i32 = 34;
+const START_MENU_FORM_Y: i32 = START_MENU_STATUS_H + 2;
+const HEADER_Y: i32 = START_MENU_FORM_Y + 22;
 const LIST_TOP: i32 = 72;
 const LINE_HEIGHT: i32 = 30;
 const LIST_MARGIN_X: i32 = 18;
+
+#[derive(Clone, Copy, Debug)]
+struct PalmChromeMetrics {
+    scale: i32,
+}
+
+impl PalmChromeMetrics {
+    const fn palm3() -> Self {
+        Self { scale: 3 }
+    }
+
+    const fn px(self, base: i32) -> i32 {
+        base * self.scale
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StartMenuSection {
@@ -30,11 +46,12 @@ pub enum StartMenuSection {
     Actions,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum StartMenuAction {
-    FileBrowser,
-    Settings,
-    Battery,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LauncherCategory {
+    Recents,
+    Apps,
+    Books,
+    Images,
 }
 
 pub struct RecentPreview {
@@ -48,9 +65,12 @@ pub struct HomeState {
     pub selected: usize,
     pub path: Vec<String>,
     pub start_menu_section: StartMenuSection,
+    pub launcher_category: LauncherCategory,
     pub start_menu_index: usize,
     pub start_menu_prev_section: StartMenuSection,
     pub start_menu_prev_index: usize,
+    pub category_menu_open: bool,
+    pub category_menu_index: usize,
     pub start_menu_cache: Vec<RecentPreview>,
     pub start_menu_nav_pending: bool,
     pub start_menu_need_base_refresh: bool,
@@ -70,8 +90,6 @@ pub enum HomeOpen {
 pub enum HomeAction {
     None,
     OpenRecent(String),
-    OpenFileBrowser,
-    OpenSettings,
 }
 
 pub enum MenuAction {
@@ -108,6 +126,7 @@ pub struct HomeRenderContext<'a, S: AppSource> {
     pub source: &'a mut S,
     pub full_refresh: bool,
     pub battery_percent: Option<u8>,
+    pub palm_fonts: &'a [crate::prc_app::runtime::PalmFont],
     pub icons: HomeIcons<'a>,
     pub draw_trbk_image: DrawTrbkImageFn,
 }
@@ -119,9 +138,12 @@ impl HomeState {
             selected: 0,
             path: Vec::new(),
             start_menu_section: StartMenuSection::Recents,
+            launcher_category: LauncherCategory::Recents,
             start_menu_index: 0,
             start_menu_prev_section: StartMenuSection::Recents,
             start_menu_prev_index: 0,
+            category_menu_open: false,
+            category_menu_index: 0,
             start_menu_cache: Vec::new(),
             start_menu_nav_pending: false,
             start_menu_need_base_refresh: true,
@@ -235,23 +257,50 @@ impl HomeState {
         buttons: &crate::input::ButtonState,
     ) -> HomeAction {
         use crate::input::Buttons;
+        let content_len = self.start_menu_content_len(recents);
+        let categories = [
+            LauncherCategory::Recents,
+            LauncherCategory::Apps,
+            LauncherCategory::Books,
+            LauncherCategory::Images,
+        ];
+
+        if self.category_menu_open {
+            if buttons.is_pressed(Buttons::Up) {
+                self.category_menu_index = self.category_menu_index.saturating_sub(1);
+                self.start_menu_need_base_refresh = true;
+                return HomeAction::None;
+            }
+            if buttons.is_pressed(Buttons::Down) {
+                self.category_menu_index =
+                    (self.category_menu_index + 1).min(categories.len().saturating_sub(1));
+                self.start_menu_need_base_refresh = true;
+                return HomeAction::None;
+            }
+            if buttons.is_pressed(Buttons::Confirm) {
+                self.launcher_category = categories[self.category_menu_index];
+                self.category_menu_open = false;
+                self.start_menu_section = StartMenuSection::Recents;
+                self.start_menu_index = 0;
+                self.start_menu_need_base_refresh = true;
+                return HomeAction::None;
+            }
+            if buttons.is_pressed(Buttons::Back) || buttons.is_pressed(Buttons::Left) {
+                self.category_menu_open = false;
+                self.start_menu_need_base_refresh = true;
+                return HomeAction::None;
+            }
+            return HomeAction::None;
+        }
 
         if buttons.is_pressed(Buttons::Up) {
             self.start_menu_prev_section = self.start_menu_section;
             self.start_menu_prev_index = self.start_menu_index;
             if self.start_menu_section == StartMenuSection::Recents {
-                if self.start_menu_index > 0 {
+                if content_len > 0 && self.start_menu_index > 0 {
                     self.start_menu_index -= 1;
                 } else {
                     self.start_menu_section = StartMenuSection::Actions;
-                    self.start_menu_index = 2;
-                }
-            } else if self.start_menu_section == StartMenuSection::Actions {
-                if self.start_menu_index == 0 && !recents.is_empty() {
-                    self.start_menu_section = StartMenuSection::Recents;
-                    self.start_menu_index = recents.len().saturating_sub(1);
-                } else {
-                    self.start_menu_index = self.start_menu_index.saturating_sub(1);
                 }
             }
             self.start_menu_nav_pending = true;
@@ -261,27 +310,21 @@ impl HomeState {
         if buttons.is_pressed(Buttons::Down) {
             self.start_menu_prev_section = self.start_menu_section;
             self.start_menu_prev_index = self.start_menu_index;
-            if self.start_menu_section == StartMenuSection::Recents {
-                if self.start_menu_index + 1 < recents.len() {
-                    self.start_menu_index += 1;
-                } else {
-                    self.start_menu_section = StartMenuSection::Actions;
-                    self.start_menu_index = 0;
-                }
-            } else if self.start_menu_section == StartMenuSection::Actions {
-                if self.start_menu_index + 1 < 3 {
-                    self.start_menu_index += 1;
-                }
+            if self.start_menu_section == StartMenuSection::Actions {
+                self.start_menu_section = StartMenuSection::Recents;
+                self.start_menu_index = 0;
+            } else if content_len > 0 && self.start_menu_index + 1 < content_len {
+                self.start_menu_index += 1;
             }
             self.start_menu_nav_pending = true;
             return HomeAction::None;
         }
 
         if buttons.is_pressed(Buttons::Left) {
-            if self.start_menu_section == StartMenuSection::Actions {
+            if self.start_menu_section == StartMenuSection::Recents {
                 self.start_menu_prev_section = self.start_menu_section;
                 self.start_menu_prev_index = self.start_menu_index;
-                self.start_menu_index = self.start_menu_index.saturating_sub(1);
+                self.start_menu_section = StartMenuSection::Actions;
                 self.start_menu_nav_pending = true;
             }
             return HomeAction::None;
@@ -291,30 +334,36 @@ impl HomeState {
             if self.start_menu_section == StartMenuSection::Actions {
                 self.start_menu_prev_section = self.start_menu_section;
                 self.start_menu_prev_index = self.start_menu_index;
-                self.start_menu_index = (self.start_menu_index + 1).min(2);
+                self.start_menu_section = StartMenuSection::Recents;
                 self.start_menu_nav_pending = true;
             }
             return HomeAction::None;
         }
 
         if buttons.is_pressed(Buttons::Confirm) {
-            match self.start_menu_section {
-                StartMenuSection::Recents => {
-                    if let Some(path) = recents.get(self.start_menu_index) {
-                        return HomeAction::OpenRecent(path.clone());
-                    }
-                }
-                StartMenuSection::Actions => {
-                    return match self.start_menu_index {
-                        0 => HomeAction::OpenFileBrowser,
-                        1 => HomeAction::OpenSettings,
-                        _ => HomeAction::None,
-                    };
+            if self.start_menu_section == StartMenuSection::Actions {
+                self.category_menu_open = true;
+                self.category_menu_index = categories
+                    .iter()
+                    .position(|c| *c == self.launcher_category)
+                    .unwrap_or(0);
+                self.start_menu_need_base_refresh = true;
+                return HomeAction::None;
+            } else if self.launcher_category == LauncherCategory::Recents {
+                if let Some(path) = recents.get(self.start_menu_index) {
+                    return HomeAction::OpenRecent(path.clone());
                 }
             }
         }
 
         HomeAction::None
+    }
+
+    fn start_menu_content_len(&self, recents: &[String]) -> usize {
+        match self.launcher_category {
+            LauncherCategory::Recents => recents.len(),
+            LauncherCategory::Apps | LauncherCategory::Books | LauncherCategory::Images => 0,
+        }
     }
 
     pub fn handle_menu_input(
@@ -354,18 +403,15 @@ impl HomeState {
         let size = ctx.display_buffers.size();
         let width = size.width as i32;
         let height = size.height as i32;
-        let mid_y = (height * 82) / 100;
+        let mid_y = height - START_MENU_MARGIN;
 
         self.ensure_start_menu_cache(ctx, recents);
 
-        let list_top = HEADER_Y + 24;
+        let list_top = HEADER_Y + 28;
         let max_items = 6usize;
         let list_width = width - (START_MENU_MARGIN * 2);
         let item_height = 99;
         let thumb_size = 74;
-        let action_top = mid_y + 17;
-        let action_width = (width - (START_MENU_MARGIN * 2) - (START_MENU_ACTION_GAP * 2)) / 3;
-        let action_height = 110;
 
         if self.start_menu_need_base_refresh {
             let (gray2_used, draw_count) = self.render_start_menu_contents(
@@ -378,9 +424,6 @@ impl HomeState {
                 list_width,
                 item_height,
                 thumb_size,
-                action_top,
-                action_width,
-                action_height,
             );
             log::info!(
                 "Start menu base render: recents={}, cache={}",
@@ -417,46 +460,21 @@ impl HomeState {
                 list_width,
                 item_height,
                 thumb_size,
-                action_top,
-                action_width,
-                action_height,
             );
-            let rect_for = |section: StartMenuSection, index: usize| -> Option<Rect> {
-                match section {
-                    StartMenuSection::Recents => {
-                        if index >= max_items {
-                            return None;
-                        }
-                        let y = list_top + (index as i32 * item_height);
-                        if y + item_height > mid_y {
-                            return None;
-                        }
-                        Some(Rect::new(
-                            START_MENU_MARGIN - 4,
-                            y - 4,
-                            list_width + 8,
-                            item_height - 4,
-                        ))
-                    }
-                    StartMenuSection::Actions => {
-                        if index >= 3 {
-                            return None;
-                        }
-                        let x = START_MENU_MARGIN
-                            + index as i32 * (action_width + START_MENU_ACTION_GAP);
-                        Some(Rect::new(
-                            x - 4,
-                            action_top - 4,
-                            action_width + 8,
-                            action_height + 8,
-                        ))
+            if self.launcher_category == LauncherCategory::Recents
+                && self.start_menu_section == StartMenuSection::Recents
+            {
+                if self.start_menu_index < max_items {
+                    let y = list_top + (self.start_menu_index as i32 * item_height);
+                    if y + item_height <= mid_y {
+                        let mut rq = RenderQueue::default();
+                        rq.push(
+                            Rect::new(START_MENU_MARGIN - 4, y - 4, list_width + 8, item_height - 4),
+                            RefreshMode::Fast,
+                        );
+                        flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Fast);
                     }
                 }
-            };
-            if let Some(rect) = rect_for(self.start_menu_section, self.start_menu_index) {
-                let mut rq = RenderQueue::default();
-                rq.push(rect, RefreshMode::Fast);
-                flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Fast);
             }
             return;
         }
@@ -471,9 +489,6 @@ impl HomeState {
             list_width,
             item_height,
             thumb_size,
-            action_top,
-            action_width,
-            action_height,
         );
         log::info!(
             "Start menu render: recents={}, cache={}",
@@ -483,51 +498,27 @@ impl HomeState {
         if gray2_used {
             if self.start_menu_nav_pending {
                 let mut rq = RenderQueue::default();
-                let mut push_rect = |rect: Rect| {
-                    rq.push(rect, RefreshMode::Fast);
-                };
-                let rect_for = |section: StartMenuSection, index: usize| -> Option<Rect> {
-                    match section {
-                        StartMenuSection::Recents => {
-                            if index >= max_items {
-                                return None;
-                            }
-                            let y = list_top + (index as i32 * item_height);
-                            if y + item_height > mid_y {
-                                return None;
-                            }
-                            Some(Rect::new(
-                                START_MENU_MARGIN - 4,
-                                y - 4,
-                                list_width + 8,
-                                item_height - 4,
-                            ))
-                        }
-                        StartMenuSection::Actions => {
-                            if index >= 3 {
-                                return None;
-                            }
-                            let x = START_MENU_MARGIN
-                                + index as i32 * (action_width + START_MENU_ACTION_GAP);
-                            Some(Rect::new(
-                                x - 4,
-                                action_top - 4,
-                                action_width + 8,
-                                action_height + 8,
-                            ))
-                        }
-                    }
-                };
-                if let Some(rect) =
-                    rect_for(self.start_menu_prev_section, self.start_menu_prev_index)
+                if self.category_menu_open
+                    || self.start_menu_section == StartMenuSection::Actions
+                    || self.launcher_category != LauncherCategory::Recents
                 {
-                    push_rect(rect);
-                }
-                if (self.start_menu_prev_section != self.start_menu_section)
-                    || (self.start_menu_prev_index != self.start_menu_index)
-                {
-                    if let Some(rect) = rect_for(self.start_menu_section, self.start_menu_index) {
-                        push_rect(rect);
+                    rq.push(Rect::new(0, 0, width, height), RefreshMode::Fast);
+                } else if self.launcher_category == LauncherCategory::Recents {
+                    for idx in [self.start_menu_prev_index, self.start_menu_index] {
+                        if idx < max_items {
+                            let y = list_top + (idx as i32 * item_height);
+                            if y + item_height <= mid_y {
+                                rq.push(
+                                    Rect::new(
+                                        START_MENU_MARGIN - 4,
+                                        y - 4,
+                                        list_width + 8,
+                                        item_height - 4,
+                                    ),
+                                    RefreshMode::Fast,
+                                );
+                            }
+                        }
                     }
                 }
                 flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Fast);
@@ -609,221 +600,445 @@ impl HomeState {
         list_width: i32,
         item_height: i32,
         thumb_size: i32,
-        action_top: i32,
-        action_width: i32,
-        action_height: i32,
     ) -> (bool, usize) {
+        let chrome = PalmChromeMetrics::palm3();
         let header_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
         ctx.display_buffers.clear(BinaryColor::On).ok();
         ctx.gray2_lsb.fill(0);
         ctx.gray2_msb.fill(0);
         let mut gray2_used = false;
 
-        Text::new("Recents", Point::new(START_MENU_MARGIN, HEADER_Y), header_style)
-            .draw(ctx.display_buffers)
-            .ok();
-
-        let mut draw_count = 0usize;
-        for (idx, preview) in self.start_menu_cache.iter().take(max_items).enumerate() {
-            let y = list_top + (idx as i32 * item_height);
-            if y + item_height > mid_y {
-                break;
-            }
-            let is_selected = !suppress_selection
-                && self.start_menu_section == StartMenuSection::Recents
-                && self.start_menu_index == idx;
-            if is_selected {
-                Rectangle::new(
-                    Point::new(START_MENU_MARGIN - 4, y - 4),
-                    Size::new((list_width + 8) as u32, (item_height - 4) as u32),
-                )
-                .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
-                    BinaryColor::Off,
-                ))
-                .draw(ctx.display_buffers)
-                .ok();
-            }
-            let thumb_x = START_MENU_MARGIN;
-            let thumb_y = y + (item_height - thumb_size) / 2 - 2;
-            Rectangle::new(
-                Point::new(thumb_x, thumb_y),
-                Size::new(thumb_size as u32, thumb_size as u32),
-            )
-            .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_stroke(
-                if is_selected {
-                    BinaryColor::On
-                } else {
-                    BinaryColor::Off
-                },
-                1,
-            ))
-            .draw(ctx.display_buffers)
-            .ok();
-            if let Some(image) = preview.image.as_ref() {
-                if let Some(mono) = thumbnail_to_mono(image) {
-                    let mut gray2_ctx = None;
-                    (ctx.draw_trbk_image)(
-                        ctx.display_buffers,
-                        &mono,
-                        &mut gray2_ctx,
-                        thumb_x + 2,
-                        thumb_y + 2,
-                        thumb_size - 4,
-                        thumb_size - 4,
-                    );
-                } else {
-                    let gray2_lsb = &mut *ctx.gray2_lsb;
-                    let gray2_msb = &mut *ctx.gray2_msb;
-                    let mut gray2_ctx = Some((gray2_lsb, gray2_msb, &mut gray2_used));
-                    (ctx.draw_trbk_image)(
-                        ctx.display_buffers,
-                        &image,
-                        &mut gray2_ctx,
-                        thumb_x + 2,
-                        thumb_y + 2,
-                        thumb_size - 4,
-                        thumb_size - 4,
-                    );
-                }
-            }
-            let text_color = if is_selected {
-                BinaryColor::On
-            } else {
-                BinaryColor::Off
-            };
-            let label_style = MonoTextStyle::new(&FONT_10X20, text_color);
-            Text::new(
-                &preview.title,
-                Point::new(thumb_x + thumb_size + 12, y + 26),
-                label_style,
-            )
-            .draw(ctx.display_buffers)
-            .ok();
-            draw_count += 1;
-        }
-        if draw_count == 0 {
-            Text::new(
-                "No recent items.",
-                Point::new(START_MENU_MARGIN, list_top + 24),
-                header_style,
-            )
-            .draw(ctx.display_buffers)
-            .ok();
-        }
-
         Rectangle::new(
-            Point::new(START_MENU_MARGIN, mid_y),
-            Size::new((width - (START_MENU_MARGIN * 2)) as u32, 1),
+            Point::new(0, 0),
+            Size::new(width as u32, START_MENU_STATUS_H as u32),
+        )
+        .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+            BinaryColor::On,
+        ))
+        .draw(ctx.display_buffers)
+        .ok();
+        let battery = ctx.battery_percent.unwrap_or(100);
+        let battery_text = format!("{}%", battery);
+        let batt_w = chrome.px(34);
+        let batt_h = chrome.px(8);
+        let cap_w = chrome.px(2);
+        let cap_h = chrome.px(4);
+        let batt_total_w = batt_w + cap_w;
+        let batt_x = (width - batt_total_w) / 2;
+        let batt_y = ((START_MENU_STATUS_H - batt_h) / 2) + 2;
+        Rectangle::new(
+            Point::new(batt_x, batt_y),
+            Size::new(batt_w as u32, batt_h as u32),
         )
         .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
             BinaryColor::Off,
         ))
         .draw(ctx.display_buffers)
         .ok();
-
-        let actions = [
-            (StartMenuAction::FileBrowser, "Files"),
-            (StartMenuAction::Settings, "Settings"),
-            (StartMenuAction::Battery, ""),
-        ];
-        for (idx, (_, label)) in actions.iter().enumerate() {
-            let x = START_MENU_MARGIN + idx as i32 * (action_width + START_MENU_ACTION_GAP);
-            let y = action_top;
-            let is_selected = !suppress_selection
-                && self.start_menu_section == StartMenuSection::Actions
-                && self.start_menu_index == idx;
-            if is_selected {
-                Rectangle::new(
-                    Point::new(x - 4, y - 4),
-                    Size::new((action_width + 8) as u32, (action_height + 8) as u32),
-                )
-                .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
-                    BinaryColor::Off,
-                ))
-                .draw(ctx.display_buffers)
-                .ok();
-            }
-            Rectangle::new(
-                Point::new(x, y),
-                Size::new(action_width as u32, action_height as u32),
+        Rectangle::new(
+            Point::new(batt_x + batt_w, batt_y + (batt_h - cap_h) / 2),
+            Size::new(cap_w as u32, cap_h as u32),
+        )
+        .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+            BinaryColor::Off,
+        ))
+        .draw(ctx.display_buffers)
+        .ok();
+        if !ctx.palm_fonts.is_empty() {
+            let battery_font_id = 0u8; // Palm standard
+            let battery_scale = 1;
+            let battery_text_w =
+                palm_text_width(&battery_text, battery_font_id, ctx.palm_fonts, battery_scale);
+            let battery_text_h =
+                palm_text_height(battery_font_id, ctx.palm_fonts, battery_scale);
+            let battery_text_x = batt_x + (batt_w - battery_text_w) / 2;
+            let battery_text_y = batt_y + (batt_h - battery_text_h) / 2;
+            draw_palm_text(
+                ctx.display_buffers,
+                &battery_text,
+                battery_text_x,
+                battery_text_y,
+                battery_font_id,
+                ctx.palm_fonts,
+                battery_scale,
+                BinaryColor::On,
+            );
+        } else {
+            let status_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
+            let battery_text_x = batt_x + (batt_w - (battery_text.len() as i32 * 10)) / 2;
+            let battery_text_y = batt_y + batt_h - 7;
+            Text::new(
+                &battery_text,
+                Point::new(battery_text_x, battery_text_y),
+                status_style,
             )
-            .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_stroke(
-                if is_selected {
-                    BinaryColor::On
-                } else {
-                    BinaryColor::Off
-                },
-                1,
+            .draw(ctx.display_buffers)
+            .ok();
+        }
+
+        let form_x = 2;
+        let form_y = START_MENU_FORM_Y;
+        let form_w = (width - 4).max(1);
+        let title_font_id = 1u8;
+        let category_font_id = 0u8;
+        let ui_scale_num = 6;
+        let ui_scale_den = 5;
+        let home_text_w = palm_text_width_scaled(
+            "Home",
+            title_font_id,
+            ctx.palm_fonts,
+            ui_scale_num,
+            ui_scale_den,
+        );
+        let home_text_h = palm_text_height_scaled(
+            title_font_id,
+            ctx.palm_fonts,
+            ui_scale_num,
+            ui_scale_den,
+        );
+        let title_pad_x = chrome.px(3);
+        let title_pad_top = 2;
+        let title_pad_bottom = 5;
+        let tab_w = home_text_w + title_pad_x * 2;
+        let tab_h = home_text_h + title_pad_top + title_pad_bottom;
+        let title_layout = draw_form_title_bar(
+            ctx.display_buffers,
+            form_x,
+            form_y,
+            form_w,
+            tab_w,
+            tab_h,
+            4,
+        );
+        let home_x = title_layout.tab_x + title_pad_x;
+        let home_y = title_layout.tab_y + title_pad_top;
+        if !ctx.palm_fonts.is_empty() {
+            draw_palm_text_scaled(
+                ctx.display_buffers,
+                "Home",
+                home_x,
+                home_y,
+                title_font_id,
+                ctx.palm_fonts,
+                ui_scale_num,
+                ui_scale_den,
+                BinaryColor::On,
+            );
+        } else {
+            Text::new(
+                "Home",
+                Point::new(title_layout.tab_x + title_pad_x, title_layout.tab_y + title_pad_top + 11),
+                MonoTextStyle::new(&FONT_10X20, BinaryColor::On),
+            )
+            .draw(ctx.display_buffers)
+            .ok();
+        }
+
+        // Palm-style right-justified category selector: arrow + plain text.
+        let trigger_y = home_y;
+        let category_label = match self.launcher_category {
+            LauncherCategory::Recents => "Recents",
+            LauncherCategory::Apps => "Apps",
+            LauncherCategory::Books => "Books",
+            LauncherCategory::Images => "Images",
+        };
+        let cat_w = if !ctx.palm_fonts.is_empty() {
+            palm_text_width_scaled(
+                category_label,
+                category_font_id,
+                ctx.palm_fonts,
+                ui_scale_num,
+                ui_scale_den,
+            )
+        } else {
+            (category_label.len() as i32) * 10
+        };
+        let cat_h = if !ctx.palm_fonts.is_empty() {
+            palm_text_height_scaled(
+                category_font_id,
+                ctx.palm_fonts,
+                ui_scale_num,
+                ui_scale_den,
+            )
+        } else {
+            20
+        };
+        let right_edge = form_x + form_w - 6;
+        let arrow_x = right_edge - cat_w - 14;
+        let text_x = right_edge - cat_w;
+        if self.start_menu_section == StartMenuSection::Actions && !self.category_menu_open {
+            Rectangle::new(
+                Point::new(arrow_x - 4, trigger_y - 1),
+                Size::new((cat_w + 18) as u32, (cat_h + 2) as u32),
+            )
+            .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+                BinaryColor::Off,
             ))
             .draw(ctx.display_buffers)
             .ok();
-            let icon_size = ctx.icons.icon_size;
-            let icon_x = x + (action_width - icon_size) / 2;
-            let icon_y = y + 5;
-            match idx {
-                0 => draw_icon_gray2(
-                    ctx.display_buffers,
-                    ctx.gray2_lsb,
-                    ctx.gray2_msb,
-                    &mut gray2_used,
-                    icon_x,
-                    icon_y,
-                    icon_size,
-                    icon_size,
-                    ctx.icons.folder_dark,
-                    ctx.icons.folder_light,
-                ),
-                1 => draw_icon_gray2(
-                    ctx.display_buffers,
-                    ctx.gray2_lsb,
-                    ctx.gray2_msb,
-                    &mut gray2_used,
-                    icon_x,
-                    icon_y,
-                    icon_size,
-                    icon_size,
-                    ctx.icons.gear_dark,
-                    ctx.icons.gear_light,
-                ),
-                _ => draw_icon_gray2(
-                    ctx.display_buffers,
-                    ctx.gray2_lsb,
-                    ctx.gray2_msb,
-                    &mut gray2_used,
-                    icon_x,
-                    icon_y,
-                    icon_size,
-                    icon_size,
-                    ctx.icons.battery_dark,
-                    ctx.icons.battery_light,
-                ),
-            }
-            let label_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
+        }
+        let arrow_color = if self.start_menu_section == StartMenuSection::Actions && !self.category_menu_open {
+            BinaryColor::On
+        } else {
+            BinaryColor::Off
+        };
+        if !ctx.palm_fonts.is_empty() {
+            draw_palm_text_scaled(
+                ctx.display_buffers,
+                category_label,
+                text_x,
+                trigger_y,
+                category_font_id,
+                ctx.palm_fonts,
+                ui_scale_num,
+                ui_scale_den,
+                arrow_color,
+            );
+        } else {
             Text::new(
-                label,
-                Point::new(
-                    x + (action_width - (label.len() as i32 * 10)) / 2,
-                    y + action_height - 12,
+                category_label,
+                Point::new(text_x, trigger_y + 11),
+                MonoTextStyle::new(
+                    &FONT_10X20,
+                    arrow_color,
                 ),
-                label_style,
             )
             .draw(ctx.display_buffers)
             .ok();
-            if idx == 2 {
-                let text = match ctx.battery_percent {
-                    Some(value) => format!("{}%", value),
-                    None => "--%".to_string(),
+        }
+        let arrow_y = trigger_y + (cat_h / 2) - 1;
+        Rectangle::new(Point::new(arrow_x, arrow_y), Size::new(7, 1))
+            .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+                arrow_color,
+            ))
+            .draw(ctx.display_buffers)
+            .ok();
+        Rectangle::new(Point::new(arrow_x + 1, arrow_y + 1), Size::new(5, 1))
+            .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+                arrow_color,
+            ))
+            .draw(ctx.display_buffers)
+            .ok();
+        Rectangle::new(Point::new(arrow_x + 2, arrow_y + 2), Size::new(3, 1))
+            .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+                arrow_color,
+            ))
+            .draw(ctx.display_buffers)
+            .ok();
+        Rectangle::new(Point::new(arrow_x + 3, arrow_y + 3), Size::new(1, 1))
+            .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+                arrow_color,
+            ))
+            .draw(ctx.display_buffers)
+            .ok();
+
+        if self.category_menu_open {
+            let menu_items = ["Recents", "Apps", "Books", "Images"];
+            let item_font_id = 0u8;
+            let item_scale_num = 6;
+            let item_scale_den = 5;
+            let item_text_h = if !ctx.palm_fonts.is_empty() {
+                palm_text_height_scaled(
+                    item_font_id,
+                    ctx.palm_fonts,
+                    item_scale_num,
+                    item_scale_den,
+                )
+            } else {
+                10
+            };
+            let max_text_w = if !ctx.palm_fonts.is_empty() {
+                menu_items
+                    .iter()
+                    .map(|label| {
+                        palm_text_width_scaled(
+                            label,
+                            item_font_id,
+                            ctx.palm_fonts,
+                            item_scale_num,
+                            item_scale_den,
+                        )
+                    })
+                    .max()
+                    .unwrap_or(0)
+            } else {
+                menu_items.iter().map(|label| (label.len() as i32) * 6).max().unwrap_or(0)
+            };
+            let item_h = item_text_h + 6;
+            let menu_w = (max_text_w + 14).max(48);
+            let menu_x = form_x + form_w - menu_w - 4;
+            let menu_y = form_y + 1;
+            let menu_h = item_h * menu_items.len() as i32 + 4;
+            draw_palm_pull_down_box(ctx.display_buffers, menu_x, menu_y, menu_w, menu_h);
+            for (i, label) in menu_items.iter().enumerate() {
+                let y = menu_y + 3 + (i as i32 * item_h);
+                let selected = i == self.category_menu_index;
+                if selected {
+                    Rectangle::new(
+                        Point::new(menu_x + 1, y - 1),
+                        Size::new((menu_w - 2) as u32, (item_h - 1) as u32),
+                    )
+                    .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+                        BinaryColor::Off,
+                    ))
+                    .draw(ctx.display_buffers)
+                    .ok();
+                }
+                if !ctx.palm_fonts.is_empty() {
+                    draw_palm_text_scaled(
+                        ctx.display_buffers,
+                        label,
+                        menu_x + 6,
+                        y + 2,
+                        item_font_id,
+                        ctx.palm_fonts,
+                        item_scale_num,
+                        item_scale_den,
+                        if selected { BinaryColor::On } else { BinaryColor::Off },
+                    );
+                } else {
+                    Text::new(
+                        label,
+                        Point::new(menu_x + 6, y + 10),
+                        MonoTextStyle::new(
+                            &FONT_6X10,
+                            if selected { BinaryColor::On } else { BinaryColor::Off },
+                        ),
+                    )
+                    .draw(ctx.display_buffers)
+                    .ok();
+                }
+            }
+        }
+
+        let mut draw_count = 0usize;
+        if self.launcher_category == LauncherCategory::Recents {
+            for (idx, preview) in self.start_menu_cache.iter().take(max_items).enumerate() {
+                let y = list_top + (idx as i32 * item_height);
+                if y + item_height > mid_y {
+                    break;
+                }
+                let is_selected = !suppress_selection
+                    && self.start_menu_section == StartMenuSection::Recents
+                    && self.start_menu_index == idx;
+                if is_selected {
+                    Rectangle::new(
+                        Point::new(START_MENU_MARGIN - 4, y - 4),
+                        Size::new((list_width + 8) as u32, (item_height - 4) as u32),
+                    )
+                    .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+                        BinaryColor::Off,
+                    ))
+                    .draw(ctx.display_buffers)
+                    .ok();
+                }
+                let thumb_x = START_MENU_MARGIN;
+                let thumb_y = y + (item_height - thumb_size) / 2 - 2;
+                Rectangle::new(
+                    Point::new(thumb_x, thumb_y),
+                    Size::new(thumb_size as u32, thumb_size as u32),
+                )
+                .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_stroke(
+                    if is_selected {
+                        BinaryColor::On
+                    } else {
+                        BinaryColor::Off
+                    },
+                    1,
+                ))
+                .draw(ctx.display_buffers)
+                .ok();
+                if let Some(image) = preview.image.as_ref() {
+                    if let Some(mono) = thumbnail_to_mono(image) {
+                        let mut gray2_ctx = None;
+                        (ctx.draw_trbk_image)(
+                            ctx.display_buffers,
+                            &mono,
+                            &mut gray2_ctx,
+                            thumb_x + 2,
+                            thumb_y + 2,
+                            thumb_size - 4,
+                            thumb_size - 4,
+                        );
+                    } else {
+                        let gray2_lsb = &mut *ctx.gray2_lsb;
+                        let gray2_msb = &mut *ctx.gray2_msb;
+                        let mut gray2_ctx = Some((gray2_lsb, gray2_msb, &mut gray2_used));
+                        (ctx.draw_trbk_image)(
+                            ctx.display_buffers,
+                            image,
+                            &mut gray2_ctx,
+                            thumb_x + 2,
+                            thumb_y + 2,
+                            thumb_size - 4,
+                            thumb_size - 4,
+                        );
+                    }
+                }
+                let text_color = if is_selected {
+                    BinaryColor::On
+                } else {
+                    BinaryColor::Off
                 };
-                let label_width = (text.len() as i32) * 10;
-                let label_x = x + (action_width - label_width) / 2;
+                let title_x = thumb_x + thumb_size + 12;
+                let title_max_w = (list_width - (title_x - START_MENU_MARGIN) - 6).max(20);
+                let lines = wrap_home_title_lines(
+                    &preview.title,
+                    title_max_w,
+                    ctx.palm_fonts,
+                    0,
+                    6,
+                    5,
+                    2,
+                );
+                if !ctx.palm_fonts.is_empty() {
+                    let line_h = palm_text_height_scaled(0, ctx.palm_fonts, 6, 5).max(8) + 2;
+                    for (line_idx, line) in lines.iter().enumerate() {
+                        draw_palm_text_scaled(
+                            ctx.display_buffers,
+                            line.as_str(),
+                            title_x,
+                            y + 10 + (line_idx as i32 * line_h),
+                            0,
+                            ctx.palm_fonts,
+                            6,
+                            5,
+                            text_color,
+                        );
+                    }
+                } else {
+                    let label_style = MonoTextStyle::new(&FONT_10X20, text_color);
+                    for (line_idx, line) in lines.iter().enumerate() {
+                        Text::new(
+                            line.as_str(),
+                            Point::new(title_x, y + 26 + (line_idx as i32 * 18)),
+                            label_style,
+                        )
+                        .draw(ctx.display_buffers)
+                        .ok();
+                    }
+                }
+                draw_count += 1;
+            }
+            if draw_count == 0 {
                 Text::new(
-                    &text,
-                    Point::new(label_x, y + action_height - 12),
-                    label_style,
+                    "No recent items.",
+                    Point::new(START_MENU_MARGIN, list_top + 24),
+                    header_style,
                 )
                 .draw(ctx.display_buffers)
                 .ok();
             }
+        } else {
+            let msg = match self.launcher_category {
+                LauncherCategory::Apps => "No installed apps yet.",
+                LauncherCategory::Books => "No books in launcher yet.",
+                LauncherCategory::Images => "No images in launcher yet.",
+                LauncherCategory::Recents => "No recent items.",
+            };
+            Text::new(msg, Point::new(START_MENU_MARGIN, list_top + 24), header_style)
+                .draw(ctx.display_buffers)
+                .ok();
         }
 
         (gray2_used, draw_count)
@@ -1186,6 +1401,82 @@ fn adjust_thumbnail_luma(lum: u8) -> u8 {
         value = 255;
     }
     value as u8
+}
+
+fn wrap_home_title_lines(
+    text: &str,
+    max_width: i32,
+    fonts: &[crate::prc_app::runtime::PalmFont],
+    font_id: u8,
+    scale_num: i32,
+    scale_den: i32,
+    max_lines: usize,
+) -> Vec<String> {
+    if max_lines == 0 || max_width <= 0 {
+        return Vec::new();
+    }
+    let width_of = |s: &str| -> i32 {
+        if fonts.is_empty() {
+            (s.chars().count() as i32) * 10
+        } else {
+            palm_text_width_scaled(s, font_id, fonts, scale_num, scale_den)
+        }
+    };
+
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.is_empty() {
+        return vec![String::new()];
+    }
+
+    let mut lines: Vec<String> = Vec::new();
+    let mut current = String::new();
+
+    for word in words {
+        let candidate = if current.is_empty() {
+            word.to_string()
+        } else {
+            format!("{} {}", current, word)
+        };
+        if width_of(&candidate) <= max_width {
+            current = candidate;
+            continue;
+        }
+
+        if !current.is_empty() {
+            lines.push(current);
+            if lines.len() >= max_lines {
+                return lines;
+            }
+            current = String::new();
+        }
+
+        if width_of(word) <= max_width {
+            current = word.to_string();
+            continue;
+        }
+
+        let mut clipped = String::new();
+        for ch in word.chars() {
+            let mut probe = clipped.clone();
+            probe.push(ch);
+            if width_of(&probe) > max_width {
+                break;
+            }
+            clipped.push(ch);
+        }
+        if clipped.is_empty() {
+            clipped.push('?');
+        }
+        lines.push(clipped);
+        if lines.len() >= max_lines {
+            return lines;
+        }
+    }
+
+    if !current.is_empty() && lines.len() < max_lines {
+        lines.push(current);
+    }
+    lines
 }
 
 pub fn merge_bw_into_gray2(

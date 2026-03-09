@@ -157,7 +157,8 @@ fn generate_embedded_prc_fonts() {
 
     fn font_variant_rank(name: &str) -> u8 {
         let lower = name.to_ascii_lowercase();
-        if lower.ends_with("_72.txt") { 0 } else if lower.ends_with("_144.txt") { 2 } else { 1 }
+        // Prefer high-density fonts for full-resolution UI chrome.
+        if lower.ends_with("_144.txt") { 0 } else if lower.ends_with("_72.txt") { 2 } else { 1 }
     }
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR missing"));

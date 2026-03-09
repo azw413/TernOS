@@ -277,9 +277,9 @@ impl ImageSource for DesktopImageSource {
         let mut out = Vec::new();
         fn font_variant_rank(name: &str) -> u8 {
             let lower = name.to_ascii_lowercase();
-            if lower.ends_with("_72.txt") {
+            if lower.ends_with("_144.txt") {
                 0
-            } else if lower.ends_with("_144.txt") {
+            } else if lower.ends_with("_72.txt") {
                 2
             } else {
                 1
