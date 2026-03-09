@@ -16,9 +16,10 @@ use crate::prc_app::{
     bitmap::PrcBitmap,
     form_preview::{FormPreview, FormPreviewObject},
     menu_preview::MenuBarPreview,
-    runner::{RuntimeBitmapDraw, RuntimeFieldDraw},
+    runner::{RuntimeBitmapDraw, RuntimeFieldDraw, RuntimeHelpDialog},
     runtime::{PalmFont, PalmGlyphBitmap},
 };
+use crate::ui::{prc_alert, prc_components};
 
 fn find_font(fonts: &[PalmFont], font_id: u8) -> Option<&PalmFont> {
     fonts.iter().find(|f| f.font_id == font_id as u16)
@@ -141,59 +142,9 @@ fn draw_button_outline<T: DrawTarget<Color = BinaryColor>>(
     by: i32,
     bw: i32,
     bh: i32,
-    outline: PrimitiveStyle<BinaryColor>,
+    _outline: PrimitiveStyle<BinaryColor>,
 ) {
-    let o1 = 1;
-    let o2 = 2;
-    if bw < 6 || bh < 6 {
-        let _ = Rectangle::new(Point::new(bx, by), Size::new(bw as u32, bh as u32))
-            .into_styled(outline)
-            .draw(target);
-        return;
-    }
-    let x0 = bx;
-    let y0 = by;
-    let x1 = bx + bw - 1;
-    let y1 = by + bh - 1;
-
-    let _ = Rectangle::new(Point::new(x0 + o2, y0), Size::new((bw - o2 * 2) as u32, 1))
-        .into_styled(outline)
-        .draw(target);
-    let _ = Rectangle::new(Point::new(x0 + o2, y1), Size::new((bw - o2 * 2) as u32, 1))
-        .into_styled(outline)
-        .draw(target);
-    let _ = Rectangle::new(Point::new(x0, y0 + o2), Size::new(1, (bh - o2 * 2) as u32))
-        .into_styled(outline)
-        .draw(target);
-    let _ = Rectangle::new(Point::new(x1, y0 + o2), Size::new(1, (bh - o2 * 2) as u32))
-        .into_styled(outline)
-        .draw(target);
-
-    // Approximate a PalmOS-like radius-2 corner.
-    for (px, py) in [
-        (x0 + o1, y0 + o1),
-        (x0 + o2, y0),
-        (x0 + o1, y0),
-        (x0, y0 + o1),
-        (x0, y0 + o2),
-        (x1 - o1, y0 + o1),
-        (x1 - o2, y0),
-        (x1 - o1, y0),
-        (x1, y0 + o1),
-        (x1, y0 + o2),
-        (x0 + o1, y1 - o1),
-        (x0 + o2, y1),
-        (x0 + o1, y1),
-        (x0, y1 - o1),
-        (x0, y1 - o2),
-        (x1 - o1, y1 - o1),
-        (x1 - o2, y1),
-        (x1 - o1, y1),
-        (x1, y1 - o1),
-        (x1, y1 - o2),
-    ] {
-        let _ = Pixel(Point::new(px, py), BinaryColor::Off).draw(target);
-    }
+    prc_components::draw_button_frame(target, bx, by, bw, bh, BinaryColor::Off);
 }
 
 struct MonoCanvas160 {
@@ -570,6 +521,99 @@ fn draw_menu_overlay_on_canvas(
     }
 }
 
+fn wrap_text_lines(text: &str, font_id: u8, max_w: i32, fonts: &[PalmFont]) -> alloc::vec::Vec<alloc::string::String> {
+    let mut lines = alloc::vec::Vec::new();
+    for para in text.split('\n') {
+        let words: alloc::vec::Vec<&str> = para.split_whitespace().collect();
+        if words.is_empty() {
+            lines.push(alloc::string::String::new());
+            continue;
+        }
+        let mut cur = alloc::string::String::new();
+        for w in words {
+            let candidate = if cur.is_empty() {
+                alloc::format!("{}", w)
+            } else {
+                alloc::format!("{} {}", cur, w)
+            };
+            let (cw, _) = text_metrics(&candidate, font_id, fonts, 1);
+            if cw <= max_w || cur.is_empty() {
+                cur = candidate;
+            } else {
+                lines.push(cur);
+                cur = alloc::format!("{}", w);
+            }
+        }
+        lines.push(cur);
+    }
+    lines
+}
+
+fn draw_help_dialog_on_canvas(canvas: &mut MonoCanvas160, dialog: &RuntimeHelpDialog, fonts: &[PalmFont]) {
+    let x = 1i32;
+    let y = 1i32;
+    let w = 158i32;
+    let h = 158i32;
+    let header_h = 14i32;
+    prc_alert::draw_alert_frame(canvas, x, y, w, h, header_h);
+
+    let title = "Tips";
+    let (tw, _) = text_metrics(title, 1, fonts, 1);
+    let tx = x + ((w - tw) / 2).max(0);
+    draw_text(canvas, title, tx, y + 3, 1, fonts, 1, BinaryColor::On);
+
+    let body_x = x + 6;
+    let body_y = y + header_h + 5;
+    let body_w = w - 14;
+    let body_h = h - header_h - 26;
+    let line_h = 12i32;
+    let visible = (body_h / line_h).max(1) as usize;
+    let lines = wrap_text_lines(&dialog.text, 1, body_w, fonts);
+    let max_scroll = lines.len().saturating_sub(visible);
+    let scroll = dialog.scroll_line.min(max_scroll);
+    for row in 0..visible {
+        let idx = scroll + row;
+        let Some(line) = lines.get(idx) else { break };
+        draw_text(
+            canvas,
+            line,
+            body_x,
+            body_y + row as i32 * line_h,
+            1,
+            fonts,
+            1,
+            BinaryColor::Off,
+        );
+    }
+
+    let (done_tw, done_th) = text_metrics("Done", 1, fonts, 1);
+    let btn_x = x + 8;
+    let layout =
+        prc_components::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 36, 10, 7, 2);
+    let btn_y = y + h - layout.h - 4;
+    prc_alert::draw_done_button(canvas, btn_x, btn_y, layout.w, layout.h);
+    let done_tx = btn_x + ((layout.w - done_tw) / 2).max(1);
+    let done_ty = btn_y + ((layout.h - done_th) / 2).max(1);
+    draw_text(
+        canvas,
+        "Done",
+        done_tx,
+        done_ty,
+        1,
+        fonts,
+        1,
+        BinaryColor::Off,
+    );
+
+    prc_alert::draw_scroll_indicator(
+        canvas,
+        x + w - 11,
+        y + h - 17,
+        scroll > 0,
+        scroll < max_scroll,
+    );
+}
+
 pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     target: &mut T,
     form: &FormPreview,
@@ -579,6 +623,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     runtime_field_draws: &[RuntimeFieldDraw],
     focused_control_id: Option<u16>,
     menu_overlay: Option<(&MenuBarPreview, usize, Option<usize>)>,
+    help_overlay: Option<&RuntimeHelpDialog>,
     pane_x: i32,
     pane_y: i32,
     pane_w: i32,
@@ -694,6 +739,9 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
 
     if let Some((menu, active_menu_index, active_item_index)) = menu_overlay {
         draw_menu_overlay_on_canvas(&mut canvas, menu, active_menu_index, active_item_index, fonts);
+    }
+    if let Some(dialog) = help_overlay {
+        draw_help_dialog_on_canvas(&mut canvas, dialog, fonts);
     }
 
     let s = scale.max(1);

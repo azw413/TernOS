@@ -24,6 +24,7 @@ pub struct RuntimeUiSnapshot {
     pub form_id: Option<u16>,
     pub bitmap_draws: Vec<RuntimeBitmapDraw>,
     pub field_draws: Vec<RuntimeFieldDraw>,
+    pub help_dialog: Option<RuntimeHelpDialog>,
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +39,13 @@ pub struct RuntimeFieldDraw {
     pub form_id: u16,
     pub field_id: u16,
     pub text: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeHelpDialog {
+    pub help_id: u16,
+    pub text: String,
+    pub scroll_line: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -431,7 +439,50 @@ impl PrcRuntimeSession {
                     text: f.text.clone(),
                 })
                 .collect(),
+            help_dialog: self.runtime.help_dialog.as_ref().map(|h| RuntimeHelpDialog {
+                help_id: h.help_id,
+                text: h.text.clone(),
+                scroll_line: h.scroll_line,
+            }),
         }
+    }
+
+    pub fn dismiss_help_dialog(&mut self) -> bool {
+        if self.runtime.help_dialog.is_some() {
+            self.runtime.help_dialog = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn has_help_dialog(&self) -> bool {
+        self.runtime.help_dialog.is_some()
+    }
+
+    pub fn help_dialog(&self) -> Option<RuntimeHelpDialog> {
+        self.runtime.help_dialog.as_ref().map(|h| RuntimeHelpDialog {
+            help_id: h.help_id,
+            text: h.text.clone(),
+            scroll_line: h.scroll_line,
+        })
+    }
+
+    pub fn scroll_help_dialog(&mut self, delta_lines: i32) -> bool {
+        let Some(help) = self.runtime.help_dialog.as_mut() else {
+            return false;
+        };
+        let next = if delta_lines >= 0 {
+            help.scroll_line.saturating_add(delta_lines as usize)
+        } else {
+            help.scroll_line
+                .saturating_sub((-delta_lines) as usize)
+        };
+        if next == help.scroll_line {
+            return false;
+        }
+        help.scroll_line = next;
+        true
     }
 }
 
@@ -1007,6 +1058,7 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
         form_id: best.drawn_form_id.or(best.active_form_id),
         bitmap_draws: best.drawn_bitmaps.clone(),
         field_draws: Vec::new(),
+        help_dialog: None,
     };
     let stop_text = match stop_reason {
         Some(core::StopReason::ATrap { trap_word, pc }) => {

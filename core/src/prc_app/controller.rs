@@ -4,37 +4,29 @@ use alloc::vec::Vec;
 
 use crate::prc_app::form_preview::{FormPreview, FormPreviewObject};
 use crate::prc_app::menu_preview::{MenuBarPreview, MenuItemPreview};
+use crate::prc_app::ui_component::{FocusChain, UiComponent, UiNavEvent};
+use crate::ui::Rect;
 
 #[derive(Clone, Debug, Default)]
 pub struct PrcUiController {
-    focused_control_id: Option<u16>,
+    focus_chain: FocusChain,
 }
 
 impl PrcUiController {
     pub fn reset(&mut self) {
-        self.focused_control_id = None;
+        self.focus_chain.clear_selection();
     }
 
     pub fn focused_control_id(&self) -> Option<u16> {
-        self.focused_control_id
+        self.focus_chain.selected_id()
     }
 
     pub fn sync_with_form(&mut self, form: Option<&FormPreview>) -> bool {
+        let previous = self.focus_chain.selected_id();
         let controls = focusable_controls(form);
-        if controls.is_empty() {
-            if self.focused_control_id.take().is_some() {
-                return true;
-            }
-            return false;
-        }
-        if controls
-            .iter()
-            .any(|id| Some(*id) == self.focused_control_id)
-        {
-            return false;
-        }
-        self.focused_control_id = controls.first().copied();
-        true
+        let refs: Vec<&dyn UiComponent> = controls.iter().map(|c| c as &dyn UiComponent).collect();
+        self.focus_chain.rebuild(&refs);
+        self.focus_chain.selected_id() != previous
     }
 
     pub fn move_focus(&mut self, form: Option<&FormPreview>, delta: i32) -> bool {
@@ -42,29 +34,55 @@ impl PrcUiController {
         if controls.is_empty() {
             return false;
         }
-        let current_idx = self
-            .focused_control_id
-            .and_then(|id| controls.iter().position(|x| *x == id))
-            .unwrap_or(0);
-        let len = controls.len() as i32;
-        let next_idx = (current_idx as i32 + delta).rem_euclid(len) as usize;
-        let next_id = controls[next_idx];
-        if self.focused_control_id == Some(next_id) {
-            return false;
+        let refs: Vec<&dyn UiComponent> = controls.iter().map(|c| c as &dyn UiComponent).collect();
+        self.focus_chain.rebuild(&refs);
+        let before = self.focus_chain.selected_id();
+        if delta < 0 {
+            self.focus_chain.move_prev();
+        } else if delta > 0 {
+            self.focus_chain.move_next();
         }
-        self.focused_control_id = Some(next_id);
-        true
+        self.focus_chain.selected_id() != before
     }
 }
 
-fn focusable_controls(form: Option<&FormPreview>) -> Vec<u16> {
+#[derive(Clone, Copy, Debug)]
+struct ControlComponent {
+    id: u16,
+    rect: Rect,
+}
+
+impl UiComponent for ControlComponent {
+    fn id(&self) -> u16 {
+        self.id
+    }
+
+    fn bounds(&self) -> Rect {
+        self.rect
+    }
+
+    fn set_bounds(&mut self, rect: Rect) {
+        self.rect = rect;
+    }
+
+    fn is_focusable(&self) -> bool {
+        true
+    }
+
+    fn draw(&self, _painter: &mut dyn crate::prc_app::ui_component::UiPainter, _ctx: crate::prc_app::ui_component::UiDrawCtx) {}
+}
+
+fn focusable_controls(form: Option<&FormPreview>) -> Vec<ControlComponent> {
     let Some(form) = form else {
         return Vec::new();
     };
     form.objects
         .iter()
         .filter_map(|obj| match obj {
-            FormPreviewObject::Button { id, .. } => Some(*id),
+            FormPreviewObject::Button { id, x, y, w, h, .. } => Some(ControlComponent {
+                id: *id,
+                rect: Rect::new(*x as i32, *y as i32, *w as i32, *h as i32),
+            }),
             _ => None,
         })
         .collect()
@@ -178,5 +196,94 @@ impl PrcMenuController {
         }
         let bar = self.menu_bar.as_ref()?;
         Some((bar, self.menu_index, self.item_index))
+    }
+
+    pub fn on_event(&mut self, event: UiNavEvent) -> MenuAction {
+        if !self.active {
+            return MenuAction::None;
+        }
+        match event {
+            UiNavEvent::Back => {
+                self.close();
+                MenuAction::Closed
+            }
+            UiNavEvent::Left => {
+                if self.move_menu(-1) {
+                    MenuAction::Redraw
+                } else {
+                    MenuAction::None
+                }
+            }
+            UiNavEvent::Right => {
+                if self.move_menu(1) {
+                    MenuAction::Redraw
+                } else {
+                    MenuAction::None
+                }
+            }
+            UiNavEvent::Up => {
+                if self.move_item(-1) {
+                    MenuAction::Redraw
+                } else {
+                    MenuAction::None
+                }
+            }
+            UiNavEvent::Down => {
+                if self.move_item(1) {
+                    MenuAction::Redraw
+                } else {
+                    MenuAction::None
+                }
+            }
+            UiNavEvent::Confirm => {
+                if let Some(id) = self.selected_item().map(|i| i.id) {
+                    self.close();
+                    MenuAction::Activate(id)
+                } else {
+                    self.close();
+                    MenuAction::Closed
+                }
+            }
+            UiNavEvent::Tick => MenuAction::None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MenuAction {
+    None,
+    Redraw,
+    Closed,
+    Activate(u16),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HelpDialogAction {
+    None,
+    Scroll(i32),
+    Dismiss,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PrcHelpDialogController {
+    pub scroll_step_lines: i32,
+}
+
+impl Default for PrcHelpDialogController {
+    fn default() -> Self {
+        Self {
+            scroll_step_lines: 8,
+        }
+    }
+}
+
+impl PrcHelpDialogController {
+    pub fn on_event(&self, event: UiNavEvent) -> HelpDialogAction {
+        match event {
+            UiNavEvent::Up => HelpDialogAction::Scroll(-self.scroll_step_lines),
+            UiNavEvent::Down => HelpDialogAction::Scroll(self.scroll_step_lines),
+            UiNavEvent::Back | UiNavEvent::Confirm => HelpDialogAction::Dismiss,
+            UiNavEvent::Left | UiNavEvent::Right | UiNavEvent::Tick => HelpDialogAction::None,
+        }
     }
 }

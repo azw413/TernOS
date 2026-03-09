@@ -1,5 +1,7 @@
 pub mod geom;
 pub mod list_view;
+pub mod prc_alert;
+pub mod prc_components;
 pub mod reader_view;
 pub mod text_view;
 pub mod view;

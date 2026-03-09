@@ -1416,7 +1416,38 @@ pub fn apply_prc_runtime_trap_stub(
             }
             cpu.d[0] = 0;
         }
-        0xA195 | 0xA1A1 | 0xA234 | 0xA9F0 => {
+        0xA195 => {
+            // UInt16 FrmHelp(UInt16 helpMsgId)
+            let sp = cpu.a[7];
+            let help_id = memory
+                .read_u16_be(sp)
+                .unwrap_or((cpu.d[0] & 0xFFFF) as u16);
+            let tstr = u32::from_be_bytes(*b"tSTR");
+            let text = runtime
+                .resources
+                .iter()
+                .find(|res| res.kind == tstr && res.id == help_id)
+                .map(|res| normalize_tstr_payload(&res.data))
+                .map(|bytes| {
+                    let end = bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len());
+                    alloc::string::String::from_utf8_lossy(&bytes[..end]).into_owned()
+                })
+                .unwrap_or_else(|| alloc::format!("Help {}", help_id));
+            runtime.help_dialog = Some(crate::prc_app::runtime::RuntimeHelpDialog {
+                help_id,
+                text: text.clone(),
+                scroll_line: 0,
+            });
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                log::info!(
+                    "PRC trap detail FrmHelp help_id=0x{:04X} chars={}",
+                    help_id,
+                    text.len()
+                );
+            }
+            cpu.d[0] = 0;
+        }
+        0xA1A1 | 0xA234 | 0xA9F0 => {
             cpu.d[0] = 0;
         }
         _ => {

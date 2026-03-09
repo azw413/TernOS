@@ -40,6 +40,7 @@ pub struct PrcRuntimeContext {
     pub drawn_bitmaps: alloc::vec::Vec<RuntimeBitmapDraw>,
     pub form_objects: alloc::vec::Vec<RuntimeFormObject>,
     pub field_draws: alloc::vec::Vec<RuntimeFieldDraw>,
+    pub help_dialog: Option<RuntimeHelpDialog>,
     pub blink_next_tick: u32,
     pub blink_phase: u8,
     pub terminate_requested: bool,
@@ -133,6 +134,13 @@ pub struct RuntimeFieldDraw {
     pub text: alloc::string::String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeHelpDialog {
+    pub help_id: u16,
+    pub text: alloc::string::String,
+    pub scroll_line: usize,
+}
+
 impl Default for PrcRuntimeContext {
     fn default() -> Self {
         Self {
@@ -165,6 +173,7 @@ impl Default for PrcRuntimeContext {
             drawn_bitmaps: alloc::vec::Vec::new(),
             form_objects: alloc::vec::Vec::new(),
             field_draws: alloc::vec::Vec::new(),
+            help_dialog: None,
             blink_next_tick: 175,
             blink_phase: 0,
             terminate_requested: false,

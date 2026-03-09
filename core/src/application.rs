@@ -83,6 +83,7 @@ pub struct Application<'a, S: AppSource> {
     prc_runtime_field_draws: Vec<prc_app::runner::RuntimeFieldDraw>,
     prc_system_fonts: Vec<prc_app::runtime::PalmFont>,
     prc_menu_controller: prc_app::controller::PrcMenuController,
+    prc_help_controller: prc_app::controller::PrcHelpDialogController,
     prc_active_entry: Option<ImageEntry>,
     prc_session: Option<prc_app::runner::PrcRuntimeSession>,
     prc_blocked_timeout_ticks: u32,
@@ -160,6 +161,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_runtime_field_draws: Vec::new(),
             prc_system_fonts: Vec::new(),
             prc_menu_controller: prc_app::controller::PrcMenuController::default(),
+            prc_help_controller: prc_app::controller::PrcHelpDialogController::default(),
             prc_active_entry: None,
             prc_session: None,
             prc_blocked_timeout_ticks: 0,
@@ -361,41 +363,82 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.dirty = true;
                     }
                 }
-                if self.prc_menu_controller.is_active() {
-                    if buttons.is_pressed(input::Buttons::Back) {
-                        self.prc_menu_controller.close();
-                        self.dirty = true;
-                    } else if buttons.is_pressed(input::Buttons::Left) {
-                        if self.prc_menu_controller.move_menu(-1) {
-                            self.dirty = true;
-                        }
-                    } else if buttons.is_pressed(input::Buttons::Right) {
-                        if self.prc_menu_controller.move_menu(1) {
-                            self.dirty = true;
-                        }
-                    } else if buttons.is_pressed(input::Buttons::Up) {
-                        if self.prc_menu_controller.move_item(-1) {
-                            self.dirty = true;
-                        }
+                if self
+                    .prc_session
+                    .as_ref()
+                    .map(|s| s.has_help_dialog())
+                    .unwrap_or(false)
+                {
+                    let event = if buttons.is_pressed(input::Buttons::Up) {
+                        Some(prc_app::ui_component::UiNavEvent::Up)
                     } else if buttons.is_pressed(input::Buttons::Down) {
-                        if self.prc_menu_controller.move_item(1) {
-                            self.dirty = true;
-                        }
+                        Some(prc_app::ui_component::UiNavEvent::Down)
+                    } else if buttons.is_pressed(input::Buttons::Back) {
+                        Some(prc_app::ui_component::UiNavEvent::Back)
                     } else if buttons.is_pressed(input::Buttons::Confirm) {
-                        let selected = self.prc_menu_controller.selected_item().cloned();
-                        if let (Some(item), Some(session)) = (selected, self.prc_session.as_mut()) {
-                            session.inject_event_now(
-                                prc_app::runtime::EVT_MENU,
-                                item.id,
-                                "menuSelect",
-                            );
-                            self.prc_blocked_elapsed_ms = 0;
-                            self.prc_blocked_timeout_ticks = 0;
-                            self.prc_menu_controller.close();
-                            self.resume_prc_runtime_session();
-                        } else {
-                            self.prc_menu_controller.close();
-                            self.dirty = true;
+                        Some(prc_app::ui_component::UiNavEvent::Confirm)
+                    } else {
+                        None
+                    };
+                    if let Some(event) = event {
+                        match self.prc_help_controller.on_event(event) {
+                            prc_app::controller::HelpDialogAction::Scroll(delta) => {
+                                if let Some(session) = self.prc_session.as_mut() {
+                                    if session.scroll_help_dialog(delta) {
+                                        self.dirty = true;
+                                    }
+                                }
+                            }
+                            prc_app::controller::HelpDialogAction::Dismiss => {
+                                if let Some(session) = self.prc_session.as_mut() {
+                                    let _ = session.dismiss_help_dialog();
+                                    self.resume_prc_runtime_session();
+                                }
+                            }
+                            prc_app::controller::HelpDialogAction::None => {}
+                        }
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                    return;
+                }
+                if self.prc_menu_controller.is_active() {
+                    let event = if buttons.is_pressed(input::Buttons::Back) {
+                        Some(prc_app::ui_component::UiNavEvent::Back)
+                    } else if buttons.is_pressed(input::Buttons::Left) {
+                        Some(prc_app::ui_component::UiNavEvent::Left)
+                    } else if buttons.is_pressed(input::Buttons::Right) {
+                        Some(prc_app::ui_component::UiNavEvent::Right)
+                    } else if buttons.is_pressed(input::Buttons::Up) {
+                        Some(prc_app::ui_component::UiNavEvent::Up)
+                    } else if buttons.is_pressed(input::Buttons::Down) {
+                        Some(prc_app::ui_component::UiNavEvent::Down)
+                    } else if buttons.is_pressed(input::Buttons::Confirm) {
+                        Some(prc_app::ui_component::UiNavEvent::Confirm)
+                    } else {
+                        None
+                    };
+                    if let Some(event) = event {
+                        match self.prc_menu_controller.on_event(event) {
+                            prc_app::controller::MenuAction::Activate(item_id) => {
+                                if let Some(session) = self.prc_session.as_mut() {
+                                    session.inject_event_now(
+                                        prc_app::runtime::EVT_MENU,
+                                        item_id,
+                                        "menuSelect",
+                                    );
+                                    self.prc_blocked_elapsed_ms = 0;
+                                    self.prc_blocked_timeout_ticks = 0;
+                                    self.resume_prc_runtime_session();
+                                } else {
+                                    self.dirty = true;
+                                }
+                            }
+                            prc_app::controller::MenuAction::Redraw
+                            | prc_app::controller::MenuAction::Closed => {
+                                self.dirty = true;
+                            }
+                            prc_app::controller::MenuAction::None => {}
                         }
                     } else if self.system.add_idle(elapsed_ms) {
                         self.start_sleep_request();
@@ -681,10 +724,11 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
                 self.prc_runtime_field_draws = runtime_snapshot.field_draws;
                 log::info!(
-                    "PRC runtime_ui form_id={:?} bitmap_draws={} field_draws={}",
+                    "PRC runtime_ui form_id={:?} bitmap_draws={} field_draws={} help={}",
                     self.prc_runtime_form_id,
                     self.prc_runtime_bitmap_draws.len(),
-                    self.prc_runtime_field_draws.len()
+                    self.prc_runtime_field_draws.len(),
+                    runtime_snapshot.help_dialog.is_some()
                 );
                 self.prc_system_fonts = self.source.load_prc_system_fonts();
                 self.prc_forms.clear();
@@ -741,6 +785,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         let Some(session) = self.prc_session.as_mut() else {
             return;
         };
+        let prev_help_dialog = session.help_dialog();
         let runtime_out = session.resume();
         let runtime_snapshot = runtime_out.snapshot;
         let changed = self.prc_runtime_form_id != runtime_snapshot.form_id
@@ -750,9 +795,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                 .iter()
                 .zip(runtime_snapshot.bitmap_draws.iter())
                 .any(|(a, b)| a.resource_id != b.resource_id || a.x != b.x || a.y != b.y)
-            || self.prc_runtime_field_draws != runtime_snapshot.field_draws;
+            || self.prc_runtime_field_draws != runtime_snapshot.field_draws
+            || prev_help_dialog != runtime_snapshot.help_dialog;
         log::info!(
-            "PRC runtime_ui update form_id={:?} bitmap_draws={} field_draws={} first_field={:?} changed={}",
+            "PRC runtime_ui update form_id={:?} bitmap_draws={} field_draws={} first_field={:?} help={:?} changed={}",
             runtime_snapshot.form_id,
             runtime_snapshot.bitmap_draws.len(),
             runtime_snapshot.field_draws.len(),
@@ -760,6 +806,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 .field_draws
                 .first()
                 .map(|f| (f.field_id, f.text.len())),
+            runtime_snapshot.help_dialog.as_ref().map(|h| h.help_id),
             changed
         );
         self.prc_runtime_form_id = runtime_snapshot.form_id;
@@ -1306,6 +1353,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                 &self.prc_runtime_field_draws,
                 self.prc_ui_controller.focused_control_id(),
                 self.prc_menu_controller.overlay(),
+                self.prc_session
+                    .as_ref()
+                    .and_then(|session| session.help_dialog())
+                    .as_ref(),
                 pane_x,
                 pane_y,
                 pane_w,

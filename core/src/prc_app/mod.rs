@@ -12,6 +12,7 @@ pub mod runtime;
 pub mod traps;
 mod trap_stub;
 pub mod ui;
+pub mod ui_component;
 
 pub use prc::{
     PrcCodeScan, PrcDbKind, PrcInfo, PrcResourceEntry, PrcSectionStat, PrcTrapHit,
