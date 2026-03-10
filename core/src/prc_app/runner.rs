@@ -23,6 +23,7 @@ const PRC_STACK_CANDIDATES: &[usize] = &[8 * 1024, 4 * 1024, 2 * 1024, 1024, 512
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeUiSnapshot {
     pub form_id: Option<u16>,
+    pub underlay_form_id: Option<u16>,
     pub bitmap_draws: Vec<RuntimeBitmapDraw>,
     pub field_draws: Vec<RuntimeFieldDraw>,
     pub table_draws: Vec<RuntimeTableDraw>,
@@ -583,6 +584,7 @@ impl PrcRuntimeSession {
 
         RuntimeUiSnapshot {
             form_id: self.runtime.drawn_form_id.or(self.runtime.active_form_id),
+            underlay_form_id: self.runtime.form_return_stack.last().copied(),
             bitmap_draws: self
                 .runtime
                 .drawn_bitmaps
@@ -1230,6 +1232,7 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
     let stop_reason = best.stop_reason;
     let snapshot = RuntimeUiSnapshot {
         form_id: best.drawn_form_id.or(best.active_form_id),
+        underlay_form_id: None,
         bitmap_draws: best.drawn_bitmaps.clone(),
         field_draws: Vec::new(),
         table_draws: Vec::new(),

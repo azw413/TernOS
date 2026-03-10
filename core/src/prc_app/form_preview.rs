@@ -7,6 +7,12 @@ use crate::prc_app::prc::{PrcResourceEntry, parse_prc};
 
 #[derive(Clone, Debug)]
 pub enum FormPreviewObject {
+    Title {
+        x: i16,
+        y: i16,
+        font: u8,
+        text: String,
+    },
     Label {
         x: i16,
         y: i16,
@@ -20,6 +26,8 @@ pub enum FormPreviewObject {
         w: i16,
         h: i16,
         font: u8,
+        style: u8,
+        no_frame: bool,
         text: String,
     },
     Field {
@@ -48,6 +56,9 @@ pub enum FormPreviewObject {
 pub struct FormPreview {
     pub resource_id: u16,
     pub form_id: u16,
+    pub window_flags: u16,
+    pub form_attr: u16,
+    pub frame_type: u16,
     pub x: i16,
     pub y: i16,
     pub w: i16,
@@ -97,7 +108,13 @@ fn parse_tlbl(data: &[u8]) -> Option<FormPreviewObject> {
     Some(FormPreviewObject::Label { x, y, font, text })
 }
 
-fn parse_text_button(data: &[u8], text_off: usize, font_off: usize) -> Option<FormPreviewObject> {
+fn parse_text_button(
+    data: &[u8],
+    text_off: usize,
+    font_off: usize,
+    frame_off: Option<usize>,
+    style: u8,
+) -> Option<FormPreviewObject> {
     if data.len() <= text_off {
         return None;
     }
@@ -107,6 +124,10 @@ fn parse_text_button(data: &[u8], text_off: usize, font_off: usize) -> Option<Fo
     let w = read_i16_be(data, 6)?;
     let h = read_i16_be(data, 8)?;
     let font = *data.get(font_off).unwrap_or(&0);
+    let no_frame = frame_off
+        .and_then(|off| data.get(off))
+        .map(|b| *b == 0)
+        .unwrap_or(false);
     let text = read_c_string(data, text_off);
     Some(FormPreviewObject::Button {
         id,
@@ -115,6 +136,8 @@ fn parse_text_button(data: &[u8], text_off: usize, font_off: usize) -> Option<Fo
         w,
         h,
         font,
+        style,
+        no_frame,
         text,
     })
 }
@@ -141,20 +164,66 @@ fn parse_tfld(data: &[u8]) -> Option<FormPreviewObject> {
     })
 }
 
+fn parse_tgrb(data: &[u8]) -> Option<FormPreviewObject> {
+    // Graphic repeating button; treat as button geometry for focus/navigation.
+    if data.len() < 10 {
+        return None;
+    }
+    let id = read_u16_be(data, 0)?;
+    let x = read_i16_be(data, 2)?;
+    let y = read_i16_be(data, 4)?;
+    let w = read_i16_be(data, 6)?;
+    let h = read_i16_be(data, 8)?;
+    let no_frame = data.get(14).copied().unwrap_or(1) == 0;
+    Some(FormPreviewObject::Button {
+        id,
+        x,
+        y,
+        w,
+        h,
+        font: 0,
+        style: 5,
+        no_frame,
+        text: String::new(),
+    })
+}
+
+fn parse_tttl(data: &[u8]) -> Option<FormPreviewObject> {
+    // Title resource; use forgiving offsets.
+    if data.len() < 9 {
+        return None;
+    }
+    let x = read_i16_be(data, 2)?;
+    let y = read_i16_be(data, 4)?;
+    let text = read_c_string(data, 8);
+    Some(FormPreviewObject::Title {
+        x,
+        y,
+        font: 1,
+        text,
+    })
+}
+
 fn parse_form_object(kind: &str, data: &[u8]) -> Option<FormPreviewObject> {
     match kind {
         "tLBL" => parse_tlbl(data),
-        "tBTN" => parse_text_button(data, 19, 16),
-        "tPBN" => parse_text_button(data, 14, 11),
-        "tPUT" => parse_text_button(data, 14, 11),
-        "tCBX" => parse_text_button(data, 17, 14),
+        "tBTN" => parse_text_button(data, 19, 18, Some(14), 0),
+        "tPBN" => parse_text_button(data, 14, 13, None, 1),
+        "tPUT" => parse_text_button(data, 15, 14, None, 3),
+        "tCBX" => parse_text_button(data, 16, 15, None, 2),
+        "tREP" => parse_text_button(data, 19, 18, Some(14), 5),
+        "tgrb" => parse_tgrb(data),
+        "tTTL" => parse_tttl(data),
         "tFLD" => parse_tfld(data),
         _ => None,
     }
 }
 
 fn is_known_form_object_kind(kind: &str) -> bool {
-    matches!(kind, "tLBL" | "tBTN" | "tPBN" | "tPUT" | "tCBX" | "tFLD")
+    matches!(
+        kind,
+        "tLBL" | "tBTN" | "tPBN" | "tPUT" | "tCBX" | "tREP" | "tgrb" | "tFLD" | "tTTL"
+    )
 }
 
 fn collect_objects_from_refs(
@@ -233,7 +302,7 @@ fn parse_packed_title(form_data: &[u8], off: usize) -> Option<FormPreviewObject>
     let x = read_i16_be(form_data, off)?;
     let y = read_i16_be(form_data, off + 2)?;
     let text = read_c_string(form_data, off + 12);
-    Some(FormPreviewObject::Label {
+    Some(FormPreviewObject::Title {
         x,
         y,
         font: 1,
@@ -253,6 +322,7 @@ fn parse_packed_control(form_data: &[u8], off: usize) -> Option<FormPreviewObjec
     let h = read_i16_be(form_data, off + 8)?;
     let attr = read_u16_be(form_data, off + 14)?;
     let style = *form_data.get(off + 16)?;
+    let no_frame = (attr & 0x0700) == 0;
 
     let mut i = off + 17;
     let (font, text) = if style == 6 || style == 7 {
@@ -284,6 +354,8 @@ fn parse_packed_control(form_data: &[u8], off: usize) -> Option<FormPreviewObjec
         w,
         h,
         font,
+        style,
+        no_frame,
         text,
     })
 }
@@ -347,7 +419,10 @@ fn parse_packed_form(resource_id: u16, form_data: &[u8]) -> Option<FormPreview> 
     let y = read_i16_be(form_data, 12)?;
     let w = read_i16_be(form_data, 14)?;
     let h = read_i16_be(form_data, 16)?;
+    let window_flags = read_u16_be(form_data, 8).unwrap_or(0);
+    let frame_type = read_u16_be(form_data, 30).unwrap_or(0);
     let form_id = read_u16_be(form_data, 40).unwrap_or(resource_id);
+    let form_attr = read_u16_be(form_data, 42).unwrap_or(0);
     let object_count = read_u16_be(form_data, 62)?;
     let table_off = 68usize;
     let table_len = (object_count as usize).saturating_mul(6);
@@ -388,6 +463,9 @@ fn parse_packed_form(resource_id: u16, form_data: &[u8]) -> Option<FormPreview> 
     Some(FormPreview {
         resource_id,
         form_id,
+        window_flags,
+        form_attr,
+        frame_type,
         x,
         y,
         w,
@@ -473,6 +551,9 @@ fn parse_single_form(
     Some(FormPreview {
         resource_id,
         form_id,
+        window_flags: 0,
+        form_attr: 0,
+        frame_type: 0,
         x,
         y,
         w,
@@ -503,6 +584,9 @@ pub fn parse_form_previews(raw: &[u8]) -> Vec<FormPreview> {
             out.push(FormPreview {
                 resource_id: res.id,
                 form_id: res.id,
+                window_flags: 0,
+                form_attr: 0,
+                frame_type: 0,
                 x: 0,
                 y: 0,
                 w: 160,

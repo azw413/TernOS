@@ -80,6 +80,7 @@ pub struct Application<'a, S: AppSource> {
     prc_forms: Vec<prc_app::form_preview::FormPreview>,
     prc_bitmaps: Vec<prc_app::bitmap::PrcBitmap>,
     prc_runtime_form_id: Option<u16>,
+    prc_runtime_underlay_form_id: Option<u16>,
     prc_ui_controller: prc_app::controller::PrcUiController,
     prc_runtime_bitmap_draws: Vec<prc_app::runner::RuntimeBitmapDraw>,
     prc_runtime_field_draws: Vec<prc_app::runner::RuntimeFieldDraw>,
@@ -136,6 +137,10 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn runtime_prc_form(&self) -> Option<prc_app::form_preview::FormPreview> {
         let fid = self.prc_runtime_form_id?;
+        self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
+    }
+
+    fn prc_form_by_id(&self, fid: u16) -> Option<prc_app::form_preview::FormPreview> {
         self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
     }
 
@@ -230,6 +235,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_forms: Vec::new(),
             prc_bitmaps: Vec::new(),
             prc_runtime_form_id: None,
+            prc_runtime_underlay_form_id: None,
             prc_ui_controller: prc_app::controller::PrcUiController::default(),
             prc_runtime_bitmap_draws: Vec::new(),
             prc_runtime_field_draws: Vec::new(),
@@ -890,6 +896,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_lines = prc_app::format_info_lines(&info);
                 let runtime_snapshot = self.log_prc_info(&entry, &info);
                 self.prc_runtime_form_id = runtime_snapshot.form_id;
+                self.prc_runtime_underlay_form_id = runtime_snapshot.underlay_form_id;
                 self.prc_ui_controller.reset();
                 self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
                 self.prc_runtime_field_draws = runtime_snapshot.field_draws;
@@ -982,6 +989,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_lines = prc_app::format_info_lines(&info);
                 let runtime_snapshot = self.log_prc_info(&entry, &info);
                 self.prc_runtime_form_id = runtime_snapshot.form_id;
+                self.prc_runtime_underlay_form_id = runtime_snapshot.underlay_form_id;
                 self.prc_ui_controller.reset();
                 self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
                 self.prc_runtime_field_draws = runtime_snapshot.field_draws;
@@ -1029,6 +1037,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         let runtime_out = session.resume();
         let runtime_snapshot = runtime_out.snapshot;
         let changed = self.prc_runtime_form_id != runtime_snapshot.form_id
+            || self.prc_runtime_underlay_form_id != runtime_snapshot.underlay_form_id
             || self.prc_runtime_bitmap_draws.len() != runtime_snapshot.bitmap_draws.len()
             || self
                 .prc_runtime_bitmap_draws
@@ -1052,6 +1061,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             changed
         );
         self.prc_runtime_form_id = runtime_snapshot.form_id;
+        self.prc_runtime_underlay_form_id = runtime_snapshot.underlay_form_id;
         self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
         self.prc_runtime_field_draws = runtime_snapshot.field_draws;
         self.prc_runtime_table_draws = runtime_snapshot.table_draws;
@@ -1390,6 +1400,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_active_entry = None;
         self.prc_session = None;
         self.prc_runtime_form_id = None;
+        self.prc_runtime_underlay_form_id = None;
         self.prc_blocked_timeout_ticks = 0;
         self.prc_blocked_elapsed_ms = 0;
         self.prc_soft_menu_focused = false;
@@ -1610,11 +1621,11 @@ impl<'a, S: AppSource> Application<'a, S> {
             );
         }
 
-        let draw_form = self
+        let active_form = self
             .runtime_prc_form()
             .or_else(|| self.prc_forms.get(self.prc_form_index).cloned())
             .or_else(|| self.prc_forms.first().cloned());
-        if let Some(form) = draw_form {
+        if let Some(form) = active_form {
             let outline = PrimitiveStyle::with_stroke(BinaryColor::Off, 1);
             let clear = PrimitiveStyle::with_fill(BinaryColor::On);
             let max_scale_w = ((size.width as i32) / 160).max(1);
@@ -1634,6 +1645,32 @@ impl<'a, S: AppSource> Application<'a, S> {
             .into_styled(clear)
             .draw(self.display_buffers)
             .ok();
+            let dialog_framed = form.frame_type != 0 || (form.window_flags & 0x2000) != 0;
+            if dialog_framed {
+                if let Some(underlay_id) = self.prc_runtime_underlay_form_id {
+                    if let Some(underlay_form) = self.prc_form_by_id(underlay_id) {
+                        prc_app::ui::draw_form_preview(
+                            self.display_buffers,
+                            &underlay_form,
+                            &self.prc_system_fonts,
+                            &self.prc_bitmaps,
+                            &self.prc_runtime_bitmap_draws,
+                            &self.prc_runtime_field_draws,
+                            &self.prc_runtime_table_draws,
+                            None,
+                            None,
+                            None,
+                            pane_x,
+                            pane_y,
+                            pane_w,
+                            pane_h,
+                            scale.max(1),
+                            true,
+                            outline,
+                        );
+                    }
+                }
+            }
             prc_app::ui::draw_form_preview(
                 self.display_buffers,
                 &form,
@@ -1653,6 +1690,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 pane_w,
                 pane_h,
                 scale.max(1),
+                !dialog_framed,
                 outline,
             );
         }

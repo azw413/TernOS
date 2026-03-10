@@ -541,12 +541,28 @@ pub fn apply_prc_runtime_trap_stub(
         db_ref
     }
 
+    fn queue_form_transition(runtime: &mut PrcRuntimeContext, form_id: u16) {
+        if form_id == 0 {
+            return;
+        }
+        runtime.event_queue.push(RuntimeEvent {
+            e_type: EVT_FRM_LOAD,
+            data_u16: form_id,
+        });
+        runtime.event_queue.push(RuntimeEvent {
+            e_type: EVT_FRM_OPEN,
+            data_u16: form_id,
+        });
+        runtime.startup_open_dispatched = false;
+    }
+
     match trap_word {
         0xA08F => {
             runtime.shutting_down = false;
             runtime.active_form_id = None;
             runtime.active_form_handle = 0x3000_0000;
             runtime.active_form_handler = 0;
+            runtime.form_return_stack.clear();
             runtime.event_queue.clear();
             runtime.pending_dispatch_event = None;
             runtime.startup_open_dispatched = false;
@@ -609,15 +625,44 @@ pub fn apply_prc_runtime_trap_stub(
             // FrmGotoForm(formID): queue a deterministic Palm-style transition.
             let sp = cpu.a[7];
             let form_id = memory.read_u16_be(sp).unwrap_or(0);
-            runtime.event_queue.push(RuntimeEvent {
-                e_type: EVT_FRM_LOAD,
-                data_u16: form_id,
-            });
-            runtime.event_queue.push(RuntimeEvent {
-                e_type: EVT_FRM_OPEN,
-                data_u16: form_id,
-            });
-            runtime.startup_open_dispatched = false;
+            queue_form_transition(runtime, form_id);
+            cpu.d[0] = 0;
+        }
+        0xA19C => {
+            // FrmPopupForm(formID): modal-style transition.
+            // Maintain a lightweight return stack so FrmReturnToForm(0) works.
+            let sp = cpu.a[7];
+            let form_id = memory.read_u16_be(sp).unwrap_or(0);
+            if form_id != 0 {
+                if let Some(current) = runtime.active_form_id {
+                    if current != form_id {
+                        runtime.form_return_stack.push(current);
+                    }
+                }
+                queue_form_transition(runtime, form_id);
+            }
+            cpu.d[0] = 0;
+        }
+        0xA19E => {
+            // FrmReturnToForm(formID): return to requested form or previous popup parent.
+            let sp = cpu.a[7];
+            let requested = memory.read_u16_be(sp).unwrap_or(0);
+            let target = if requested != 0 {
+                // Drop any stale nested entries at/above requested target.
+                if let Some(pos) = runtime
+                    .form_return_stack
+                    .iter()
+                    .rposition(|id| *id == requested)
+                {
+                    runtime.form_return_stack.truncate(pos);
+                }
+                Some(requested)
+            } else {
+                runtime.form_return_stack.pop()
+            };
+            if let Some(form_id) = target {
+                queue_form_transition(runtime, form_id);
+            }
             cpu.d[0] = 0;
         }
         0xA173 => {

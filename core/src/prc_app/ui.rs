@@ -1,5 +1,8 @@
 extern crate alloc;
 
+use alloc::vec;
+use alloc::vec::Vec;
+
 use embedded_graphics::{
     Drawable, Pixel,
     mono_font::{
@@ -143,9 +146,16 @@ fn draw_button_outline<T: DrawTarget<Color = BinaryColor>>(
     by: i32,
     bw: i32,
     bh: i32,
+    style: u8,
     _outline: PrimitiveStyle<BinaryColor>,
 ) {
-    prc_components::draw_button_frame(target, bx, by, bw, bh, BinaryColor::Off);
+    if style == 1 || style == 5 {
+        let _ = Rectangle::new(Point::new(bx, by), Size::new(bw.max(1) as u32, bh.max(1) as u32))
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
+            .draw(target);
+    } else {
+        prc_components::draw_button_frame(target, bx, by, bw, bh, BinaryColor::Off);
+    }
 }
 
 fn draw_dotted_hline<T: DrawTarget<Color = BinaryColor>>(
@@ -229,12 +239,25 @@ fn blit_scaled<T: DrawTarget<Color = BinaryColor>>(
     src_w: i32,
     src_h: i32,
     scale: i32,
+    opaque_rect: Option<(i32, i32, i32, i32)>,
 ) {
     let s = scale.max(1);
     for y in 0..src_h.min(160) {
         for x in 0..src_w.min(160) {
             if let Some(color) = canvas.get(x, y) {
                 if color == BinaryColor::On {
+                    let opaque = opaque_rect
+                        .map(|(rx, ry, rw, rh)| x >= rx && y >= ry && x < (rx + rw) && y < (ry + rh))
+                        .unwrap_or(false);
+                    if !opaque {
+                        continue;
+                    }
+                    let _ = Rectangle::new(
+                        Point::new(pane_x + x * s, pane_y + y * s),
+                        Size::new(s as u32, s as u32),
+                    )
+                    .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+                    .draw(target);
                     continue;
                 }
                 let _ = Rectangle::new(
@@ -671,25 +694,193 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     pane_w: i32,
     pane_h: i32,
     scale: i32,
+    clear_pane: bool,
     outline: PrimitiveStyle<BinaryColor>,
 ) {
-    // Clear the whole preview pane so form changes don't leave stale pixels.
-    let _ = Rectangle::new(
-        Point::new(pane_x, pane_y),
-        Size::new(pane_w.max(1) as u32, pane_h.max(1) as u32),
-    )
-    .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
-    .draw(target);
+    if clear_pane {
+        // Clear the whole preview pane so form changes don't leave stale pixels.
+        let _ = Rectangle::new(
+            Point::new(pane_x, pane_y),
+            Size::new(pane_w.max(1) as u32, pane_h.max(1) as u32),
+        )
+        .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+        .draw(target);
+    }
 
     let mut canvas = MonoCanvas160::new();
-    let src_w = form.w.max(20).min(160) as i32;
-    let src_h = form.h.max(20).min(160) as i32;
+    // Always render in Palm's native 160x160 space.
+    // Some modal forms are smaller than full-screen; scaling them by their
+    // own bounds makes them look like alert/help overlays instead of forms.
+    let src_w = 160i32;
+    let src_h = 160i32;
 
-    let map_x = |x: i16| (x - form.x).max(0) as i32;
-    let map_y = |y: i16| (y - form.y).max(0) as i32;
-
-    for obj in form.objects.iter().take(48) {
+    // Most form object coordinates are form-relative in packed resources.
+    // Detect that case and shift by form origin so popup forms land correctly
+    // within the 160x160 screen.
+    let mut max_right = 0i16;
+    let mut max_bottom = 0i16;
+    for obj in form.objects.iter() {
         match obj {
+            FormPreviewObject::Title { x, y, .. } | FormPreviewObject::Label { x, y, .. } => {
+                if *x > max_right {
+                    max_right = *x;
+                }
+                if *y > max_bottom {
+                    max_bottom = *y;
+                }
+            }
+            FormPreviewObject::Button { x, y, w, h, .. }
+            | FormPreviewObject::Field { x, y, w, h, .. }
+            | FormPreviewObject::Table { x, y, w, h, .. } => {
+                max_right = max_right.max(x.saturating_add(*w));
+                max_bottom = max_bottom.max(y.saturating_add(*h));
+            }
+            FormPreviewObject::Bitmap { x, y, .. } => {
+                if *x > max_right {
+                    max_right = *x;
+                }
+                if *y > max_bottom {
+                    max_bottom = *y;
+                }
+            }
+        }
+    }
+    let coords_are_form_relative =
+        (form.x != 0 || form.y != 0)
+            && max_right <= form.w.saturating_add(4)
+            && max_bottom <= form.h.saturating_add(4);
+    let map_x = |x: i16| {
+        if coords_are_form_relative {
+            x.saturating_add(form.x).max(0) as i32
+        } else {
+            x.max(0) as i32
+        }
+    };
+    let map_y = |y: i16| {
+        if coords_are_form_relative {
+            y.saturating_add(form.y).max(0) as i32
+        } else {
+            y.max(0) as i32
+        }
+    };
+
+    // Modal/frame forms (FrmPopupForm dialogs) use Palm's alert/dialog chrome.
+    let dialog_framed = form.frame_type != 0 || (form.window_flags & 0x2000) != 0;
+    if dialog_framed {
+        let fx = form.x.max(0) as i32;
+        let fy = form.y.max(0) as i32;
+        let fw = form.w.max(20).min(160) as i32;
+        let fh = form.h.max(20).min(160) as i32;
+        prc_components::draw_alert_frame(&mut canvas, fx, fy, fw, fh, 12);
+    }
+
+    // Snap adjacent push buttons (tPBN style=1) so neighboring buttons share
+    // one divider line, matching Palm's adjoined segmented-button look.
+    struct PushRow {
+        y: i32,
+        h: i32,
+        items: Vec<(usize, i32, i32)>, // (object index, x, w)
+    }
+    let mut push_rows: Vec<PushRow> = Vec::new();
+    for (obj_idx, obj) in form.objects.iter().take(48).enumerate() {
+        let FormPreviewObject::Button {
+            x, y, w, h, style, ..
+        } = obj
+        else {
+            continue;
+        };
+        if *style != 1 {
+            continue;
+        }
+        let bx = map_x(*x);
+        let mut by = map_y(*y);
+        let mut bw = (*w).max(8) as i32;
+        let mut bh = (*h).max(8) as i32;
+        if *style == 1 {
+            // Push buttons: slightly wider/deeper than raw resource bounds to
+            // match Palm's segmented day strip look.
+            by -= 1;
+            bw += 2;
+            bh += 2;
+        }
+        if bw <= 0 || bh <= 0 {
+            continue;
+        }
+        if let Some(row) = push_rows
+            .iter_mut()
+            .find(|r| (r.y - by).abs() <= 1 && (r.h - bh).abs() <= 2)
+        {
+            row.items.push((obj_idx, bx, bw));
+        } else {
+            push_rows.push(PushRow {
+                y: by,
+                h: bh,
+                items: vec![(obj_idx, bx, bw)],
+            });
+        }
+    }
+    let mut push_button_x: Vec<(usize, i32)> = Vec::new();
+    for row in push_rows.iter_mut() {
+        row.items.sort_by_key(|(_, x, _)| *x);
+        let mut prev_right: Option<i32> = None;
+        for (obj_idx, x, w) in row.items.iter() {
+            let mut adj_x = *x;
+            if let Some(pr) = prev_right {
+                // Share one divider line with previous push-button.
+                adj_x = pr;
+            }
+            prev_right = Some(adj_x + *w - 1);
+            push_button_x.push((*obj_idx, adj_x));
+        }
+    }
+
+    if let Some(FormPreviewObject::Title { x, y, font, text }) = form
+        .objects
+        .iter()
+        .find(|o| matches!(o, FormPreviewObject::Title { .. }))
+    {
+        if dialog_framed {
+            let fx = form.x.max(0) as i32;
+            let fy = form.y.max(0) as i32;
+            let fw = form.w.max(20).min(160) as i32;
+            let (tw, _) = text_metrics(text, *font, fonts, 1);
+            let tx = fx + ((fw - tw) / 2).max(2);
+            let ty = fy + 2;
+            draw_text(&mut canvas, text, tx, ty, *font, fonts, 1, BinaryColor::On);
+        } else {
+            let tx = map_x(*x);
+            let ty = map_y(*y);
+            let (tw, th) = text_metrics(text, *font, fonts, 1);
+            let pad_x = 4;
+            let pad_top = 2;
+            let pad_bottom = 0;
+            let tab_w = (tw + pad_x * 2).clamp(24, src_w.max(24));
+            let tab_h = (th + pad_top + pad_bottom).max(10);
+            let layout = prc_components::draw_form_title_bar(
+                &mut canvas,
+                tx.clamp(0, src_w.saturating_sub(1)),
+                ty.clamp(0, src_h.saturating_sub(1)),
+                (src_w - tx).max(1),
+                tab_w,
+                tab_h,
+                2,
+            );
+            draw_text(
+                &mut canvas,
+                text,
+                layout.tab_x + pad_x,
+                layout.tab_y + pad_top,
+                *font,
+                fonts,
+                1,
+                BinaryColor::On,
+            );
+        }
+    }
+
+    for (obj_idx, obj) in form.objects.iter().take(48).enumerate() {
+        match obj {
+            FormPreviewObject::Title { .. } => {}
             FormPreviewObject::Label { x, y, font, text } => {
                 draw_text(
                     &mut canvas,
@@ -709,28 +900,53 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
                 w,
                 h,
                 font,
+                style,
+                no_frame,
                 text,
             } => {
-                let bx = map_x(*x);
-                let by = map_y(*y);
-                let bw = (*w).max(8) as i32;
-                let bh = (*h).max(8) as i32;
+                let mut bx = map_x(*x);
+                let mut by = map_y(*y);
+                let mut bw = (*w).max(8) as i32;
+                let mut bh = (*h).max(8) as i32;
+                if *style == 1 {
+                    by -= 1;
+                    bw += 2;
+                    bh += 2;
+                }
                 if bw <= 0 || bh <= 0 {
                     continue;
                 }
-                draw_button_outline(&mut canvas, bx, by, bw, bh, outline);
+                if *style == 1 {
+                    if let Some((_, adj_x)) = push_button_x.iter().find(|(idx, _)| *idx == obj_idx) {
+                        bx = *adj_x;
+                    }
+                }
                 let focused = focused_control_id == Some(*id);
-                if focused && bw > 4 && bh > 4 {
+                if !*no_frame {
+                    draw_button_outline(&mut canvas, bx, by, bw, bh, *style, outline);
+                    if focused && bw > 4 && bh > 4 {
+                        let _ = Rectangle::new(
+                            Point::new(bx + 1, by + 1),
+                            Size::new((bw - 2) as u32, (bh - 2) as u32),
+                        )
+                        .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+                        .draw(&mut canvas);
+                    }
+                }
+                let (tw, th) = text_metrics(text, *font, fonts, 1);
+                let mut tx = bx + ((bw - tw) / 2).max(1);
+                if *style == 1 {
+                    tx += 1;
+                }
+                let ty = by + ((bh - th) / 2).max(1);
+                if *no_frame && focused {
                     let _ = Rectangle::new(
-                        Point::new(bx + 1, by + 1),
-                        Size::new((bw - 2) as u32, (bh - 2) as u32),
+                        Point::new((tx - 1).max(0), (ty - 1).max(0)),
+                        Size::new((tw + 2).max(1) as u32, (th + 2).max(1) as u32),
                     )
                     .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
                     .draw(&mut canvas);
                 }
-                let (tw, th) = text_metrics(text, *font, fonts, 1);
-                let tx = bx + ((bw - tw) / 2).max(1);
-                let ty = by + ((bh - th) / 2).max(1);
                 draw_text(
                     &mut canvas,
                     text,
@@ -913,5 +1129,15 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     let out_h = (src_h * s).min(pane_h.max(1));
     let dst_x = pane_x + ((pane_w - out_w) / 2).max(0);
     let dst_y = pane_y + ((pane_h - out_h) / 2).max(0);
-    blit_scaled(target, &canvas, dst_x, dst_y, src_w, src_h, s);
+    let opaque_rect = if dialog_framed {
+        Some((
+            form.x.max(0) as i32,
+            form.y.max(0) as i32,
+            form.w.max(1).min(160) as i32,
+            form.h.max(1).min(160) as i32,
+        ))
+    } else {
+        None
+    };
+    blit_scaled(target, &canvas, dst_x, dst_y, src_w, src_h, s, opaque_rect);
 }
