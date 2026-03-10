@@ -54,8 +54,28 @@ impl DmApi {
                 cpu.d[0] = runtime.dm_last_err as u32;
                 true
             }
+            0xA04F => {
+                Self::dm_num_records(cpu, runtime, memory);
+                true
+            }
+            0xA050 => {
+                Self::dm_record_info(cpu, runtime, memory);
+                true
+            }
             0xA055 => {
                 Self::dm_new_record(cpu, runtime, memory);
+                true
+            }
+            0xA05B => {
+                Self::dm_query_record(cpu, runtime, memory, false);
+                true
+            }
+            0xA05C => {
+                Self::dm_query_record(cpu, runtime, memory, true);
+                true
+            }
+            0xA05D => {
+                Self::dm_resize_record(cpu, runtime, memory);
                 true
             }
             0xA05E => {
@@ -123,7 +143,16 @@ impl DmApi {
         resource_kind: Option<u32>,
         resource_id: Option<u16>,
     ) -> u32 {
-        let size = data.len().max(16) as u32;
+        let size = data.len().clamp(16, 1_048_576) as u32;
+        if runtime.next_ptr < 0x2000_0000 || runtime.next_ptr > 0x2FFF_0000 {
+            let mut high = 0x2000_0000u32;
+            for b in &runtime.mem_blocks {
+                if (0x2000_0000..=0x2FFF_FFFF).contains(&b.ptr) {
+                    high = high.max(b.ptr.saturating_add(b.size).saturating_add(16));
+                }
+            }
+            runtime.next_ptr = high.max(0x2000_0000);
+        }
         let handle = runtime.next_handle;
         runtime.next_handle = runtime.next_handle.saturating_add(1);
         let ptr = runtime.next_ptr;
@@ -231,6 +260,20 @@ impl DmApi {
             .find(|o| o.db_ref == db_ref)
             .map(|o| o.local_id)?;
         Self::db_by_local_id_mut(runtime, local_id)
+    }
+
+    fn handle_from_any(runtime: &PrcRuntimeContext, raw: u32) -> Option<u32> {
+        if raw == 0 {
+            return None;
+        }
+        if runtime.mem_blocks.iter().any(|b| b.handle == raw) {
+            return Some(raw);
+        }
+        runtime
+            .mem_blocks
+            .iter()
+            .find(|b| b.ptr == raw)
+            .map(|b| b.handle)
     }
 
     fn fourcc_name(db_type: u32) -> String {
@@ -727,15 +770,164 @@ impl DmApi {
         Self::set_last_err(runtime, Self::DM_ERR_NONE);
     }
 
+    fn dm_num_records(cpu: &mut CpuState68k, runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap) {
+        let sp = cpu.a[7];
+        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let db = Self::db_by_ref(runtime, stack_db_ref).or_else(|| {
+            runtime
+                .open_databases
+                .last()
+                .and_then(|open| Self::db_by_local_id(runtime, open.local_id))
+        });
+        let Some(db) = db else {
+            cpu.d[0] = 0;
+            Self::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        cpu.d[0] = db.record_handles.len() as u32;
+        Self::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_record_info(cpu: &mut CpuState68k, runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap) {
+        let sp = cpu.a[7];
+        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
+        let attr_p = memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0);
+        let unique_id_p = memory.read_u32_be(sp.saturating_add(10)).unwrap_or(0);
+        let chunk_id_p = memory.read_u32_be(sp.saturating_add(14)).unwrap_or(0);
+        let db = Self::db_by_ref(runtime, stack_db_ref).or_else(|| {
+            runtime
+                .open_databases
+                .last()
+                .and_then(|open| Self::db_by_local_id(runtime, open.local_id))
+        });
+        let Some(db) = db else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            Self::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        if index >= db.record_handles.len() {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            Self::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        }
+        let handle = db.record_handles[index];
+        if attr_p != 0 && memory.contains_addr(attr_p) {
+            let _ = memory.write_u8(attr_p, 0);
+        }
+        if unique_id_p != 0 && memory.contains_addr(unique_id_p) {
+            let _ = memory.write_u32_be(unique_id_p, (index as u32).saturating_add(1));
+        }
+        if chunk_id_p != 0 && memory.contains_addr(chunk_id_p) {
+            let _ = memory.write_u32_be(chunk_id_p, handle);
+        }
+        cpu.d[0] = 0;
+        Self::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_query_record(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+        lock_record: bool,
+    ) {
+        let sp = cpu.a[7];
+        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
+        let db = Self::db_by_ref(runtime, stack_db_ref).or_else(|| {
+            runtime
+                .open_databases
+                .last()
+                .and_then(|open| Self::db_by_local_id(runtime, open.local_id))
+        });
+        let Some(db) = db else {
+            cpu.a[0] = 0;
+            cpu.d[0] = 0;
+            Self::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        let Some(handle) = db.record_handles.get(index).copied() else {
+            cpu.a[0] = 0;
+            cpu.d[0] = 0;
+            Self::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        if lock_record
+            && let Some(block) = runtime.mem_blocks.iter_mut().find(|b| b.handle == handle)
+        {
+            block.locked = true;
+            memory.upsert_overlay(block.ptr, block.data.clone());
+        }
+        cpu.a[0] = handle;
+        cpu.d[0] = handle;
+        Self::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_resize_record(cpu: &mut CpuState68k, runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap) {
+        let sp = cpu.a[7];
+        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
+        let mut new_size = memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0) as usize;
+
+        let mut handle = None;
+        if let Some(db) = Self::db_by_ref(runtime, stack_db_ref) {
+            handle = db.record_handles.get(index).copied();
+        }
+        if handle.is_none() {
+            // Some glue paths pass stale/zero stack args; fall back to register candidates.
+            for raw in [cpu.a[0], cpu.d[3], cpu.d[0], cpu.a[1], cpu.d[1]] {
+                if let Some(h) = Self::handle_from_any(runtime, raw) {
+                    handle = Some(h);
+                    break;
+                }
+            }
+        }
+        if handle.is_none() {
+            // Last resort: use latest open DB + requested index.
+            if let Some(open) = runtime.open_databases.last()
+                && let Some(db) = Self::db_by_local_id(runtime, open.local_id)
+            {
+                handle = db.record_handles.get(index).copied();
+            }
+        }
+        let Some(handle) = handle else {
+            cpu.a[0] = 0;
+            cpu.d[0] = 0;
+            Self::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        let Some(block) = runtime.mem_blocks.iter_mut().find(|b| b.handle == handle) else {
+            cpu.a[0] = 0;
+            cpu.d[0] = 0;
+            Self::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        if new_size == 0 {
+            // Be permissive for older glue paths that accidentally pass 0.
+            new_size = block.data.len();
+        }
+        block.data.resize(new_size, 0);
+        block.size = block.data.len() as u32;
+        memory.upsert_overlay(block.ptr, block.data.clone());
+        cpu.a[0] = handle;
+        cpu.d[0] = handle;
+        Self::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
     fn dm_release_record(
         cpu: &mut CpuState68k,
         runtime: &mut PrcRuntimeContext,
         memory: &mut MemoryMap,
     ) {
         let sp = cpu.a[7];
-        let db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
         let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
         let dirty = memory.read_u16_be(sp.saturating_add(6)).unwrap_or(0) != 0;
+        let db_ref = if Self::db_by_ref(runtime, stack_db_ref).is_some() {
+            stack_db_ref
+        } else {
+            runtime.open_databases.last().map(|o| o.db_ref).unwrap_or(0)
+        };
         let Some(db) = Self::db_by_ref_mut(runtime, db_ref) else {
             cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
             Self::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);

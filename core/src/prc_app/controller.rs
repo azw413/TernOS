@@ -12,6 +12,14 @@ pub struct PrcUiController {
     focus_chain: FocusChain,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FocusDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
 impl PrcUiController {
     pub fn reset(&mut self) {
         self.focus_chain.clear_selection();
@@ -30,6 +38,20 @@ impl PrcUiController {
     }
 
     pub fn move_focus(&mut self, form: Option<&FormPreview>, delta: i32) -> bool {
+        if delta < 0 {
+            return self.move_focus_direction(form, FocusDirection::Up);
+        }
+        if delta > 0 {
+            return self.move_focus_direction(form, FocusDirection::Down);
+        }
+        false
+    }
+
+    pub fn move_focus_direction(
+        &mut self,
+        form: Option<&FormPreview>,
+        direction: FocusDirection,
+    ) -> bool {
         let controls = focusable_controls(form);
         if controls.is_empty() {
             return false;
@@ -37,11 +59,28 @@ impl PrcUiController {
         let refs: Vec<&dyn UiComponent> = controls.iter().map(|c| c as &dyn UiComponent).collect();
         self.focus_chain.rebuild(&refs);
         let before = self.focus_chain.selected_id();
-        if delta < 0 {
-            self.focus_chain.move_prev();
-        } else if delta > 0 {
-            self.focus_chain.move_next();
+        let current_id = before.unwrap_or_else(|| first_reading_order_id(&controls));
+        if before.is_none() {
+            let _ = self.focus_chain.select_id(current_id);
         }
+
+        let next_id = directional_target(&controls, current_id, direction)
+            .or_else(|| linear_fallback_target(&controls, current_id, direction));
+        if let Some(next_id) = next_id {
+            let _ = self.focus_chain.select_id(next_id);
+        }
+        self.focus_chain.selected_id() != before
+    }
+
+    pub fn select_control_id(&mut self, form: Option<&FormPreview>, id: u16) -> bool {
+        let controls = focusable_controls(form);
+        if controls.is_empty() {
+            return false;
+        }
+        let refs: Vec<&dyn UiComponent> = controls.iter().map(|c| c as &dyn UiComponent).collect();
+        self.focus_chain.rebuild(&refs);
+        let before = self.focus_chain.selected_id();
+        let _ = self.focus_chain.select_id(id);
         self.focus_chain.selected_id() != before
     }
 }
@@ -86,6 +125,119 @@ fn focusable_controls(form: Option<&FormPreview>) -> Vec<ControlComponent> {
             _ => None,
         })
         .collect()
+}
+
+fn first_reading_order_id(controls: &[ControlComponent]) -> u16 {
+    controls
+        .iter()
+        .min_by_key(|c| (c.rect.y, c.rect.x, c.id))
+        .map(|c| c.id)
+        .unwrap_or(0)
+}
+
+fn axis_overlap(a0: i32, a1: i32, b0: i32, b1: i32) -> i32 {
+    (a1.min(b1) - a0.max(b0)).max(0)
+}
+
+fn directional_target(
+    controls: &[ControlComponent],
+    current_id: u16,
+    direction: FocusDirection,
+) -> Option<u16> {
+    let current = controls.iter().find(|c| c.id == current_id)?;
+    let cur_cx = current.rect.x + current.rect.w / 2;
+    let cur_cy = current.rect.y + current.rect.h / 2;
+    let mut best: Option<(u8, i32, i32, i32, i32, u16)> = None;
+    let mut best_id: Option<u16> = None;
+
+    for cand in controls {
+        if cand.id == current.id {
+            continue;
+        }
+        let cx = cand.rect.x + cand.rect.w / 2;
+        let cy = cand.rect.y + cand.rect.h / 2;
+
+        let (in_dir, primary, secondary, overlap) = match direction {
+            FocusDirection::Up => (
+                cy < cur_cy,
+                cur_cy - cy,
+                (cx - cur_cx).abs(),
+                axis_overlap(
+                    current.rect.x,
+                    current.rect.x + current.rect.w,
+                    cand.rect.x,
+                    cand.rect.x + cand.rect.w,
+                ),
+            ),
+            FocusDirection::Down => (
+                cy > cur_cy,
+                cy - cur_cy,
+                (cx - cur_cx).abs(),
+                axis_overlap(
+                    current.rect.x,
+                    current.rect.x + current.rect.w,
+                    cand.rect.x,
+                    cand.rect.x + cand.rect.w,
+                ),
+            ),
+            FocusDirection::Left => (
+                cx < cur_cx,
+                cur_cx - cx,
+                (cy - cur_cy).abs(),
+                axis_overlap(
+                    current.rect.y,
+                    current.rect.y + current.rect.h,
+                    cand.rect.y,
+                    cand.rect.y + cand.rect.h,
+                ),
+            ),
+            FocusDirection::Right => (
+                cx > cur_cx,
+                cx - cur_cx,
+                (cy - cur_cy).abs(),
+                axis_overlap(
+                    current.rect.y,
+                    current.rect.y + current.rect.h,
+                    cand.rect.y,
+                    cand.rect.y + cand.rect.h,
+                ),
+            ),
+        };
+
+        if !in_dir {
+            continue;
+        }
+
+        // Prefer controls that overlap on the orthogonal axis (same row/column),
+        // then nearest in the requested direction.
+        let align_class = if overlap > 0 { 0 } else { 1 };
+        let key = (align_class, primary, secondary, cand.rect.y, cand.rect.x, cand.id);
+        if best.map(|k| key < k).unwrap_or(true) {
+            best = Some(key);
+            best_id = Some(cand.id);
+        }
+    }
+
+    best_id
+}
+
+fn linear_fallback_target(
+    controls: &[ControlComponent],
+    current_id: u16,
+    direction: FocusDirection,
+) -> Option<u16> {
+    if controls.is_empty() {
+        return None;
+    }
+    let mut order: Vec<(u16, i32, i32)> = controls.iter().map(|c| (c.id, c.rect.y, c.rect.x)).collect();
+    order.sort_by_key(|(id, y, x)| (*y, *x, *id));
+    let idx = order.iter().position(|(id, _, _)| *id == current_id)?;
+    match direction {
+        FocusDirection::Up | FocusDirection::Left => idx
+            .checked_sub(1)
+            .and_then(|i| order.get(i).map(|(id, _, _)| *id)),
+        FocusDirection::Down | FocusDirection::Right => order.get(idx + 1).map(|(id, _, _)| *id),
+    }
 }
 
 #[derive(Clone, Debug, Default)]

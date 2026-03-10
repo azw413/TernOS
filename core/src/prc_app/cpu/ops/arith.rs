@@ -81,7 +81,10 @@ fn execute_add_sub_class(
         return Ok(false);
     }
     // ADDX/SUBX are handled in xops to keep semantics isolated.
-    if (word & 0xF130) == 0xD100 || (word & 0xF130) == 0x9100 {
+    // Restrict to valid ADDX/SUBX sizes (byte/word/long). Without this,
+    // ADDA/SUBA opmode 0b111 would be incorrectly filtered out.
+    let is_xop = (word & 0xF130) == 0xD100 || (word & 0xF130) == 0x9100;
+    if is_xop && ((word >> 6) & 0x0003) != 0x0003 {
         return Ok(false);
     }
 

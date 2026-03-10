@@ -1,0 +1,4089 @@
+<html>
+<head>
+<title>(68K) Tables | Palm OS&#174; Programmer's  API Reference</title> 
+<link href="psi_devpubs.css" rel="stylesheet" type="text/css">
+
+<!-- BEGIN META DATA -->
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<META NAME="PSITEMPLATE" CONTENT="1006-007 PalmSource_HTML_2003 20041101">
+<META NAME="GENERATOR" CONTENT="Quadralay WebWorks AutoMap 2003 for FrameMaker 8.0.6.2138">
+<META NAME="LASTUPDATED" CONTENT="11/22/04 10:46:10">
+<!-- END META DATA -->
+</head>
+
+<body bgcolor="#ffffff" text="#000000" leftmargin="0" topmargin="0" marginwidth="0" marginheight="0">
+<a name="995794"></a>
+
+<!-- BEGIN TOPNAV -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td><img src="images/shim.gif" width="7" height="75" border="0" alt=""></td>
+<td align="left"><table border="0" cellpadding="0" cellspacing="0" width="744">
+<tr>
+<td><img name="index_r2_c1" src="images/shim.gif" width="25" height="75" border="0" alt=""></td>
+<td valign="top"><table border="0" cellpadding="0" cellspacing="0" width="96">
+<tr>
+<td><img name="index_r2_c4" src="images/shim.gif" width="96" height="15" border="0" alt=""></td>
+</tr>
+<tr>
+<td><a href="http://www.palmsource.com/"><img name="ps_logo" src="images/ps_logo.gif" width="96" height="54" border="0" alt=""></a></td>
+</tr>
+
+</table>
+</td>
+
+<td><table border="0" cellpadding="0" cellspacing="0" width="30">
+<td><img name="index_x" src="images/shim.gif" width="30" height="75" border="0" alt=""></td>
+</table></td>
+
+<!--BEGIN MASTHEAD-->
+<td><table border="0" cellpadding="0" cellspacing="0" width="96">
+<tr>
+<td><img name="index_x" src="images/shim.gif" width="615" height="5" border="0" alt=""></td>
+</tr>
+<tr>
+<td>
+<!--BEGIN BOOK NAVIGATION-->
+<span class="nav">
+<A href="http://www.palmos.com/dev/support/docs/">Documentation</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+<a href="ReferenceTOC.html">Table of Contents</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="SystemDialogs.html">&lt;&nbsp;Previous</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="UIColor.html">Next&nbsp;&gt;</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="ReferenceIX.html">Index</a>
+</span>
+<!--END BOOK NAVIGATION-->
+</tr>
+<tr>
+<td>
+<!--BEGIN PAGE TITLE-->
+<h2 class="PageTitle">20 &nbsp;&nbsp;
+Tables</h2></td>
+<!--END PAGE TITLE-->
+</tr>
+<tr>
+<td>
+<!--BEGIN BOOK TITLE-->
+<p class="BookTitle">Palm OS&#174; Programmer's  API Reference</p>
+<p class="SubTitle">Palm OS&#174; 68K SDK </p>
+<!--END BOOK TITLE-->
+</td>
+</tr>
+<tr>
+<td><img name="index_x" src="images/shim.gif" width="615" height="5" border="0" alt=""></td>
+</tr>
+</table>
+</td>
+<!--END MASTHEAD-->
+</tr>
+</table>
+<img name="dashes" src="images/dashes.gif" width="744" height="3" border="0" alt=""></td>
+</tr>
+</table>
+<!-- END TOPNAV -->
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td valign="top" width="5"><img name="index_x" src="images/shim.gif" width="5" height="33" border="0" alt=""></td>
+
+<!--BEGIN SIDETOC-->
+<td valign="top" width="175">
+<div id="sidetoc" valign="bottom">
+<h1 class="SideTOC1-PartTab"><a href="PartI.html">Part I: User Interface</a> </h1>
+<h1 class="SideTOC1"><a href="Table.html">20  Tables</a></h1>
+
+   <h2 class="SideTOC2"><a href="Table.html#995849">
+   Table Data Structures</a></h2>
+
+      <h3 class="SideTOC3"><a href="Table.html#995852">
+      TableAttrType</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#995911">
+      TableColumnAttrType</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996022">
+      TableItemPtr</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996034">
+      TableItemType</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996246">
+      TablePtr</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996265">
+      TableRowAttrType</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996397">
+      TableType</a></h3>
+
+   <h2 class="SideTOC2"><a href="Table.html#996529">
+   Table Constants</a></h2>
+
+   <h2 class="SideTOC2"><a href="Table.html#996572">
+   Table Resource</a></h2>
+
+   <h2 class="SideTOC2"><a href="Table.html#996576">
+   Table Functions</a></h2>
+
+      <h3 class="SideTOC3"><a href="Table.html#996579">
+      TblDrawTable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996644">
+      TblEditing</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996679">
+      TblEraseTable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996710">
+      TblFindRowData</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996748">
+      TblFindRowID</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996781">
+      TblGetBounds</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996806">
+      TblGetColumnSpacing</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996838">
+      TblGetColumnWidth</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996869">
+      TblGetCurrentField</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996895">
+      TblGetItemBounds</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996919">
+      TblGetItemFont</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996956">
+      TblGetItemInt</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#996991">
+      TblGetItemPtr</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997029">
+      TblGetLastUsableRow</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997056">
+      TblGetNumberOfColumns</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997091">
+      TblGetNumberOfRows</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997111">
+      TblGetRowData</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997143">
+      TblGetRowHeight</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997171">
+      TblGetRowID</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997206">
+      TblGetSelection</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997231">
+      TblGetTopRow</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997266">
+      TblGrabFocus</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997334">
+      TblHandleEvent</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997399">
+      TblHasScrollBar</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997429">
+      TblInsertRow</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997473">
+      TblMarkRowInvalid</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997519">
+      TblMarkTableInvalid</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997553">
+      TblRedrawTable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997610">
+      TblReleaseFocus</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997646">
+      TblRemoveRow</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997686">
+      TblRowInvalid</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997719">
+      TblRowMasked</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997761">
+      TblRowSelectable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997788">
+      TblRowUsable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997822">
+      TblSelectItem</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997860">
+      TblSetBounds</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997885">
+      TblSetColumnEditIndicator</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997920">
+      TblSetColumnMasked</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997965">
+      TblSetColumnSpacing</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#997996">
+      TblSetColumnUsable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998029">
+      TblSetColumnWidth</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998060">
+      TblSetCustomDrawProcedure</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998099">
+      TblSetItemFont</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998139">
+      TblSetItemInt</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998178">
+      TblSetItemPtr</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998216">
+      TblSetItemStyle</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998274">
+      TblSetLoadDataProcedure</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998310">
+      TblSetRowData</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998341">
+      TblSetRowHeight</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998372">
+      TblSetRowID</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998406">
+      TblSetRowMasked</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998462">
+      TblSetRowSelectable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998498">
+      TblSetRowStaticHeight</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998528">
+      TblSetRowUsable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998560">
+      TblSetSaveDataProcedure</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998593">
+      TblSetSelection</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998637">
+      TblUnhighlightSelection</a></h3>
+
+   <h2 class="SideTOC2"><a href="Table.html#998655">
+   Application-Defined Functions</a></h2>
+
+      <h3 class="SideTOC3"><a href="Table.html#998658">
+      TableDrawItemFuncType</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998702">
+      TableLoadDataFuncType</a></h3>
+
+      <h3 class="SideTOC3"><a href="Table.html#998770">
+      TableSaveDataFuncType</a></h3>
+
+</div>
+</td>
+
+<td width="5">&nbsp;&nbsp;</td>
+<td width="2" background="images/index_r8_c10.gif"><img src="images/shim.gif" width="2" height="75" border="0" alt=""></td>
+<td width="5">&nbsp;&nbsp;</td>
+
+<!--END SIDETOC-->
+
+<td valign="top">
+
+<!--BEGIN CONTENT-->
+<div id="content" valign="bottom">
+<p><a name="995818"> </a>This chapter describes the table API as declared in the header file <code>Table.h</code>. It discusses the following topics:</p>
+<ul type="disc">
+  <li><a name="995823"> </a><a href="Table.html#995849">Table Data Structures</a>
+  <li><a name="995827"> </a><a href="Table.html#996529">Table Constants</a>
+  <li><a name="995831"> </a><a href="Table.html#996572">Table Resource</a>
+  <li><a name="995835"> </a><a href="Table.html#996576">Table Functions</a>
+  <li><a name="995839"> </a><a href="Table.html#998655">Application-Defined Functions</a>
+</ul>
+
+<p><a name="995845"> </a>For more information on tables, see the section <a href="../PalmOSCompanion/UserInterface.html#1009810">"Tables"</a> in the <i>Palm OS Programmer's Companion</i>, vol. I. </p>
+
+<h2 class="haH2">
+  <a name="995849"> </a>Table Data Structures <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h2>
+
+
+<h3 class="hbH3">
+  <a name="995852"> </a>TableAttrType Struct <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="995854"> </a>Purpose 
+</h4>
+
+<p><a name="995856"> </a>The <code>TableAttrType</code> bit field defines the visible characteristics of the table. </p>
+
+<div><hr>
+  <a name="995857"> </a> <span class="warning">WARNING! </span> PalmSource, Inc. does not support or provide backward compatibility for the <code>TableAttrType</code> structure. Never access its structure members directly, or your code may break in future versions. Use the information below for debugging purposes only.
+<hr>
+</div>
+<h4>
+  <a name="995858"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="995859"></a>typedef struct {
+  UInt16 visible:1;
+  UInt16 editable:1;
+  UInt16 editing:1;
+  UInt16 selected:1;
+  UInt16 hasScrollBar:1;
+  UInt16 reserved:11;
+} TableAttrType;
+</pre>
+
+<p><a name="995867"> </a>Your code should treat the <code>TableAttrType</code> bit field as opaque. Use the functions specified in the descriptions below to retrieve and set each value. Do not attempt to change member values directly. </p>
+<h4>
+  <a name="1035349"> </a>Fields 
+</h4>
+
+<dl>
+<dt><a name="995871"> </a><code><code>visible</code> </code></dt>
+<dd><a name="995873"> </a>If set, the table is drawn on the screen. The value of this field is set by <a href="Table.html#996579"><code>TblDrawTable()</code></a> and cleared by <a href="Table.html#996679"><code>TblEraseTable()</code></a>. </dd>
+
+<dt><a name="995881"> </a><code><code>editable</code> </code></dt>
+<dd><a name="995883"> </a>If set, the user can modify the table. You specify this when you create the table resource. </dd>
+
+<dt><a name="995885"> </a><code><code>editing</code> </code></dt>
+<dd><a name="995887"> </a>If set, the table is in edit mode. The table is in edit mode while the user edits a text item. The value of this field is returned by <a href="Table.html#996644"><code>TblEditing()</code></a>. </dd>
+
+<dt><a name="995892"> </a><code><code>selected</code> </code></dt>
+<dd><a name="995894"> </a>If set, the current item (as identified by the <a href="Table.html#996397"><code>TableType</code></a> fields <code>currentRow</code> and <code>currentColumn</code>) is selected. Use <a href="Table.html#997206"><code>TblGetSelection()</code></a> to retrieve this value. </dd>
+
+<dt><a name="995902"> </a><code><code>hasScrollBar</code> </code></dt>
+<dd><a name="995904"> </a>If set, the table has a scroll bar. Note that this attribute can only be set programmatically. See <a href="Table.html#997399"><code>TblHasScrollBar()</code></a>.</dd>
+
+</dl>
+
+<h3 class="hbH3">
+  <a name="995911"> </a>TableColumnAttrType Struct <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="995913"> </a>Purpose 
+</h4>
+
+<p><a name="995915"> </a>The <code>TableColumnAttrType</code> structure defines a column in a table. </p>
+
+<div><hr>
+  <a name="995916"> </a> <span class="warning">WARNING! </span> PalmSource, Inc. does not support or provide backward compatibility for the <code>TableColumnAttrType</code> structure. Never access its structure members directly, or your code may break in future versions. Use the information below for debugging purposes only.
+<hr>
+</div>
+<h4>
+  <a name="995917"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="995918"></a>typedef struct {
+  Coord width;
+  UInt16 reserved1 : 5;
+  UInt16 masked : 1;
+  UInt16 editIndicator : 1;
+  UInt16 usable : 1;
+  UInt16 reserved2 : 8;
+  Coord spacing;
+  TableDrawItemFuncPtr drawCallback;
+  TableLoadDataFuncPtr loadDataCallback;
+  TableSaveDataFuncPtr saveDataCallback;
+} TableColumnAttrType;
+</pre>
+
+<p><a name="995930"> </a>Your code should treat the <code>TableColumnAttrType</code> structure as opaque. Use the functions specified in the descriptions below to retrieve and set each value. Do not attempt to change structure member values directly. </p>
+<h4>
+  <a name="1035397"> </a>Fields 
+</h4>
+
+<dl>
+<dt><a name="995934"> </a><code><code>width</code> </code></dt>
+<dd><a name="995936"> </a>The column's width in pixels. See <a href="Table.html#996838"><code>TblGetColumnWidth()</code></a> and <a href="Table.html#998029"><code>TblSetColumnWidth()</code></a>. </dd>
+
+<dt><a name="995944"> </a><code>reserved1 </code></dt>
+<dd><a name="995946"> </a>Reserved for future use. </dd>
+
+<dt><a name="995948"> </a><code><code>masked</code> </code></dt>
+<dd><a name="995950"> </a>If <code>true</code> and the item's row also has a <code>masked</code> attribute of <code>true</code>, the table cell is drawn on the screen but is shaded to obscure the information that it contains. See <a href="Table.html#997920"><code>TblSetColumnMasked()</code></a>. </dd>
+
+<dt><a name="995955"> </a><code><code>editIndicator</code> </code></dt>
+<dd><a name="995957"> </a>If <code>true</code>, items in the column should be highlighted if selected while in edit mode. If <code>false</code>, items in the column should not be highlighted. By default, text field items are highlighted in edit mode, but all other types of items are not highlighted. The default can be overridden with <a href="Table.html#997885"><code>TblSetColumnEditIndicator()</code></a>. </dd>
+
+<dt><a name="995962"> </a><code><code>usable</code> </code></dt>
+<dd><a name="995964"> </a>If <code>false</code>, the column is not considered part of the current interface of the application, and it doesn't appear on screen. See <a href="Table.html#997996"><code>TblSetColumnUsable()</code></a>. </dd>
+
+<dt><a name="995969"> </a><code><code>reserved2</code> </code></dt>
+<dd><a name="995971"> </a>Reserved for future use. </dd>
+
+<dt><a name="995973"> </a><code><code>spacing</code> </code></dt>
+<dd><a name="995975"> </a>The spacing in pixels between this column and the next column. See <a href="Table.html#996806"><code>TblGetColumnSpacing()</code></a> and <a href="Table.html#997965"><code>TblSetColumnSpacing()</code></a>.</dd>
+
+<dt><a name="995983"> </a><code><code>drawCallback</code> </code></dt>
+<dd><a name="995985"> </a>Pointer to a function that draws custom items in the column. This function is called during <a href="Table.html#996579"><code>TblDrawTable()</code></a> and <a href="Table.html#997553"><code>TblRedrawTable()</code></a>. See <a href="Table.html#998060"><code>TblSetCustomDrawProcedure()</code></a>.</dd>
+
+<dt><a name="995996"> </a><code><code>loadDataCallback</code> </code></dt>
+<dd><a name="995998"> </a>Pointer to a function that loads data into the column. This function is called during <a href="Table.html#996579"><code>TblDrawTable()</code></a> and <a href="Table.html#997553"><code>TblRedrawTable()</code></a>. See <a href="Table.html#998274"><code>TblSetLoadDataProcedure()</code></a>.</dd>
+
+<dt><a name="996009"> </a><code><code>saveDataCallback</code> </code></dt>
+<dd><a name="996011"> </a>Pointer to a function that saves the data in the column. Called when the focus moves from one table cell to another and when the table loses focus entirely. See <a href="Table.html#998560"><code>TblSetSaveDataProcedure()</code></a>.</dd>
+
+</dl>
+<h4>
+  <a name="996016"> </a>Compatibility 
+</h4>
+
+<p><a name="996020"> </a>The <code>masked</code> field is defined only if <a href="CompatibilityApdx.html#994671">3.5 New Feature Set</a> is present. </p>
+
+<h3 class="hbH3">
+  <a name="996022"> </a>TableItemPtr Typedef <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996024"> </a>Purpose 
+</h4>
+
+<p><a name="996029"> </a>A <code>TableItemPtr</code> points to a <a href="Table.html#996034"><code>TableItemType</code></a>.</p>
+<h4>
+  <a name="996030"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996031"></a>typedef TableItemType *TableItemPtr;
+</pre>
+
+<h3 class="hbH3">
+  <a name="996034"> </a>TableItemType Struct <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996036"> </a>Purpose 
+</h4>
+
+<p><a name="996038"> </a>The <code>TableItemType</code> structure defines an item, or cell, within the table. </p>
+
+<div><hr>
+  <a name="996039"> </a> <span class="warning">WARNING! </span> PalmSource, Inc. does not support or provide backward compatibility for the <code>TableItemType</code> structure. Never access its structure members directly, or your code may break in future versions. Use the information below for debugging purposes only.
+<hr>
+</div>
+<h4>
+  <a name="996040"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996041"></a>typedef struct {
+  TableItemStyleType itemType;
+  FontID fontID;
+  Int16 intValue;
+  Char *ptr;
+} TableItemType;
+</pre>
+
+<p><a name="996047"> </a>Your code should treat the <code>TableItemType</code> structure as opaque. Use the functions specified in the descriptions below to retrieve and set each value. Do not attempt to change structure member values directly. </p>
+
+<div><hr>
+  <a name="996048"> </a> <b>NOTE: </b> None of the table items create memory that you need to free. The table manager handles all of the allocating and deallocating of memory for table items. The only memory you are responsible for freeing is the memory handle containing the text that you want displayed in editable text fields. (See <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a>.)
+<hr>
+</div>
+<h4>
+  <a name="1035473"> </a>Fields 
+</h4>
+
+<dl>
+<dt><a name="996055"> </a><code><code>itemType</code> </code></dt>
+<dd><a name="996057"> </a>The type of the item, such as a control, a text label, and so on. <a href="Table.html#998216"><code>TblSetItemStyle()</code></a> sets this value. The rest of the fields in this struct are either used or not used depending on the <code>itemType</code>. See <a href="Table.html#996104">Table 20.1</a>. </dd>
+
+<dt><a name="996065"> </a><code><code>fontID </code></code></dt>
+<dd><a name="996067"> </a>ID of the font used to display the item's text. <a href="Table.html#996919"><code>TblGetItemFont()</code></a> and <a href="Table.html#998099"><code>TblSetItemFont()</code></a> retrieve and set this value. </dd>
+
+<dt><a name="996075"> </a><code><code>intValue</code></code></dt>
+<dd><a name="996080"> </a>Integer value of the item. <a href="Table.html#996956"><code>TblGetItemInt()</code></a> and <a href="Table.html#998139"><code>TblSetItemInt()</code></a> retrieve and set this value. </dd>
+
+<dt><a name="996085"> </a><code><code>ptr</code></code></dt>
+<dd><a name="996090"> </a>Pointer to the item's text. <a href="Table.html#996991"><code>TblGetItemPtr()</code></a> and <a href="Table.html#998178"><code>TblSetItemPtr()</code></a> retrieve and set this value.</dd>
+
+<dd><a name="996094"> </a>All text items have a maximum of <code>tableMaxTextItemSize</code>. </dd>
+
+</dl>
+
+<p><a name="996097"> </a>The following table lists the possible values for the <code>itemType</code> field, describes how each type is drawn, describes which other fields are used for each <code>itemType</code>, and provides special instructions for setting those fields. Note in particular that the <code>fontID</code> field is often not used. Instead, certain items are displayed in a standard font. These are noted in the last column of this table. </p>
+
+<p class="caption"><a name="996104"> </a><b>Table 20.1&nbsp;&nbsp;TableItemType fields </b></p>
+<div class="tablediv"><table cellspacing="0" class="tTable">
+
+  <tr valign="top">
+    <th><p class="tt"><a name="996111"> </a><b>ItemType</b></p>
+    </th>
+    <th><p class="tt"><a name="996113"> </a><b>Description</b></p>
+    </th>
+    <th><p class="tt"><a name="996115"> </a><b>TableItemType Fields Used</b></p>
+    </th>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996118"> </a><code>checkboxTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996120"> </a>A checkbox control.</p>
+    </td>
+    <td><p class="tt"><a name="996122"> </a><code>intValue</code> </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996125"> </a><code>customTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996127"> </a>Application-defined cell. The height of the item is fixed at 11 pixels.</p>
+    </td>
+    <td><p class="tt"><a name="996129"> </a>None. </p>
+<p class="tt"><a name="996130"> </a>Custom items are drawn using the custom drawing function that you implement. See <a href="Table.html#998658"><code>TableDrawItemFuncType()</code></a>. If you want, you can store data in the <code>intValue</code> and <code>ptr</code> fields. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996136"> </a><code>dateTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996138"> </a>Non-editable date in the form <i>month</i>/<i>day</i>, or a dash if the date value is -1. The date is followed by an exclamation point if it has past. </p>
+    </td>
+    <td><p class="tt"><a name="996140"> </a><code>intValue</code> </p>
+<p class="tt"><a name="996141"> </a>The <code>intValue</code> field should be a value that can be cast to <code>DateType</code>. <code>DateType</code> is currently defined as a 16-bit number:</p>
+<p class="tt"><a name="996142"> </a><code>yyyyyyymmmmddddd</code> </p>
+<p class="tt"><a name="996143"> </a>The first 7 bits are the year given as the offset since 1904, the next 4 bits are the month, and the next 5 bits are the day. </p>
+<p class="tt"><a name="996144"> </a>Dates are always drawn in the current font. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996147"> </a><code>labelTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996149"> </a>Non-editable text. </p>
+    </td>
+    <td><p class="tt"><a name="996151"> </a><code>ptr</code> </p>
+<p class="tt"><a name="996152"> </a>Labels are displayed in the system's default font along with a terminating colon character (':'). Use a</p>
+<p class="tt"><a name="996153"> </a><code>customTableItem</code> or <code>tallCustomTableItem</code> if you don't want a colon.</p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996156"> </a><code>numericTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996158"> </a>Non-editable number.</p>
+    </td>
+    <td><p class="tt"><a name="996160"> </a><code>intValue</code> </p>
+<p class="tt"><a name="996161"> </a>Numbers are displayed in the system's default bold font. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996164"> </a><code>popupTriggerTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996166"> </a>A list with a pop-up trigger.</p>
+    </td>
+    <td><p class="tt"><a name="996168"> </a><code>intValue </code></p>
+<p class="tt"><a name="996169"> </a><code>ptr</code> </p>
+<p class="tt"><a name="996170"> </a><code>intValue</code> is the index of the list item that should be displayed.</p>
+<p class="tt"><a name="996171"> </a><code>ptr</code> is a pointer to the list. </p>
+<p class="tt"><a name="996172"> </a>Lists are displayed in the system's default font. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996175"> </a><code>tallCustomTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996177"> </a>Application-defined cell. The height of the item is equal to the height of the row in which the item is located. This table item type was added in Palm OS 4.0 and is only supported if <a href="CompatibilityApdx.html#995256">4.0 New Feature Set</a> is defined.</p>
+    </td>
+    <td><p class="tt"><a name="996182"> </a>None. </p>
+<p class="tt"><a name="996183"> </a>Custom items are drawn using the custom drawing function that you implement. See <a href="Table.html#998658"><code>TableDrawItemFuncType()</code></a>. If you want, you can store data in the <code>intValue</code> and <code>ptr</code> fields. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996189"> </a><code>textTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996191"> </a>Editable text field.</p>
+    </td>
+    <td><p class="tt"><a name="996193"> </a><code>fontID</code> </p>
+<p class="tt"><a name="996194"> </a><code>ptr</code> </p>
+<p class="tt"><a name="996195"> </a>For this item type, implement the callback function <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a> to load text into the table cell and implement the callback <a href="Table.html#998770"><code>TableSaveDataFuncType()</code></a> to save data before the field is freed. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996204"> </a><code>textWithNoteTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996206"> </a>Editable text field and a note icon to the right of the text.</p>
+    </td>
+    <td><p class="tt"><a name="996208"> </a><code>fontID</code> </p>
+<p class="tt"><a name="996209"> </a><code>ptr</code> </p>
+<p class="tt"><a name="996210"> </a>For this item type, implement the callback function <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a> to load text into the table cell and implement the callback <a href="Table.html#998770"><code>TableSaveDataFuncType()</code></a> to save data before the field is freed. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996219"> </a><code>timeTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996221"> </a>Not implemented.</p>
+    </td>
+    <td><p class="tt"><a name="996223"> </a></p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996226"> </a><code>narrowTextTableItem</code></p>
+    </td>
+    <td><p class="tt"><a name="996228"> </a>Editable text with space reserved on the right side of the cell. </p>
+    </td>
+    <td><p class="tt"><a name="996230"> </a><code>fontID</code> </p>
+<p class="tt"><a name="996231"> </a><code>ptr</code> </p>
+<p class="tt"><a name="996232"> </a><code>intValue</code> </p>
+<p class="tt"><a name="996233"> </a><code>intValue</code> is the number of pixels to reserve on the right side of the cell.</p>
+<p class="tt"><a name="996234"> </a>For this item type, implement the callback function <a href="Table.html#998658"><code>TableDrawItemFuncType()</code></a> to draw in the space reserved on the right side of the cell, the <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a> callback function to load text into the table cell, and the callback function <a href="Table.html#998770"><code>TableSaveDataFuncType()</code></a> to save data before the field is freed. </p>
+    </td>
+  </tr>
+</table>
+
+</div>
+
+
+<h3 class="hbH3">
+  <a name="996246"> </a>TablePtr Typedef <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996248"> </a>Purpose 
+</h4>
+
+<p><a name="996253"> </a>The <code>TablePtr</code> type defines a pointer to a <a href="Table.html#996397"><code>TableType</code></a>.</p>
+<h4>
+  <a name="996254"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996255"></a>typedef TableType *TablePtr;
+</pre>
+
+<p><a name="996256"> </a>You pass the table's pointer as an argument to all table functions. You can obtain the table's pointer using the function <a href="Form.html#997879"><code>FrmGetObjectPtr()</code></a> in this way:</p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+tblPtr = FrmGetObjectPtr(frm, 
+  FrmGetObjectIndex(frm, tblID));<a name="996260"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+
+<p><a name="996261"> </a>where <code>tblID</code> is the resource ID assigned when you created the table. </p>
+
+<h3 class="hbH3">
+  <a name="996265"> </a>TableRowAttrType Struct <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996267"> </a>Purpose 
+</h4>
+
+<p><a name="996269"> </a>The <code>TableRowAttrType</code> structure defines a row in a table. </p>
+
+<div><hr>
+  <a name="996270"> </a> <span class="warning">WARNING! </span> PalmSource, Inc. does not support or provide backward compatibility for the <code>TableRowAttrType</code> structure. Never access its structure members directly, or your code may break in future versions. Use the information below for debugging purposes only.
+<hr>
+</div>
+<h4>
+  <a name="996271"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996272"></a>typedef struct {
+  UInt16 id;
+  Coord height;
+  UInt32 data;
+  UInt16 reserved1 : 7;
+  UInt16 usable : 1;
+  UInt16 reserved2 : 4;
+  UInt16 masked : 1;
+  UInt16 invalid : 1;
+  UInt16 staticHeight : 1;
+  UInt16 selectable : 1;
+  UInt16 reserved3;
+} TableRowAttrType;
+</pre>
+
+<p><a name="996285"> </a>Your code should treat the <code>TableRowAttrType</code> structure as opaque. Use the functions specified in the descriptions below to retrieve and set each value. Do not attempt to change structure member values directly. </p>
+<h4>
+  <a name="1035514"> </a>Fields 
+</h4>
+
+<dl>
+<dt><a name="996289"> </a><code><code>id</code> </code></dt>
+<dd><a name="996294"> </a>The ID of this row. See <a href="Table.html#996748"><code>TblFindRowID()</code></a>, <a href="Table.html#997171"><code>TblGetRowID()</code></a>, and <a href="Table.html#998372"><code>TblSetRowID()</code></a>.</dd>
+
+<dt><a name="996302"> </a><code><code>height</code> </code></dt>
+<dd><a name="996304"> </a>Height of the row in pixels. The functions <a href="Table.html#998341"><code>TblSetRowHeight()</code></a> and <a href="Table.html#997143"><code>TblGetRowHeight()</code></a> set and retrieve this value. </dd>
+
+<dt><a name="996312"> </a><code><code>data</code> </code></dt>
+<dd><a name="996314"> </a>Any application-specific value you want to store in this row. For example, the Datebook and ToDo applications use this field to store the unique ID of the database record that is displayed in this table row. See <a href="Table.html#996710"><code>TblFindRowData()</code></a>, <a href="Table.html#997111"><code>TblGetRowData()</code></a>, and <a href="Table.html#998310"><code>TblSetRowData()</code></a>. </dd>
+
+<dt><a name="996325"> </a><code><code>reserved1</code> </code></dt>
+<dd><a name="996327"> </a>Reserved for future use.</dd>
+
+<dt><a name="996329"> </a><code><code>usable</code> </code></dt>
+<dd><a name="996331"> </a>If <code>false</code>, the row is not considered part of the current interface of the application, and it doesn't appear on screen. Table rows have <code>usable</code> set to <code>false</code> when they are scrolled off the screen. See <a href="Table.html#997788"><code>TblRowUsable()</code></a> and <a href="Table.html#998528"><code>TblSetRowUsable()</code></a>. The function <a href="Table.html#997029"><code>TblGetLastUsableRow()</code></a> returns the row that appears at the bottom of the screen. </dd>
+
+<dt><a name="996342"> </a><code><code>masked</code> </code></dt>
+<dd><a name="996344"> </a>If <code>true</code> and the item's column also has a <code>masked</code> attribute of <code>true</code>, the table cell is drawn on the screen but is shaded to obscure the information that it contains. See <a href="Table.html#998406"><code>TblSetRowMasked()</code></a> and <a href="Table.html#997719"><code>TblRowMasked()</code></a>. </dd>
+
+<dt><a name="996352"> </a><code><code>reserved2</code> </code></dt>
+<dd><a name="996354"> </a>Reserved for future use. </dd>
+
+<dt><a name="996356"> </a><code><code>invalid</code> </code></dt>
+<dd><a name="996358"> </a>If <code>true</code>, the row needs to be redrawn. See <a href="Table.html#997686"><code>TblRowInvalid()</code></a>, <a href="Table.html#997473"><code>TblMarkRowInvalid()</code></a>, and <a href="Table.html#997519"><code>TblMarkTableInvalid()</code></a>. </dd>
+
+<dt><a name="996369"> </a><code><code>staticHeight</code> </code></dt>
+<dd><a name="996371"> </a><code>true</code> if the row height cannot be changed, <code>false</code> otherwise. If <code>false</code>, text fields in this table row will dynamically resize to multiple lines as necessary. See <a href="Table.html#998498"><code>TblSetRowStaticHeight()</code></a>. </dd>
+
+<dt><a name="996376"> </a><code><code>selectable</code> </code></dt>
+<dd><a name="996378"> </a>If <code>true</code>, the user can select individual cells in this row. See <a href="Table.html#998462"><code>TblSetRowSelectable()</code></a> and <a href="Table.html#997761"><code>TblRowSelectable()</code></a>. </dd>
+
+<dt><a name="996386"> </a><code><code>reserved3</code> </code></dt>
+<dd><a name="996388"> </a>Reserved for future use. </dd>
+
+</dl>
+<h4>
+  <a name="996390"> </a>Compatibility 
+</h4>
+
+<p><a name="996394"> </a>The <code>masked</code> field is defined only if <a href="CompatibilityApdx.html#994671">3.5 New Feature Set</a> is present. </p>
+
+<h3 class="hbH3">
+  <a name="996397"> </a>TableType Struct <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996399"> </a>Purpose 
+</h4>
+
+<p><a name="996403"> </a>The <code>TableType</code> structure represents a table. </p>
+
+<div><hr>
+  <a name="996404"> </a> <span class="warning">WARNING! </span> PalmSource, Inc. does not support or provide backward compatibility for the <code>TableType</code> structure. Never access its structure members directly, or your code may break in future versions. Use the information below for debugging purposes only.
+<hr>
+</div>
+<h4>
+  <a name="996405"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996406"></a>typedef struct TableType {
+  UInt16 id;
+  RectangleType bounds;
+  TableAttrType attr;
+  Int16 numColumns;
+  Int16 numRows;
+  Int16 currentRow;
+  Int16 currentColumn;
+  Int16 topRow;
+  TableColumnAttrType *columnAttrs;
+  TableRowAttrType *rowAttrs;
+  TableItemPtr items;
+  FieldType currentField;
+} TableType;
+</pre>
+
+<p><a name="996420"> </a>Your code should treat the <code>TableType</code> structure as opaque. Use the functions specified in the descriptions below to retrieve and set each value. Do not attempt to change structure member values directly.</p>
+<h4>
+  <a name="1038830"> </a>Fields 
+</h4>
+
+<dl>
+<dt><a name="996424"> </a><code>id </code></dt>
+<dd><a name="996426"> </a>ID value you specified when you created the table resource. This ID is included as part of the event data of <a href="EventRef.html#997812"><code>tblEnterEvent</code></a>. </dd>
+
+<dt><a name="996431"> </a><code>bounds </code></dt>
+<dd><a name="996433"> </a>Position and size of the table object. The functions <a href="Table.html#996781"><code>TblGetBounds()</code></a>, <a href="Form.html#997703"><code>FrmGetObjectBounds()</code></a>, <a href="Table.html#997860"><code>TblSetBounds()</code></a>, and <a href="Form.html#999108"><code>FrmSetObjectBounds()</code></a> retrieve and set this value.</dd>
+
+<dt><a name="996447"> </a><code>attr </code></dt>
+<dd><a name="996452"> </a>The table's attributes. See <a href="Table.html#995852"><code>TableAttrType</code></a>.</dd>
+
+<dt><a name="996454"> </a><code>numColumns </code></dt>
+<dd><a name="996456"> </a>Number of columns displayed by the table object. You specify the number of columns when you create the table resource, and this value cannot be changed. Access with <a href="Table.html#997056"><code>TblGetNumberOfColumns()</code></a>.</dd>
+
+<dt><a name="996461"> </a><code>numRows </code></dt>
+<dd><a name="996463"> </a>Maximum number of visible rows in the table object. </dd>
+
+<dd><a name="996464"> </a>You specify this value when you create the table resource, and it does not change; however, the total number of rows in a table can change if you insert new rows in a table, and even the number of currently visible rows can change if a text field within a table cell is dynamically resized. </dd>
+
+<dd><a name="996468"> </a>The function <a href="Table.html#997091"><code>TblGetNumberOfRows()</code></a> returns the value of this field. </dd>
+
+<dt><a name="996470"> </a><code>currentRow </code></dt>
+<dd><a name="996472"> </a>Row index of the currently selected table cell. Rows are numbered from top to bottom starting with 0. <a href="Table.html#997206"><code>TblGetSelection()</code></a> and <a href="Table.html#998593"><code>TblSetSelection()</code></a> retrieve and set the values of <code>currentRow</code>.</dd>
+
+<dt><a name="996480"> </a><code>currentColumn </code></dt>
+<dd><a name="996482"> </a>Column index of the currently selected table cell. Columns are numbered from left to right starting with 0. If the <a href="Table.html#995852"><code>TableAttrType</code></a> <code>selected</code> is <code>true</code>, then this table cell is highlighted. If <code>selected</code> is <code>false</code>, the table still considers this the "current" item, but it is not highlighted. <a href="Table.html#997206"><code>TblGetSelection()</code></a> and <a href="Table.html#998593"><code>TblSetSelection()</code></a> retrieve and set the values of <code>currentColumn</code>.</dd>
+
+<dt><a name="996493"> </a><code>topRow </code></dt>
+<dd><a name="996495"> </a>First visible row of the table object. Access with <a href="Table.html#997231"><code>TblGetTopRow()</code></a>.</dd>
+
+<dt><a name="996500"> </a><code>columnAttrs </code></dt>
+<dd><a name="996502"> </a>An array of each table column's attributes. See <a href="Table.html#995911"><code>TableColumnAttrType</code></a>.</dd>
+
+<dt><a name="996507"> </a><code>rowAttrs </code></dt>
+<dd><a name="996509"> </a>An array of each row's attributes, such as its ID, height, and whether or not it is usable, selectable, or invalid. See <a href="Table.html#996265"><code>TableRowAttrType</code></a>.</dd>
+
+<dt><a name="996514"> </a><code>items </code></dt>
+<dd><a name="996516"> </a>An array of each item's (table cell's) attributes, such as the item type, font ID, an integer value, and a character pointer. See <a href="Table.html#996034"><code>TableItemType</code></a>.</dd>
+
+<dt><a name="996521"> </a><code>currentField </code></dt>
+<dd><a name="996523"> </a>Field object the user is currently editing. The function <a href="Table.html#996869"><code>TblGetCurrentField()</code></a> retrieves the value of this item. </dd>
+
+</dl>
+
+<h2 class="haH2">
+  <a name="996529"> </a>Table Constants <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h2>
+
+
+
+<div class="tablediv"><table cellspacing="0" class="tTable">
+
+  <tr valign="top">
+    <th><p class="tt"><a name="996532"> </a><b>Constant</b></p>
+    </th>
+    <th><p class="tt"><a name="996534"> </a><b>Value</b></p>
+    </th>
+    <th><p class="tt"><a name="996536"> </a><b>Description</b></p>
+    </th>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996538"> </a><code>tableDefaultColumnSpacing</code> </p>
+    </td>
+    <td><p class="tt"><a name="996540"> </a>1</p>
+    </td>
+    <td><p class="tt"><a name="996542"> </a>Never used. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996544"> </a><code>tableNoteIndicatorHeight</code> </p>
+    </td>
+    <td><p class="tt"><a name="996546"> </a>11</p>
+    </td>
+    <td><p class="tt"><a name="996548"> </a>The height in pixels of the note indicator for tables items of type <code>textWithNoteTableItem</code>. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996550"> </a><code>tableNoteIndicatorWidth</code> </p>
+    </td>
+    <td><p class="tt"><a name="996552"> </a>7</p>
+    </td>
+    <td><p class="tt"><a name="996554"> </a>The width in pixels of the note indicator for tables items of type <code>textWithNoteTableItem</code>. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996556"> </a><code>tableMaxTextItemSize</code> </p>
+    </td>
+    <td><p class="tt"><a name="996558"> </a>255</p>
+    </td>
+    <td><p class="tt"><a name="996560"> </a>The maximum length of an editable text field within a table cell. </p>
+    </td>
+  </tr>
+  <tr valign="top">
+    <td><p class="tt"><a name="996562"> </a><code>tblUnusableRow</code> </p>
+    </td>
+    <td><p class="tt"><a name="996564"> </a>0xffff</p>
+    </td>
+    <td><p class="tt"><a name="996566"> </a>Value returned by <a href="Table.html#997029"><code>TblGetLastUsableRow()</code></a> if none of the table's rows are usable. This value is only available in version 3.5 and higher. </p>
+    </td>
+  </tr>
+</table>
+
+</div>
+
+
+<h2 class="haH2">
+  <a name="996572"> </a>Table Resource <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h2>
+
+
+<p><a name="996573"> </a>The Table Resource (tTBL) represents a table on screen. See <i>Palm OS User Interface Guidelines</i> for more information.</p>
+
+<h2 class="haH2">
+  <a name="996576"> </a>Table Functions <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h2>
+
+
+<h3 class="hbH3">
+  <a name="996579"> </a>TblDrawTable Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996581"> </a>Purpose 
+</h4>
+
+<p><a name="996582"> </a>Draw a table.</p>
+<h4>
+  <a name="996583"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996584"> </a></code><h4>
+  <a name="996585"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996586"></a>void TblDrawTable (
+   TableType *tableP
+)
+</pre>
+<h4>
+  <a name="996587"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996588"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996592"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+</dl>
+<h4>
+  <a name="996593"> </a>Returns 
+</h4>
+
+<p><a name="996594"> </a>Returns nothing.</p>
+<h4>
+  <a name="996595"> </a>Comments 
+</h4>
+
+<p><a name="996599"> </a>This function is called as part of <a href="Form.html#997288"><code>FrmDrawForm()</code></a> when the form contains a table object. </p>
+
+<p><a name="996600"> </a>This function draws the entire table, marking all rows valid before drawing. See the <a href="Table.html#996034"><code>TableItemType</code></a> struct description for more information about how each type of table cell is drawn. </p>
+
+<p><a name="996606"> </a>When drawing cells with editable text fields (<code>textTableItem, textWithNoteTableItem</code>, or <code>narrowTextTableItem</code>), this function uses the <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a> callback function to load the text into the table cells. The text field does not retain the text handle that your <code>TableLoadDataFunc</code> returns, meaning that you are responsible for freeing the memory that you load into the table. </p>
+
+<p><a name="996612"> </a>When drawing <code>narrowTextTableItem</code> cells, <code>customTableItem</code> cells or <code>tallCustomTableItem</code> cells, this function uses the <a href="Table.html#998658"><code>TableDrawItemFuncType()</code></a> callback function to draw the extra pixels after the text or to draw the entire cell. </p>
+
+<p><a name="996617"> </a>On color systems, tables are always drawn using the same color as is used for the field background color. </p>
+
+<p><a name="996618"> </a>When the user has set the security setting to mask private records, table cells that contain private database records are drawn as shaded cells to obscure the information they contain. You must explicitly tell the table which cells are masked by making the appropriate calls to <a href="Table.html#998406"><code>TblSetRowMasked()</code></a> and <a href="Table.html#997920"><code>TblSetColumnMasked()</code></a>.</p>
+<h4>
+  <a name="996625"> </a>Compatibility 
+</h4>
+
+<p><a name="996626"> </a>Color support and masked private records are only supported in Palm OS<sup>&#174;</sup> version 3.5 and higher. </p>
+
+<p><a name="996627"> </a>In versions earlier than 3.5, this function did not erase table cells before it drew them. In earlier releases, consider calling <a href="Table.html#996679"><code>TblEraseTable()</code></a> before calling this function, particularly if the entire table has changed, as the visual effect of drawing over a white background may be more pleasing. </p>
+<h4>
+  <a name="996631"> </a>See Also 
+</h4>
+
+<p><a name="996638"> </a><a href="Table.html#996679"><code>TblEraseTable()</code></a>, <a href="Table.html#997553"><code>TblRedrawTable()</code></a>, <a href="Table.html#998060"><code>TblSetCustomDrawProcedure()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996644"> </a>TblEditing Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996646"> </a>Purpose 
+</h4>
+
+<p><a name="996647"> </a>Check whether a table is in edit mode.</p>
+<h4>
+  <a name="996648"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996649"> </a></code><h4>
+  <a name="996650"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996651"></a>Boolean TblEditing (
+   const TableType *tableP
+)
+</pre>
+<h4>
+  <a name="996652"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996653"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996657"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+</dl>
+<h4>
+  <a name="996658"> </a>Returns 
+</h4>
+
+<p><a name="996659"> </a>Returns <code>true</code> if the table is in edit mode, <code>false</code> otherwise.</p>
+<h4>
+  <a name="996660"> </a>Comments 
+</h4>
+
+<p><a name="996661"> </a>The table is in edit mode while the user edits a text item. More specifically, the table is in edit mode when a <a href="EventRef.html#997812"><code>tblEnterEvent</code></a> is received on an editable table cell (<code>textTableItem, textWithNoteTableItem</code>, or <code>narrowTextTableItem</code>), or when <a href="Table.html#997266"><code>TblGrabFocus()</code></a> is called. </p>
+
+<p><a name="996671"> </a>The table is taken out of edit mode when a the user places the pen on a note in a <code>textWithNoteTableItem</code> or when the table releases the focus (<a href="Table.html#997610"><code>TblReleaseFocus()</code></a>). </p>
+
+<h3 class="hbH3">
+  <a name="996679"> </a>TblEraseTable Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996681"> </a>Purpose 
+</h4>
+
+<p><a name="996682"> </a>Erase a table object.</p>
+<h4>
+  <a name="996683"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996684"> </a></code><h4>
+  <a name="996685"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996686"></a>void TblEraseTable (
+   TableType *tableP
+)
+</pre>
+<h4>
+  <a name="996687"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996688"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996692"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+</dl>
+<h4>
+  <a name="996693"> </a>Returns 
+</h4>
+
+<p><a name="996694"> </a>Returns nothing.</p>
+<h4>
+  <a name="996695"> </a>Comments 
+</h4>
+
+<p><a name="996696"> </a>This function sets the table's <code>visible</code> and <code>selected</code> attributes to <code>false</code>. It does not invalidate table rows. </p>
+<h4>
+  <a name="996697"> </a>See Also 
+</h4>
+
+<p><a name="996704"> </a><a href="Table.html#996579"><code>TblDrawTable()</code></a>, <a href="Table.html#998060"><code>TblSetCustomDrawProcedure()</code></a>, <a href="Table.html#997553"><code>TblRedrawTable()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996710"> </a>TblFindRowData Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996712"> </a>Purpose 
+</h4>
+
+<p><a name="996713"> </a>Return the number of the row that contains the specified data value.</p>
+<h4>
+  <a name="996714"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996715"> </a></code><h4>
+  <a name="996716"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996717"></a>Boolean TblFindRowData (
+   const TableType *tableP,
+   UInt32 data,
+   Int16 *rowP
+)
+</pre>
+<h4>
+  <a name="996718"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996719"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996723"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="996724"> </a><code>&rarr;  <i><code>data</code></i></code></dt>
+<dd><a name="996725"> </a>Row data to find.</dd>
+
+<dt><a name="996726"> </a><code>&larr;  <i><code>rowP</code></i></code></dt>
+<dd><a name="996727"> </a>Pointer to the row number (return value).</dd>
+
+</dl>
+<h4>
+  <a name="996728"> </a>Returns 
+</h4>
+
+<p><a name="996729"> </a>Returns <code>true</code> if a match was found, <code>false</code> otherwise.</p>
+<h4>
+  <a name="996730"> </a>Comments 
+</h4>
+
+<p><a name="996731"> </a>This function searches for a row whose attributes contain the specified data. The data is any application-specific data that you have set with <a href="Table.html#998310"><code>TblSetRowData()</code></a>. </p>
+<h4>
+  <a name="996735"> </a>See Also 
+</h4>
+
+<p><a name="996745"> </a><a href="Table.html#997111"><code>TblGetRowData()</code></a>, <a href="Table.html#996748"><code>TblFindRowID()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996748"> </a>TblFindRowID Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996750"> </a>Purpose 
+</h4>
+
+<p><a name="996751"> </a>Return the number of the row with the specified ID.</p>
+<h4>
+  <a name="996752"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996753"> </a></code><h4>
+  <a name="996754"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996755"></a>Boolean TblFindRowID (
+   const TableType *tableP,
+   UInt16 id,
+   Int16 *rowP
+)
+</pre>
+<h4>
+  <a name="996756"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996757"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996761"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="996762"> </a><code>&rarr;  <i><code>id</code></i></code></dt>
+<dd><a name="996763"> </a>Row ID to find.</dd>
+
+<dt><a name="996764"> </a><code>&larr;  <i><code>rowP</code></i></code></dt>
+<dd><a name="996765"> </a>Pointer to the row number (return value).</dd>
+
+</dl>
+<h4>
+  <a name="996766"> </a>Returns 
+</h4>
+
+<p><a name="996767"> </a>Returns <code>true</code> if a match was found, <code>false</code> otherwise.</p>
+<h4>
+  <a name="996768"> </a>See Also 
+</h4>
+
+<p><a name="996778"> </a><a href="Table.html#998372"><code>TblSetRowID()</code></a>, <a href="Table.html#996710"><code>TblFindRowData()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996781"> </a>TblGetBounds Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996783"> </a>Purpose 
+</h4>
+
+<p><a name="996784"> </a>Return the bounds of a table.</p>
+<h4>
+  <a name="996785"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996786"> </a></code><h4>
+  <a name="996787"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996788"></a>void TblGetBounds (
+   const TableType *tableP,
+   RectangleType *rP
+)
+</pre>
+<h4>
+  <a name="996789"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996790"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996794"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="996795"> </a><code>&larr;  <i><code>rP</code></i></code></dt>
+<dd><a name="996796"> </a>A <code>RectangleType</code> structure in which the bounds are returned.</dd>
+
+</dl>
+<h4>
+  <a name="996797"> </a>Returns 
+</h4>
+
+<p><a name="996798"> </a>Returns nothing. The <code>rP</code> parameter contains the bounds.</p>
+<h4>
+  <a name="996799"> </a>See Also 
+</h4>
+
+<p><a name="996803"> </a><a href="Table.html#996895"><code>TblGetItemBounds()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996806"> </a>TblGetColumnSpacing Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996808"> </a>Purpose 
+</h4>
+
+<p><a name="996809"> </a>Return the spacing after the specified column.</p>
+<h4>
+  <a name="996810"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996811"> </a></code><h4>
+  <a name="996812"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996813"></a>Coord TblGetColumnSpacing(
+   const TableType *tableP,
+   Int16 column
+)
+</pre>
+<h4>
+  <a name="996814"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996815"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996819"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="996820"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="996821"> </a>Column number (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="996822"> </a>Returns 
+</h4>
+
+<p><a name="996823"> </a>Returns the spacing after column (in pixels). </p>
+
+<p><a name="996824"> </a>This function may display a fatal error message if the <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="996825"> </a>See Also 
+</h4>
+
+<p><a name="996832"> </a><a href="Table.html#996838"><code>TblGetColumnWidth()</code></a>, <a href="Table.html#997965"><code>TblSetColumnSpacing()</code></a>, <a href="Table.html#997996"><code>TblSetColumnUsable()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996838"> </a>TblGetColumnWidth Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996840"> </a>Purpose 
+</h4>
+
+<p><a name="996841"> </a>Return the width of the specified column.</p>
+<h4>
+  <a name="996842"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996843"> </a></code><h4>
+  <a name="996844"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996845"></a>Coord TblGetColumnWidth (
+   const TableType *tableP,
+   Int16 column
+)
+</pre>
+<h4>
+  <a name="996846"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996847"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996851"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="996852"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="996853"> </a>Column number (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="996854"> </a>Returns 
+</h4>
+
+<p><a name="996855"> </a>Returns the width of a column (in pixels). This function may display a fatal error message if the <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="996856"> </a>See Also 
+</h4>
+
+<p><a name="996863"> </a><a href="Table.html#996806"><code>TblGetColumnSpacing()</code></a>, <a href="Table.html#998029"><code>TblSetColumnWidth()</code></a>, <a href="Table.html#997996"><code>TblSetColumnUsable()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996869"> </a>TblGetCurrentField Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996871"> </a>Purpose 
+</h4>
+
+<p><a name="996875"> </a>Return a pointer to the <a href="Field.html#996018"><code>FieldType</code></a> in which the user is currently editing a text item.</p>
+<h4>
+  <a name="996876"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996877"> </a></code><h4>
+  <a name="996878"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996879"></a>FieldPtr TblGetCurrentField(
+   const TableType *tableP
+)
+</pre>
+<h4>
+  <a name="996880"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996881"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996885"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+</dl>
+<h4>
+  <a name="996886"> </a>Returns 
+</h4>
+
+<p><a name="996887"> </a>Returns a pointer to the currently selected field, or <code>NULL</code> if the table is not in edit mode.</p>
+<h4>
+  <a name="996888"> </a>See Also 
+</h4>
+
+<p><a name="996892"> </a><a href="Table.html#997206"><code>TblGetSelection()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996895"> </a>TblGetItemBounds Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996897"> </a>Purpose 
+</h4>
+
+<p><a name="996898"> </a>Return the bounds of an item in a table.</p>
+<h4>
+  <a name="996899"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996900"> </a></code><h4>
+  <a name="996901"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996902"></a>void TblGetItemBounds (
+   const TableType *tableP,
+   Int16 row,
+   Int16 column,
+   RectangleType *rP
+)
+</pre>
+<h4>
+  <a name="996903"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996904"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996908"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="996909"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="996910"> </a>Row number of the item (zero-based).</dd>
+
+<dt><a name="996911"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="996912"> </a>Column number of the item (zero-based).</dd>
+
+<dt><a name="996913"> </a><code>&larr;  <i><code>rP</code></i></code></dt>
+<dd><a name="996914"> </a>Pointer to a structure that holds the bounds of the item.</dd>
+
+</dl>
+<h4>
+  <a name="996915"> </a>Returns 
+</h4>
+
+<p><a name="996916"> </a>Returns nothing. Stores the bounds in <code>rP</code>. This function may raise a fatal exception if the <code>row</code> or <code>column</code> parameter specifies a row or column that does not appear on screen. </p>
+
+<h3 class="hbH3">
+  <a name="996919"> </a>TblGetItemFont Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996921"> </a>Purpose 
+</h4>
+
+<p><a name="996922"> </a>Return the font used to display a table item.</p>
+<h4>
+  <a name="996923"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996924"> </a></code><h4>
+  <a name="996925"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996926"></a>FontID TblGetItemFont (
+   const TableType *tableP,
+   Int16 row,
+   Int16 column
+)
+</pre>
+<h4>
+  <a name="996927"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996928"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996932"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="996933"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="996934"> </a>Row number of the item (zero-based).</dd>
+
+<dt><a name="996935"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="996936"> </a>Column number of the item (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="996937"> </a>Returns 
+</h4>
+
+<p><a name="996938"> </a>Returns the ID of the font used for the table item at the row and column indicated. This function may display a fatal error message if the <code>row</code> or <code>column</code> parameter specifies a row or column that is not on the screen. </p>
+<h4>
+  <a name="996939"> </a>Comments 
+</h4>
+
+<p><a name="996940"> </a>This function returns the value stored in the <code>fontID</code> field for this table item. Only certain types of table items use the font specified by the <code>fontID</code> field when they are displayed. The <a href="Table.html#996034"><code>TableItemType</code></a> description specifies what font is used to display each type of table item. </p>
+<h4>
+  <a name="996944"> </a>Compatibility 
+</h4>
+
+<p><a name="996948"> </a>Implemented only if <a href="CompatibilityApdx.html#993158">3.0 New Feature Set</a> is present.</p>
+<h4>
+  <a name="996949"> </a>See Also 
+</h4>
+
+<p><a name="996953"> </a><a href="Table.html#998099"><code>TblSetItemFont()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996956"> </a>TblGetItemInt Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996958"> </a>Purpose 
+</h4>
+
+<p><a name="996959"> </a>Return the integer value stored in a table item.</p>
+<h4>
+  <a name="996960"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996961"> </a></code><h4>
+  <a name="996962"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996963"></a>Int16 TblGetItemInt (
+   const TableType *tableP,
+   Int16 row,
+   Int16 column
+)
+</pre>
+<h4>
+  <a name="996964"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996965"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="996969"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="996970"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="996971"> </a>Row number of the item (zero-based).</dd>
+
+<dt><a name="996972"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="996973"> </a>Column number of the item (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="996974"> </a>Returns 
+</h4>
+
+<p><a name="996975"> </a>Returns the integer value. This function may display a fatal message if the <code>row</code> or <code>column</code> does not appear on the screen. </p>
+<h4>
+  <a name="996976"> </a>Comments 
+</h4>
+
+<p><a name="996977"> </a>This function returns the value stored in the <code>intValue</code> field for this table item. Certain types of table items display the value stored in <code>intValue</code>, and other types display the value pointed to by the <code>ptr</code> field. See the <a href="Table.html#996034"><code>TableItemType</code></a> description for details. If the <code>intValue</code> was never set for this table item, this function returns 0. </p>
+<h4>
+  <a name="996981"> </a>See Also 
+</h4>
+
+<p><a name="996988"> </a><a href="Table.html#998139"><code>TblSetItemInt()</code></a>, <a href="Table.html#996991"><code>TblGetItemPtr()</code></a><code> </code></p>
+
+<h3 class="hbH3">
+  <a name="996991"> </a>TblGetItemPtr Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996993"> </a>Purpose 
+</h4>
+
+<p><a name="996994"> </a>Return the pointer value stored in a table item</p>
+<h4>
+  <a name="996995"> </a>Declared In 
+</h4>
+<code>Table.h<a name="996996"> </a></code><h4>
+  <a name="996997"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996998"></a>void *TblGetItemPtr (
+   const TableType *tableP,
+   Int16 row,
+   Int16 column
+)
+</pre>
+<h4>
+  <a name="996999"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997000"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997004"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997005"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997006"> </a>Row number of the item (zero-based).</dd>
+
+<dt><a name="997007"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="997008"> </a>Column number of the item (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997009"> </a>Returns 
+</h4>
+
+<p><a name="997010"> </a>Returns the item's pointer value or <code>NULL</code> if the item does not have a pointer value. This function may display a fatal message if the <code>row</code> or <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="997011"> </a>Comments 
+</h4>
+
+<p><a name="997012"> </a>This function returns the value stored in the <code>ptr</code> field for this table item. Certain types of table items display the value pointed to by the <code>ptr</code>, and other types display the value stored in the <code>intValue</code> field. See the <a href="Table.html#996034"><code>TableItemType</code></a> description for details. An application may have set the value of the <code>ptr</code> field anyway, even for items that use the <code>intValue</code>. This function always returns that value. </p>
+<h4>
+  <a name="997016"> </a>Compatibility 
+</h4>
+
+<p><a name="997020"> </a>Implemented only if <a href="CompatibilityApdx.html#994671">3.5 New Feature Set</a> is present. In earlier versions, you can implement this function using the following code: </p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+return tableP-&gt;items[row * tableP-&gt;numColumns +
+  column].ptr;<a name="997021"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+<h4>
+  <a name="997022"> </a>See Also 
+</h4>
+
+<p><a name="997026"> </a><a href="Table.html#998178"><code>TblSetItemPtr()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997029"> </a>TblGetLastUsableRow Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997031"> </a>Purpose 
+</h4>
+
+<p><a name="997032"> </a>Return the last row in a table that is usable (visible).</p>
+<h4>
+  <a name="997033"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997034"> </a></code><h4>
+  <a name="997035"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997036"></a>Int16 TblGetLastUsableRow(
+   const TableType *tableP
+)
+</pre>
+<h4>
+  <a name="997037"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997038"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997042"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+</dl>
+<h4>
+  <a name="997043"> </a>Returns 
+</h4>
+
+<p><a name="997045"> </a>Returns the row index (zero-based) or <code>tblUnusableRow</code> if there are no usable rows.</p>
+<h4>
+  <a name="997046"> </a>See Also 
+</h4>
+
+<p><a name="997053"> </a><a href="Table.html#997111"><code>TblGetRowData()</code></a>, <a href="Table.html#997171"><code>TblGetRowID()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997056"> </a>TblGetNumberOfColumns Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997058"> </a>Purpose 
+</h4>
+
+<p><a name="997059"> </a>Return the number of columns in a table.</p>
+<h4>
+  <a name="997060"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997061"> </a></code><h4>
+  <a name="997062"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997063"></a>Int16 TblGetNumberOfColumns(
+   const TableType *tableP
+)
+</pre>
+<h4>
+  <a name="997064"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997065"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997069"> </a>Pointer to a <a href="Table.html#996397"><code>TableType</code></a>.</dd>
+
+</dl>
+<h4>
+  <a name="997070"> </a>Returns 
+</h4>
+
+<p><a name="997071"> </a>This function returns the number of columns in a table. </p>
+<h4>
+  <a name="997072"> </a>Compatibility 
+</h4>
+
+<p><a name="997076"> </a>Implemented only if <a href="CompatibilityApdx.html#995256">4.0 New Feature Set</a> is present. To use this function in code intended to be run on earlier versions of Palm OS, link with the PalmOSGlue library and call <code>TblGlueGetNumberOfColumns</code>. For more information, see <a href="PalmOSGlueLib.html#1030875">Chapter 80, "PalmOSGlue Library."</a></p>
+<h4>
+  <a name="997081"> </a>See Also 
+</h4>
+
+<p><a name="997088"> </a><a href="Table.html#997231"><code>TblGetTopRow()</code></a>, <a href="Table.html#998593"><code>TblSetSelection()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997091"> </a>TblGetNumberOfRows Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997093"> </a>Purpose 
+</h4>
+
+<p><a name="997094"> </a>Return the number of rows in a table.</p>
+<h4>
+  <a name="997095"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997096"> </a></code><h4>
+  <a name="997097"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997098"></a>Int16 TblGetNumberOfRows(
+   const TableType *tableP
+)
+</pre>
+<h4>
+  <a name="997099"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997100"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997104"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+</dl>
+<h4>
+  <a name="997105"> </a>Returns 
+</h4>
+
+<p><a name="997106"> </a>Returns the maximum number of visible rows in the specified table. </p>
+<h4>
+  <a name="997107"> </a>Comments 
+</h4>
+
+<p><a name="997108"> </a>Note that even though you can add and remove rows to and from a table, the value returned by this function does not change. The value returned by this function indicates the maximum number of rows that can be displayed on the screen at one time. It is set when you create the table resource. </p>
+
+<h3 class="hbH3">
+  <a name="997111"> </a>TblGetRowData Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997113"> </a>Purpose 
+</h4>
+
+<p><a name="997114"> </a>Return the data value of the specified row. </p>
+<h4>
+  <a name="997115"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997116"> </a></code><h4>
+  <a name="997117"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997118"></a>UInt32 TblGetRowData (
+   const TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997119"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997120"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997124"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997125"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997126"> </a>Number of the row (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997127"> </a>Returns 
+</h4>
+
+<p><a name="997128"> </a>Returns the application-specific data stored for this row, if any. Returns 0 if there is no application-specific data value. </p>
+
+<p><a name="997129"> </a>This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="997130"> </a>See Also 
+</h4>
+
+<p><a name="997140"> </a><a href="Table.html#996710"><code>TblFindRowData()</code></a>, <a href="Table.html#998310"><code>TblSetRowData()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997143"> </a>TblGetRowHeight Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997145"> </a>Purpose 
+</h4>
+
+<p><a name="997146"> </a>Return the height of the specified row.</p>
+<h4>
+  <a name="997147"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997148"> </a></code><h4>
+  <a name="997149"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997150"></a>Coord TblGetRowHeight (
+   const TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997151"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997152"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997156"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997157"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997158"> </a>Number of the row (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997159"> </a>Returns 
+</h4>
+
+<p><a name="997160"> </a>Returns the height in pixels. This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="997161"> </a>See Also 
+</h4>
+
+<p><a name="997168"> </a><a href="Table.html#996895"><code>TblGetItemBounds()</code></a>, <a href="Table.html#998341"><code>TblSetRowHeight()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997171"> </a>TblGetRowID Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997173"> </a>Purpose 
+</h4>
+
+<p><a name="997174"> </a>Return the ID value of the specified row.</p>
+<h4>
+  <a name="997175"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997176"> </a></code><h4>
+  <a name="997177"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997178"></a>UInt16 TblGetRowID (
+   const TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997179"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997180"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997184"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997185"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997186"> </a>Number of the row (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997187"> </a>Returns 
+</h4>
+
+<p><a name="997188"> </a>Returns the ID value of the row in the table. </p>
+
+<p><a name="997189"> </a>This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="997190"> </a>See Also 
+</h4>
+
+<p><a name="997200"> </a><a href="Table.html#997111"><code>TblGetRowData()</code></a>, <a href="Table.html#998372"><code>TblSetRowID()</code></a>, <a href="Table.html#996748"><code>TblFindRowID()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997206"> </a>TblGetSelection Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997208"> </a>Purpose 
+</h4>
+
+<p><a name="997209"> </a>Return the row and column of the currently selected table item.</p>
+<h4>
+  <a name="997210"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997211"> </a></code><h4>
+  <a name="997212"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997213"></a>Boolean TblGetSelection (
+   const TableType *tableP,
+   Int16 *rowP,
+   Int16 *columnP
+)
+</pre>
+<h4>
+  <a name="997214"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997215"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997219"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997220"> </a><code>&larr;  <i><code>rowP, columnP</code></i></code></dt>
+<dd><a name="997221"> </a>The row and column indexes (zero-based) of the currently selected item.</dd>
+
+</dl>
+<h4>
+  <a name="997222"> </a>Returns 
+</h4>
+
+<p><a name="997223"> </a>Returns <code>true</code> if the item is highlighted, <code>false</code> if not.</p>
+<h4>
+  <a name="997224"> </a>See Also 
+</h4>
+
+<p><a name="997228"> </a><a href="Table.html#998462"><code>TblSetRowSelectable()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997231"> </a>TblGetTopRow Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997233"> </a>Purpose 
+</h4>
+
+<p><a name="997234"> </a>Return the top row visible row of a table.</p>
+<h4>
+  <a name="997235"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997236"> </a></code><h4>
+  <a name="997237"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997238"></a>Int16 TblGetTopRow(
+   const TableType *tableP
+)
+</pre>
+<h4>
+  <a name="997239"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997240"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997244"> </a>Pointer to a <a href="Table.html#996397"><code>TableType</code></a>.</dd>
+
+</dl>
+<h4>
+  <a name="997245"> </a>Returns 
+</h4>
+
+<dl>
+<dt><a name="997246"> </a><code>This function returns the top visible row in a table.</code></dt>
+</dl>
+<h4>
+  <a name="997247"> </a>Compatibility 
+</h4>
+
+<p><a name="997251"> </a>Implemented only if <a href="CompatibilityApdx.html#995256">4.0 New Feature Set</a> is present. To use this function in code intended to be run on earlier versions of Palm OS, link with the PalmOSGlue library and call <code>TblGlueGetToRow</code>. For more information, see <a href="PalmOSGlueLib.html#1030875">Chapter 80, "PalmOSGlue Library."</a></p>
+<h4>
+  <a name="997256"> </a>See Also 
+</h4>
+
+<p><a name="997263"> </a><a href="Table.html#997056"><code>TblGetNumberOfColumns()</code></a>, <a href="Table.html#998593"><code>TblSetSelection()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997266"> </a>TblGrabFocus Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997268"> </a>Purpose 
+</h4>
+
+<p><a name="997269"> </a>Put a table into edit mode.</p>
+<h4>
+  <a name="997270"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997271"> </a></code><h4>
+  <a name="997272"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997273"></a>void TblGrabFocus (
+   TableType *tableP,
+   Int16 row,
+   Int16 column
+)
+</pre>
+<h4>
+  <a name="997274"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997275"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997279"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997280"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997281"> </a>Current row to be edited (zero-based).</dd>
+
+<dt><a name="997282"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="997283"> </a>Current column to be edited (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997284"> </a>Returns 
+</h4>
+
+<p><a name="997285"> </a>Returns nothing. This function may display a fatal error message if the table already has the focus or if the <code>row</code> or <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="997286"> </a>Comments 
+</h4>
+
+<p><a name="997287"> </a>This function puts the table into edit mode and sets the current item to the one at the row and column passed in. An editable field must exist in the coordinates passed to this function.</p>
+
+<p><a name="997292"> </a>You must call <a href="Form.html#998943"><code>FrmSetFocus()</code></a> before calling this function. <code>FrmSetFocus</code> releases the focus from the object that previously had it and sets the form's internal structures. After calling this function, you must call <a href="Field.html#997022"><code>FldGrabFocus()</code></a> to display the insertion point in the field. (You can use <a href="Table.html#996869"><code>TblGetCurrentField()</code></a> to obtain a pointer to the field.) </p>
+
+<p><a name="997301"> </a>For example, the following function from the Address Book application sets the focus in an editable field within a table: </p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+static void EditViewRestoreEditState () {<a name="997302"> </a>
+  Int16      row;<a name="997303"> </a>
+  FormPtr    frm;<a name="997304"> </a>
+  TablePtr   table;<a name="997305"> </a>
+  FieldPtr   fld;<a name="997306"> </a>
+ <a name="997307"> </a>
+  if (CurrentFieldIndex == noFieldIndex) <a name="997308"> </a>
+    return;<a name="997309"> </a>
+ <a name="997310"> </a>
+  // Find the row that the current field is in.<a name="997311"> </a>
+  table = GetObjectPtr (EditTable);<a name="997312"> </a>
+  if ( ! TblFindRowID (table, <a name="997313"> </a>
+    CurrentFieldIndex, &amp;row) )<a name="997314"> </a>
+    return;<a name="997315"> </a>
+ <a name="997316"> </a>
+  frm = FrmGetActiveForm ();<a name="997317"> </a>
+  FrmSetFocus (frm, FrmGetObjectIndex (frm, <a name="997318"> </a>
+    EditTable));<a name="997319"> </a>
+  TblGrabFocus (table, row, editDataColumn);<a name="997320"> </a>
+  <a name="997321"> </a>
+  // Restore the insertion point position.<a name="997322"> </a>
+  fld = TblGetCurrentField (table);<a name="997323"> </a>
+  FldSetInsPtPosition (fld, EditFieldPosition);<a name="997324"> </a>
+  FldGrabFocus (fld);<a name="997325"> </a>
+}<a name="997326"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+<h4>
+  <a name="997327"> </a>See Also 
+</h4>
+
+<p><a name="997331"> </a><a href="Table.html#997610"><code>TblReleaseFocus()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997334"> </a>TblHandleEvent Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997336"> </a>Purpose 
+</h4>
+
+<p><a name="997337"> </a>Handle an event for the table.</p>
+<h4>
+  <a name="997338"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997339"> </a></code><h4>
+  <a name="997340"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997341"></a>Boolean TblHandleEvent (
+   TableType *tableP,
+   EventType *event
+)
+</pre>
+<h4>
+  <a name="997342"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997343"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997347"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997348"> </a><code>&rarr;  <i><code>event</code></i></code></dt>
+<dd><a name="997349"> </a>The event to be handled.</dd>
+
+</dl>
+<h4>
+  <a name="997350"> </a>Returns 
+</h4>
+
+<p><a name="997351"> </a>Returns <code>true</code> if the event was handled, <code>false</code> if it was not.</p>
+<h4>
+  <a name="997352"> </a>Comments 
+</h4>
+
+<p><a name="997353"> </a>Returns <code>false</code> if the table is not an editable table. </p>
+
+<p><a name="997354"> </a>If the table is editable, this function passes along any <a href="EventRef.html#997089"><code>keyDownEvent</code></a>, <a href="EventRef.html#996489"><code>fldEnterEvent</code></a>, or <a href="EventRef.html#997429"><code>menuCmdBarOpenEvent</code></a> to the currently selected field. </p>
+
+<p><a name="997367"> </a>When a <a href="EventRef.html#996521"><code>fldHeightChangedEvent</code></a> occurs, this function changes the height of the specified field as indicated by the event. If the field being resized is going to scroll off the bottom of the screen, then instead the table scrolls the rows above it up off the top. Otherwise, the table is scrolled downward and rows below the current row are scrolled off the bottom as necessary. </p>
+
+<p><a name="997368"> </a>Note that the <code>fldHeightChangedEvent</code> is only handled for dynamically sized fields. See the descriptions of <a href="Field.html#995863"><code>FieldAttrType</code></a> and <a href="Field.html#997172"><code>FldMakeFullyVisible()</code></a> for more information.</p>
+
+<p><a name="997378"> </a>When a <a href="EventRef.html#997559"><code>penDownEvent</code></a> occurs, the table checks to see if the focus is being changed. If it is and the user was previously editing a text field within the table, it saves the data in the table cell using the <a href="Table.html#998770"><code>TableSaveDataFuncType()</code></a> callback function, then it enqueues a <a href="EventRef.html#997812"><code>tblEnterEvent</code></a> with the new row and column that are selected. </p>
+
+<p><a name="997388"> </a>When a <a href="EventRef.html#997812"><code>tblEnterEvent</code></a> occurs, this function tracks the pen until it is lifted. If the pen is lifted within the bounds of the same item it went down in, a <a href="EventRef.html#997902"><code>tblSelectEvent</code></a> is added to the event queue; if not, a <a href="EventRef.html#997855"><code>tblExitEvent</code></a> is added to the event queue.</p>
+
+<h3 class="hbH3">
+  <a name="997399"> </a>TblHasScrollBar Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997401"> </a>Purpose 
+</h4>
+
+<p><a name="997402"> </a>Set the <code>hasScrollBar</code> attribute in the table. (See <a href="Table.html#995852"><code>TableAttrType</code></a>.) </p>
+<h4>
+  <a name="997406"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997407"> </a></code><h4>
+  <a name="997408"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997409"></a>void TblHasScrollBar (
+   TableType *tableP,
+   Boolean hasScrollBar
+)
+</pre>
+<h4>
+  <a name="997410"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997411"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997415"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997416"> </a><code>&rarr;  <i><code>hasScrollBar</code></i></code></dt>
+<dd><a name="997417"> </a><code>true</code> to set the attribute, <code>false</code> to unset it. </dd>
+
+</dl>
+<h4>
+  <a name="997418"> </a>Returns 
+</h4>
+
+<p><a name="997419"> </a>Returns nothing.</p>
+<h4>
+  <a name="997420"> </a>Comments 
+</h4>
+
+<p><a name="997421"> </a>Your application must scroll the table itself and keep track of the scroll values. See the <code>ListViewUpdateScrollers</code> function in the Memo example application (<code>MemoMain.c</code>) for an example of setting scroll bar values for a table. </p>
+<h4>
+  <a name="997422"> </a>Compatibility 
+</h4>
+
+<p><a name="997426"> </a>Implemented only if <a href="CompatibilityApdx.html#992789">2.0 New Feature Set</a> is present.</p>
+
+<h3 class="hbH3">
+  <a name="997429"> </a>TblInsertRow Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997431"> </a>Purpose 
+</h4>
+
+<p><a name="997432"> </a>Insert a row into the table before the specified row.</p>
+<h4>
+  <a name="997433"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997434"> </a></code><h4>
+  <a name="997435"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997436"></a>void TblInsertRow (
+   TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997437"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997438"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997442"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997443"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997444"> </a>Row to insert (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997445"> </a>Returns 
+</h4>
+
+<p><a name="997446"> </a>Returns nothing.</p>
+<h4>
+  <a name="997447"> </a>Comments 
+</h4>
+
+<p><a name="997448"> </a>The number of rows in a table is the maximum number of rows displayed on the screen. Unlike a multi-line text field, there is no notion of a table that is bigger than the available screen. For this reason, this function does not increase the number of table rows. </p>
+
+<p><a name="997449"> </a>Instead of keeping track of a total number of rows in the table and a number of rows displayed on the screen, tables mark any row that isn't currently displayed with a usable value of <code>false</code>. (See <a href="Table.html#996265"><code>TableRowAttrType</code></a>.) </p>
+
+<p><a name="997453"> </a>The newly inserted row is marked as invalid, unusable, and not masked. If you want to display the newly inserted row, call <a href="Table.html#998528"><code>TblSetRowUsable()</code></a> after making sure that the row displays a value and then call <a href="Table.html#997553"><code>TblRedrawTable()</code></a> when you are ready to draw the table. </p>
+<h4>
+  <a name="997460"> </a>See Also 
+</h4>
+
+<p><a name="997467"> </a><a href="Table.html#997646"><code>TblRemoveRow()</code></a>, <a href="Table.html#998528"><code>TblSetRowUsable()</code></a>, <a href="Table.html#998462"><code>TblSetRowSelectable()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997473"> </a>TblMarkRowInvalid Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997475"> </a>Purpose 
+</h4>
+
+<p><a name="997476"> </a>Mark the row invalid.</p>
+<h4>
+  <a name="997477"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997478"> </a></code><h4>
+  <a name="997479"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997480"></a>void TblMarkRowInvalid (
+   TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997481"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997482"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997486"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997487"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997488"> </a>Row number (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997489"> </a>Returns 
+</h4>
+
+<p><a name="997490"> </a>Returns nothing. </p>
+<h4>
+  <a name="997491"> </a>Comments 
+</h4>
+
+<p><a name="997495"> </a>After calling this function, call <a href="Table.html#997553"><code>TblRedrawTable()</code></a> to redraw all rows marked invalid. </p>
+
+<p><a name="997496"> </a>This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="997497"> </a>See Also 
+</h4>
+
+<p><a name="997504"> </a><a href="Table.html#997646"><code>TblRemoveRow()</code></a>, <a href="Table.html#998528"><code>TblSetRowUsable()</code></a>, <a href="Table.html#998462"><code>TblSetRowSelectable()</code></a>, <a href="Table.html#997519"><code>TblMarkTableInvalid()</code></a>, <a href="Table.html#997686"><code>TblRowInvalid()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997519"> </a>TblMarkTableInvalid Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997521"> </a>Purpose 
+</h4>
+
+<p><a name="997522"> </a>Mark all the rows in a table invalid.</p>
+<h4>
+  <a name="997523"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997524"> </a></code><h4>
+  <a name="997525"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997526"></a>void TblMarkTableInvalid (
+   TableType *tableP
+)
+</pre>
+<h4>
+  <a name="997527"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997528"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997532"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+</dl>
+<h4>
+  <a name="997533"> </a>Returns 
+</h4>
+
+<p><a name="997534"> </a>Returns nothing.</p>
+<h4>
+  <a name="997535"> </a>Comments 
+</h4>
+
+<p><a name="997539"> </a>After calling this function, you must call <a href="Table.html#997553"><code>TblRedrawTable()</code></a> to redraw all rows. </p>
+<h4>
+  <a name="997540"> </a>See Also 
+</h4>
+
+<p><a name="997550"> </a><a href="Table.html#996679"><code>TblEraseTable()</code></a>, <a href="Table.html#997553"><code>TblRedrawTable()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997553"> </a>TblRedrawTable Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997555"> </a>Purpose 
+</h4>
+
+<p><a name="997556"> </a>Redraw the rows of the table that are marked invalid.</p>
+<h4>
+  <a name="997557"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997558"> </a></code><h4>
+  <a name="997559"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997560"></a>void TblRedrawTable (
+   TableType *tableP
+)
+</pre>
+<h4>
+  <a name="997561"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997562"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997566"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+</dl>
+<h4>
+  <a name="997567"> </a>Returns 
+</h4>
+
+<p><a name="997568"> </a>Returns nothing.</p>
+<h4>
+  <a name="997569"> </a>Comments 
+</h4>
+
+<p><a name="997570"> </a>This function draws the invalid rows in the table. See the <a href="Table.html#996034"><code>TableItemType</code></a> struct description for more information about how each type of table cell is drawn. </p>
+
+<p><a name="997576"> </a>When drawing cells with editable text fields (<code>textTableItem, textWithNoteTableItem</code>, or <code>narrowTextTableItem</code>), this function uses the <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a> callback function to load the text into the table cells. The text field does not retain the text handle that your <code>TableLoadDataFunc</code> returns, meaning that you are responsible for freeing the memory that you load into the table.</p>
+
+<p><a name="997582"> </a>When drawing <code>narrowTextTableItem</code> cells, <code>customTableItem</code> cells, or <code>tallCustomTableItem</code> cells, this function uses the <a href="Table.html#998658"><code>TableDrawItemFuncType()</code></a> callback function to draw the extra pixels after the text or to draw the entire cell. </p>
+
+<p><a name="997587"> </a>On color systems, tables are always drawn using the same color as is used for the field background color. </p>
+
+<p><a name="997588"> </a>When the user has set the security setting to mask private records, table cells that contain private database records are drawn as shaded cells to obscure the information they contain. You must explicitly tell the table which cells are masked by making the appropriate calls to <a href="Table.html#998406"><code>TblSetRowMasked()</code></a> and <a href="Table.html#997920"><code>TblSetColumnMasked()</code></a>.</p>
+<h4>
+  <a name="997595"> </a>Compatibility 
+</h4>
+
+<p><a name="997596"> </a>Color support and masked private records are only supported in Palm OS version 3.5 and higher. </p>
+<h4>
+  <a name="997597"> </a>See Also 
+</h4>
+
+<p><a name="997604"> </a><a href="Table.html#997519"><code>TblMarkTableInvalid()</code></a>, <a href="Table.html#997473"><code>TblMarkRowInvalid()</code></a>, <a href="Table.html#996579"><code>TblDrawTable()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997610"> </a>TblReleaseFocus Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997612"> </a>Purpose 
+</h4>
+
+<p><a name="997613"> </a>Release the focus.</p>
+<h4>
+  <a name="997614"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997615"> </a></code><h4>
+  <a name="997616"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997617"></a>void TblReleaseFocus (
+   TableType *tableP
+)
+</pre>
+<h4>
+  <a name="997618"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997619"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997620"> </a>Pointer to a table object.</dd>
+
+</dl>
+<h4>
+  <a name="997621"> </a>Returns 
+</h4>
+
+<p><a name="997622"> </a>Returns nothing.</p>
+<h4>
+  <a name="997623"> </a>Comments 
+</h4>
+
+<p><a name="997624"> </a>You typically do not call this function yourself. Instead, call <a href="Form.html#998943"><code>FrmSetFocus()</code></a> with an object index of <code>noFocus</code> to notify the form that the table has lost focus. The form code calls <code>TblReleaseFocus</code> for you. </p>
+
+<p><a name="997631"> </a>If the current item is a text item, the <a href="Table.html#998770"><code>TableSaveDataFuncType()</code></a> callback function is called to save the text in the currently selected field, the memory allocated for editing is released, and the insertion point is turned off.</p>
+
+<p><a name="997635"> </a>Also note that you might have to call <a href="Field.html#997370"><code>FldReleaseFocus()</code></a> if the focus is in an editable text field and that field uses a custom drawing function (<a href="Table.html#998658"><code>TableDrawItemFuncType()</code></a>). </p>
+<h4>
+  <a name="997639"> </a>See Also 
+</h4>
+
+<p><a name="997643"> </a><a href="Table.html#997266"><code>TblGrabFocus()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997646"> </a>TblRemoveRow Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997648"> </a>Purpose 
+</h4>
+
+<p><a name="997649"> </a>Remove the specified row from the table.</p>
+<h4>
+  <a name="997650"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997651"> </a></code><h4>
+  <a name="997652"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997653"></a>void TblRemoveRow (
+   TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997654"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997655"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997659"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997660"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997661"> </a>Row to remove (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997662"> </a>Returns 
+</h4>
+
+<p><a name="997663"> </a>Returns nothing. This function may raise a fatal error message if an invalid row is specified.</p>
+<h4>
+  <a name="997664"> </a>Comments 
+</h4>
+
+<p><a name="997665"> </a>The number of rows in the table is not decreased; instead, this row is moved from its current spot to the end of the table and is marked unusable so that it won't be displayed when the table is redrawn. </p>
+
+<p><a name="997666"> </a>This function does not visually update the display. To update the display, call <a href="Table.html#997553"><code>TblRedrawTable()</code></a>. </p>
+<h4>
+  <a name="997670"> </a>See Also 
+</h4>
+
+<p><a name="997677"> </a><a href="Table.html#997429"><code>TblInsertRow()</code></a>, <a href="Table.html#998528"><code>TblSetRowUsable()</code></a>, <a href="Table.html#998462"><code>TblSetRowSelectable()</code></a>, <a href="Table.html#997473"><code>TblMarkRowInvalid()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997686"> </a>TblRowInvalid Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997688"> </a>Purpose 
+</h4>
+
+<p><a name="997689"> </a>Return whether a row is invalid. </p>
+<h4>
+  <a name="997690"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997691"> </a></code><h4>
+  <a name="997692"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997693"></a>Boolean TblRowInvalid (
+   const TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997694"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997695"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997699"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997700"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997701"> </a>Row number (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997702"> </a>Returns 
+</h4>
+
+<p><a name="997703"> </a>Returns <code>true</code> if the row is invalid, <code>false</code> if it's valid. This function may raise a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="997704"> </a>Comments 
+</h4>
+
+<p><a name="997708"> </a>Invalid rows need to be redrawn. Use <a href="Table.html#997553"><code>TblRedrawTable()</code></a> to do so. </p>
+<h4>
+  <a name="997709"> </a>See Also 
+</h4>
+
+<p><a name="997716"> </a><a href="Table.html#997473"><code>TblMarkRowInvalid()</code></a>, <a href="Table.html#997519"><code>TblMarkTableInvalid()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997719"> </a>TblRowMasked Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997721"> </a>Purpose 
+</h4>
+
+<p><a name="997722"> </a>Return whether a row is masked. </p>
+<h4>
+  <a name="997723"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997724"> </a></code><h4>
+  <a name="997725"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997726"></a>Boolean TblRowMasked (
+   const TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997727"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997728"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997732"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997733"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997734"> </a>Row number (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997735"> </a>Returns 
+</h4>
+
+<p><a name="997736"> </a>Returns <code>true</code> if the row is masked, <code>false</code> otherwise. </p>
+<h4>
+  <a name="997737"> </a>Comments 
+</h4>
+
+<p><a name="997738"> </a>Your code should set a row to masked if it contains a private database record and the user has set the display preference for private records to masked. Masked cells are displayed as shaded. </p>
+
+<p><a name="997739"> </a>Note that a table cell is not masked unless both its row and column are masked. This allows non-private information in the row item to remain visible. For example, the Datebook application shows the time for a private appointment, but it does not show the description. </p>
+<h4>
+  <a name="997740"> </a>Compatibility 
+</h4>
+
+<p><a name="997744"> </a>Implemented only if <a href="CompatibilityApdx.html#994671">3.5 New Feature Set</a> is present. </p>
+<h4>
+  <a name="997745"> </a>See Also 
+</h4>
+
+<p><a name="997752"> </a><a href="Table.html#998406"><code>TblSetRowMasked()</code></a>, <a href="Table.html#997920"><code>TblSetColumnMasked()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a>, <a href="PrivateRecords.html#995840"><code>SecSelectViewStatus()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997761"> </a>TblRowSelectable Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997763"> </a>Purpose 
+</h4>
+
+<p><a name="997764"> </a>Return whether the specified row is selectable. </p>
+<h4>
+  <a name="997765"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997766"> </a></code><h4>
+  <a name="997767"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997768"></a>Boolean TblRowSelectable(
+   const TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997769"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997770"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997774"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997775"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997776"> </a>Row number (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997777"> </a>Returns 
+</h4>
+
+<p><a name="997778"> </a>Returns <code>true</code> if the row is selectable, <code>false</code> if it's not.</p>
+<h4>
+  <a name="997779"> </a>Comments 
+</h4>
+
+<p><a name="997780"> </a>Rows that are not selectable don't highlight when touched.</p>
+<h4>
+  <a name="997781"> </a>See Also 
+</h4>
+
+<p><a name="997785"> </a><a href="Table.html#996265"><code>TableRowAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997788"> </a>TblRowUsable Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997790"> </a>Purpose 
+</h4>
+
+<p><a name="997791"> </a>Determine whether the specified row is usable.</p>
+<h4>
+  <a name="997792"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997793"> </a></code><h4>
+  <a name="997794"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997795"></a>Boolean TblRowUsable (
+   const TableType *tableP,
+   Int16 row
+)
+</pre>
+<h4>
+  <a name="997796"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997797"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997801"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997802"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997803"> </a>Row number (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997804"> </a>Returns 
+</h4>
+
+<p><a name="997805"> </a>Returns <code>true</code> if the row is usable, <code>false</code> if it's not. </p>
+
+<p><a name="997806"> </a>This function may display a fatal error message if the <code>row </code>parameter is invalid. </p>
+<h4>
+  <a name="997807"> </a>Comments 
+</h4>
+
+<p><a name="997808"> </a>Rows that are not usable do not display.</p>
+<h4>
+  <a name="997809"> </a>See Also 
+</h4>
+
+<p><a name="997816"> </a><a href="Table.html#997761"><code>TblRowSelectable()</code></a>, <a href="Table.html#997029"><code>TblGetLastUsableRow()</code></a>, <a href="Table.html#998528"><code>TblSetRowUsable()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997822"> </a>TblSelectItem Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997824"> </a>Purpose 
+</h4>
+
+<p><a name="997825"> </a>Select (highlight) the specified item. If there is already a selected item, it is unhighlighted.</p>
+<h4>
+  <a name="997826"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997827"> </a></code><h4>
+  <a name="997828"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997829"></a>void TblSelectItem (
+   TableType *tableP,
+   Int16 row,
+   Int16 column
+)
+</pre>
+<h4>
+  <a name="997830"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997831"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997835"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997836"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="997837"> </a>Row of the item to select (zero-based).</dd>
+
+<dt><a name="997838"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="997839"> </a>Column of the item to select (zero-based).</dd>
+
+</dl>
+<h4>
+  <a name="997840"> </a>Returns 
+</h4>
+
+<p><a name="997841"> </a>Returns nothing.</p>
+
+<p><a name="997842"> </a>This function may display a fatal error message if the <code>column</code> or <code>row</code> parameter point to an item that is not on the screen. </p>
+<h4>
+  <a name="997843"> </a>Comments 
+</h4>
+
+<p><a name="997844"> </a>If <code>row</code> contains a masked private database record, then the item remains unselected. </p>
+
+<p><a name="997845"> </a>This function cannot highlight an entire row; it can only highlight one cell in a row, and it always unhighlights the previously selected table cell. If you want to select an entire row, either create a table that has a single column, or write your own selection code. </p>
+
+<p><a name="997846"> </a>If the selected item is a multi-line text field or a text field with a nonstandard height, this function only highlights the top eleven pixels. If you want a larger area highlighted, you must write your own selection code. </p>
+<h4>
+  <a name="997847"> </a>See Also 
+</h4>
+
+<p><a name="997854"> </a><a href="Table.html#997761"><code>TblRowSelectable()</code></a>, <a href="Table.html#996895"><code>TblGetItemBounds()</code></a>, <a href="Table.html#996956"><code>TblGetItemInt()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997860"> </a>TblSetBounds Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997862"> </a>Purpose 
+</h4>
+
+<p><a name="997863"> </a>Sets the bounds of a table.</p>
+<h4>
+  <a name="997864"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997865"> </a></code><h4>
+  <a name="997866"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997867"></a>void TblSetBounds (
+   TableType *tableP,
+   const RectangleType *rP
+)
+</pre>
+<h4>
+  <a name="997868"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997869"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997873"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997874"> </a><code>&rarr;  <i><code>rP</code></i></code></dt>
+<dd><a name="997875"> </a>Pointer to a <code>RectangleType</code> structure that specifies the bounds for the table.</dd>
+
+</dl>
+<h4>
+  <a name="997876"> </a>Returns 
+</h4>
+
+<p><a name="997877"> </a>Returns nothing.</p>
+<h4>
+  <a name="997878"> </a>Compatibility 
+</h4>
+
+<p><a name="997882"> </a>Implemented only if <a href="CompatibilityApdx.html#992789">2.0 New Feature Set</a> is present.</p>
+
+<h3 class="hbH3">
+  <a name="997885"> </a>TblSetColumnEditIndicator Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997887"> </a>Purpose 
+</h4>
+
+<p><a name="997888"> </a>Set the column attribute that controls whether a column highlights when the table is in edit mode.</p>
+<h4>
+  <a name="997889"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997890"> </a></code><h4>
+  <a name="997891"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997892"></a>void TblSetColumnEditIndicator(
+   TableType *tableP,
+   Int16 column,
+   Boolean editIndicator
+)
+</pre>
+<h4>
+  <a name="997893"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997894"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997898"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997899"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="997900"> </a>Column number (zero based). </dd>
+
+<dt><a name="997901"> </a><code>&rarr;  <i><code>editIndicator</code></i></code></dt>
+<dd><a name="997902"> </a><code>true</code> to highlight, <code>false</code> to turn off highlight. </dd>
+
+</dl>
+<h4>
+  <a name="997903"> </a>Returns 
+</h4>
+
+<p><a name="997904"> </a>Returns nothing.</p>
+<h4>
+  <a name="997905"> </a>Comments 
+</h4>
+
+<p><a name="997906"> </a>The edit indicator controls whether the item in the column is highlighted when it is selected. By default, text field items have the <code>editIndicator</code> value of <code>false</code>, while all other table item types have an edit indicator of <code>true</code>. </p>
+
+<p><a name="997907"> </a>When the table is drawn, only the leftmost contiguous set of items with the edit indicator set are drawn as highlighted. That is, if columns 1, 2, and 4 have an edit indicator of <code>true</code> and column 3 has an edit indicator of <code>false</code>, only the items in column 1 and 2 are drawn as highlighted when selected. Column 4 items are not drawn as highlighted. </p>
+<h4>
+  <a name="997908"> </a>Compatibility 
+</h4>
+
+<p><a name="997912"> </a>Implemented only if <a href="CompatibilityApdx.html#992789">2.0 New Feature Set</a> is present.</p>
+<h4>
+  <a name="997913"> </a>See Also 
+</h4>
+
+<p><a name="997917"> </a><a href="Table.html#995911"><code>TableColumnAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997920"> </a>TblSetColumnMasked Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997922"> </a>Purpose 
+</h4>
+
+<p><a name="997923"> </a>Set whether the column is masked. </p>
+<h4>
+  <a name="997924"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997925"> </a></code><h4>
+  <a name="997926"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997927"></a>void TblSetColumnMasked (
+   TableType *tableP,
+   Int16 column,
+   Boolean masked
+)
+</pre>
+<h4>
+  <a name="997928"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997929"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997933"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997934"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="997935"> </a>Column number (zero-based).</dd>
+
+<dt><a name="997936"> </a><code>&rarr;  <i><code>masked</code></i></code></dt>
+<dd><a name="997937"> </a><code>true</code> to have the column be masked, <code>false</code> otherwise. </dd>
+
+</dl>
+<h4>
+  <a name="997938"> </a>Returns 
+</h4>
+
+<p><a name="997939"> </a>Returns nothing. </p>
+<h4>
+  <a name="997940"> </a>Comments 
+</h4>
+
+<p><a name="997941"> </a>Masked cells are displayed as shaded. You should set a column to masked if its contents should be hidden when it contains information from a private database record and the user has set the display preference for private records to masked. </p>
+
+<p><a name="997942"> </a>A table cell is not masked unless both its row and column are masked. This allows non-private information in the row item to remain visible. For example, the Datebook application shows the time for a private appointment, but it does not show the description.</p>
+
+<p><a name="997943"> </a>Because the number of columns is static, you only need to call this function once per column when you first set up the table. The masked attribute on the row will determine if the contents of the table cell are actually displayed as shaded. </p>
+<h4>
+  <a name="997944"> </a>Compatibility 
+</h4>
+
+<p><a name="997948"> </a>Implemented only if <a href="CompatibilityApdx.html#994671">3.5 New Feature Set</a> if present. </p>
+<h4>
+  <a name="997949"> </a>See Also 
+</h4>
+
+<p><a name="997956"> </a><a href="Table.html#997719"><code>TblRowMasked()</code></a>, <a href="Table.html#998406"><code>TblSetRowMasked()</code></a>, <a href="Table.html#995911"><code>TableColumnAttrType</code></a>, <a href="PrivateRecords.html#995840"><code>SecSelectViewStatus()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997965"> </a>TblSetColumnSpacing Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997967"> </a>Purpose 
+</h4>
+
+<p><a name="997968"> </a>Set the spacing after the specified <code>column</code>.</p>
+<h4>
+  <a name="997969"> </a>Declared In 
+</h4>
+<code>Table.h<a name="997970"> </a></code><h4>
+  <a name="997971"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997972"></a>void TblSetColumnSpacing (
+   TableType *tableP,
+   Int16 column,
+   Coord spacing
+)
+</pre>
+<h4>
+  <a name="997973"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997974"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="997978"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="997979"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="997980"> </a>Column number (zero-based).</dd>
+
+<dt><a name="997981"> </a><code>&rarr;  <i><code>spacing</code></i></code></dt>
+<dd><a name="997982"> </a>Spacing after the column in pixels.</dd>
+
+</dl>
+<h4>
+  <a name="997983"> </a>Returns 
+</h4>
+
+<p><a name="997984"> </a>Returns nothing. </p>
+
+<p><a name="997985"> </a>This function may display a fatal error message if the <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="997986"> </a>See Also 
+</h4>
+
+<p><a name="997993"> </a><a href="Table.html#997996"><code>TblSetColumnUsable()</code></a>, <a href="Table.html#995911"><code>TableColumnAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997996"> </a>TblSetColumnUsable Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997998"> </a>Purpose 
+</h4>
+
+<p><a name="997999"> </a>Set a column in a table to usable or unusable.</p>
+<h4>
+  <a name="998000"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998001"> </a></code><h4>
+  <a name="998002"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998003"></a>void TblSetColumnUsable (
+   TableType *tableP,
+   Int16 column,
+   Boolean usable
+)
+</pre>
+<h4>
+  <a name="998004"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998005"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998009"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998010"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998011"> </a>Column number (zero-based).</dd>
+
+<dt><a name="998012"> </a><code>&rarr;  <i><code>usable</code></i></code></dt>
+<dd><a name="998013"> </a><code>true</code> for usable or <code>false</code> for not usable.</dd>
+
+</dl>
+<h4>
+  <a name="998014"> </a>Returns 
+</h4>
+
+<p><a name="998015"> </a>Returns nothing. </p>
+
+<p><a name="998016"> </a>This function may display a fatal error message if the <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="998017"> </a>Comments 
+</h4>
+
+<p><a name="998018"> </a>Columns that are not usable do not display.</p>
+<h4>
+  <a name="998019"> </a>See Also 
+</h4>
+
+<p><a name="998026"> </a><a href="Table.html#997473"><code>TblMarkRowInvalid()</code></a>, <a href="Table.html#995911"><code>TableColumnAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998029"> </a>TblSetColumnWidth Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998031"> </a>Purpose 
+</h4>
+
+<p><a name="998032"> </a>Set the width of the specified column.</p>
+<h4>
+  <a name="998033"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998034"> </a></code><h4>
+  <a name="998035"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998036"></a>void TblSetColumnWidth (
+   TableType *tableP,
+   Int16 column,
+   Coord width
+)
+</pre>
+<h4>
+  <a name="998037"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998038"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998042"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998043"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998044"> </a>Column number (zero-based).</dd>
+
+<dt><a name="998045"> </a><code>&rarr;  <i><code>width</code></i></code></dt>
+<dd><a name="998046"> </a>Width of the column (in pixels).</dd>
+
+</dl>
+<h4>
+  <a name="998047"> </a>Returns 
+</h4>
+
+<p><a name="998048"> </a>Returns nothing. </p>
+
+<p><a name="998049"> </a>This function may display a fatal error message if the <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="998050"> </a>See Also 
+</h4>
+
+<p><a name="998057"> </a><a href="Table.html#996838"><code>TblGetColumnWidth()</code></a>, <a href="Table.html#995911"><code>TableColumnAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998060"> </a>TblSetCustomDrawProcedure Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998062"> </a>Purpose 
+</h4>
+
+<p><a name="998063"> </a>Set the custom draw callback procedure for the specified column.</p>
+<h4>
+  <a name="998064"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998065"> </a></code><h4>
+  <a name="998066"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998067"></a>void TblSetCustomDrawProcedure (
+   TableType *tableP,
+   Int16 column,
+   TableDrawItemFuncPtr drawCallback
+)
+</pre>
+<h4>
+  <a name="998068"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998069"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998073"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998074"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998075"> </a>Column number.</dd>
+
+<dt><a name="998076"> </a><code>&rarr;  <i><code>drawCallback</code></i></code></dt>
+<dd><a name="998077"> </a>Callback function.</dd>
+
+</dl>
+<h4>
+  <a name="998078"> </a>Returns 
+</h4>
+
+<p><a name="998079"> </a>Returns nothing. </p>
+<h4>
+  <a name="998080"> </a>Comments 
+</h4>
+
+<p><a name="998081"> </a>The custom draw callback function is used to draw table items with a <code>TableItemStyleType</code> of <code>customTableItem</code> or <code>tallCustomTableItem</code>. See the <a href="Table.html#996034"><code>TableItemType</code></a> description for more information. </p>
+
+<p><a name="998085"> </a>This function may display a fatal error message if the <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="998086"> </a>See Also 
+</h4>
+
+<p><a name="998093"> </a><a href="Table.html#998658"><code>TableDrawItemFuncType()</code></a>, <a href="Table.html#996579"><code>TblDrawTable()</code></a>, <a href="Table.html#995911"><code>TableColumnAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998099"> </a>TblSetItemFont Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998101"> </a>Purpose 
+</h4>
+
+<p><a name="998102"> </a>Set the font used to display a table item.</p>
+<h4>
+  <a name="998103"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998104"> </a></code><h4>
+  <a name="998105"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998106"></a>void TblSetItemFont (
+   TableType *tableP,
+   Int16 row,
+   Int16 column,
+   FontID fontID
+)
+</pre>
+<h4>
+  <a name="998107"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998108"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998112"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998113"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998114"> </a>Row number of the item (zero-based).</dd>
+
+<dt><a name="998115"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998116"> </a>Column number of the item (zero-based).</dd>
+
+<dt><a name="998117"> </a><code>&rarr;  <i><code>fontID</code></i></code></dt>
+<dd><a name="998118"> </a>ID of the font to be used.</dd>
+
+</dl>
+<h4>
+  <a name="998119"> </a>Returns 
+</h4>
+
+<p><a name="998120"> </a>Returns nothing.</p>
+<h4>
+  <a name="998121"> </a>Comments 
+</h4>
+
+<p><a name="998122"> </a>This function sets the value stored in the <code>fontID</code> field for this table item. Only certain types of table items use the font specified by the <code>fontID</code> field when they are displayed. The <a href="Table.html#996034"><code>TableItemType</code></a> description specifies what font is used to display each type of table item. It is not an error to set the <code>fontID</code> for a table item that does not use it. </p>
+
+<p><a name="998126"> </a>This function may display a fatal error message if the <code>row</code> or <code>column</code> parameter specifies a row or column that is not on the screen. </p>
+<h4>
+  <a name="998127"> </a>Compatibility 
+</h4>
+
+<p><a name="998131"> </a>Implemented only if <a href="CompatibilityApdx.html#993158">3.0 New Feature Set</a> is present.</p>
+<h4>
+  <a name="998132"> </a>See Also 
+</h4>
+
+<p><a name="998136"> </a><a href="Table.html#996919"><code>TblGetItemFont()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998139"> </a>TblSetItemInt Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998141"> </a>Purpose 
+</h4>
+
+<p><a name="998142"> </a>Set the integer value of the specified item.</p>
+<h4>
+  <a name="998143"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998144"> </a></code><h4>
+  <a name="998145"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998146"></a>void TblSetItemInt (
+   TableType *tableP,
+   Int16 row,
+   Int16 column,
+   Int16 value
+)
+</pre>
+<h4>
+  <a name="998147"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998148"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998152"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998153"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998154"> </a>Row number of the item (zero-based).</dd>
+
+<dt><a name="998155"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998156"> </a>Column number of the item (zero-based).</dd>
+
+<dt><a name="998157"> </a><code>&rarr;  <i><code>value</code></i></code></dt>
+<dd><a name="998158"> </a>Any byte value (an integer).</dd>
+
+</dl>
+<h4>
+  <a name="998159"> </a>Returns 
+</h4>
+
+<p><a name="998160"> </a>Returns nothing.</p>
+
+<p><a name="998161"> </a>This function may display a fatal error message if the <code>row</code> or <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="998162"> </a>Comments 
+</h4>
+
+<p><a name="998163"> </a>You typically use this function when setting up and initializing a table for the first time to set the value of each table cell. </p>
+
+<p><a name="998164"> </a>This function sets the value stored in the <code>intValue</code> field for this table item. Certain types of table items display the value stored in <code>intValue</code>, and other types display the value pointed to by the <code>ptr</code> field. See the <a href="Table.html#996034"><code>TableItemType</code></a><code> </code>description for details. If you set the <code>intValue</code> of an item that displays its <code>ptr</code> value, it is not an error. An application can store whatever value it wants in the <code>intValue</code> field; however, be aware that this has nothing to do with the value displayed by such a table cell. </p>
+<h4>
+  <a name="998168"> </a>See Also 
+</h4>
+
+<p><a name="998175"> </a><a href="Table.html#996956"><code>TblGetItemInt()</code></a>, <a href="Table.html#998178"><code>TblSetItemPtr()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="998178"> </a>TblSetItemPtr Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998180"> </a>Purpose 
+</h4>
+
+<p><a name="998181"> </a>Set the item to the specified pointer value.</p>
+<h4>
+  <a name="998182"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998183"> </a></code><h4>
+  <a name="998184"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998185"></a>void TblSetItemPtr (
+   TableType *tableP,
+   Int16 row,
+   Int16 column,
+   void *value
+)
+</pre>
+<h4>
+  <a name="998186"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998187"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998191"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998192"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998193"> </a>Row number of the item (zero-based).</dd>
+
+<dt><a name="998194"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998195"> </a>Column number of the item (zero-based).</dd>
+
+<dt><a name="998196"> </a><code>&rarr;  <i><code>value</code></i></code></dt>
+<dd><a name="998197"> </a>Pointer to data to display in the table item.</dd>
+
+</dl>
+<h4>
+  <a name="998198"> </a>Returns 
+</h4>
+
+<p><a name="998199"> </a>Returns nothing. </p>
+
+<p><a name="998200"> </a>This function may display a fatal error message if the <code>row</code> or <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="998201"> </a>Comments 
+</h4>
+
+<p><a name="998202"> </a>This function sets the value stored in the <code>ptr</code> field for this table item. Certain types of table items display the value pointed to by <code>ptr</code>, and other types display the value stored in the <code>intValue</code> field. See the <a href="Table.html#996034"><code>TableItemType</code></a> description for details. If you set the <code>ptr</code> of an item that displays its <code>intValue</code>, it is not an error. An application can store whatever value it wants in the <code>ptr</code> field; however, be aware that this has nothing to do with the value displayed by such a table cell. </p>
+<h4>
+  <a name="998206"> </a>See Also 
+</h4>
+
+<p><a name="998213"> </a><a href="Table.html#996991"><code>TblGetItemPtr()</code></a>, <a href="Table.html#998139"><code>TblSetItemInt()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998216"> </a>TblSetItemStyle Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998218"> </a>Purpose 
+</h4>
+
+<p><a name="998219"> </a>Set the type of item to display; for example, text, numbers, dates, and so on. </p>
+<h4>
+  <a name="998220"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998221"> </a></code><h4>
+  <a name="998222"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998223"></a>void TblSetItemStyle (
+   TableType *tableP,
+   Int16 row,
+   Int16 column,
+   TableItemStyleType type
+)
+</pre>
+<h4>
+  <a name="998224"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998225"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998229"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998230"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998231"> </a>Row number of the item (zero-based).</dd>
+
+<dt><a name="998232"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998233"> </a>Column number of the item (zero-based).</dd>
+
+<dt><a name="998234"> </a><code>&rarr;  <i><code>type</code></i></code></dt>
+<dd><a name="998235"> </a>The type of item, such as an editable text field or a check box. See <a href="Table.html#996034"><code>TableItemType</code></a> for a list of possible values. </dd>
+
+</dl>
+<h4>
+  <a name="998239"> </a>Returns 
+</h4>
+
+<p><a name="998240"> </a>Returns nothing. </p>
+
+<p><a name="998241"> </a>This function may display a fatal error message if the <code>row</code> or <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="998242"> </a>Comments 
+</h4>
+
+<p><a name="998243"> </a>You typically use this function when first setting up and initializing a table; you do not dynamically change item styles. </p>
+
+<p><a name="998247"> </a>Follow this function with a call to either <a href="Table.html#998139"><code>TblSetItemInt()</code></a> or <a href="Table.html#998178"><code>TblSetItemPtr()</code></a> to set the value displayed by the table item. You should call one or the other of these functions depending on the type of table item you specified. See the table in the <a href="Table.html#996034"><code>TableItemType</code></a> description for details. </p>
+
+<p><a name="998254"> </a>Note also that a table column always contains items of the same type. For example, you might initialize a table using this code: </p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+for (row = 0; row &lt; rowsInTable; row++) {<a name="998255"> </a>
+  TblSetItemStyle (table, row, completedColumn, <a name="998256"> </a>
+    checkboxTableItem);<a name="998257"> </a>
+  TblSetItemStyle (table, row, priorityColumn, <a name="998258"> </a>
+    numericTableItem);<a name="998259"> </a>
+  TblSetItemStyle (table, row, descColumn, <a name="998260"> </a>
+    textTableItem);<a name="998261"> </a>
+  TblSetItemStyle (table, row, dueDateColumn, <a name="998262"> </a>
+    customTableItem);<a name="998263"> </a>
+  TblSetItemStyle (table, row, categoryColumn, 
+    customTableItem);<a name="998264"> </a>
+}<a name="998265"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+<h4>
+  <a name="998266"> </a>See Also 
+</h4>
+
+<p><a name="998270"> </a><a href="Table.html#998060"><code>TblSetCustomDrawProcedure()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998274"> </a>TblSetLoadDataProcedure Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998276"> </a>Purpose 
+</h4>
+
+<p><a name="998277"> </a>Set the load-data callback procedure for the specified column.</p>
+<h4>
+  <a name="998278"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998279"> </a></code><h4>
+  <a name="998280"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998281"></a>void TblSetLoadDataProcedure (
+   TableType *tableP,
+   Int16 column,
+   TableLoadDataFuncPtr loadDataCallback
+)
+</pre>
+<h4>
+  <a name="998282"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998283"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998287"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998288"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998289"> </a>Column number (zero-based).</dd>
+
+<dt><a name="998290"> </a><code>&rarr;  <i><code>loadDataCallback</code></i></code></dt>
+<dd><a name="998294"> </a>Callback procedure. See <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a>. </dd>
+
+</dl>
+<h4>
+  <a name="998295"> </a>Returns 
+</h4>
+
+<p><a name="998296"> </a>Returns nothing.</p>
+<h4>
+  <a name="998297"> </a>Comments 
+</h4>
+
+<p><a name="998298"> </a>The callback procedure is used to load the data values of a table item. See the <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a> for more information on writing the callback function. </p>
+
+<p><a name="998302"> </a>You typically use this function when first setting up and initializing a table. </p>
+<h4>
+  <a name="998303"> </a>See Also 
+</h4>
+
+<p><a name="998307"> </a><a href="Table.html#998060"><code>TblSetCustomDrawProcedure()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998310"> </a>TblSetRowData Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998312"> </a>Purpose 
+</h4>
+
+<p><a name="998313"> </a>Set the data value of the specified row. The data value is a placeholder for application-specific values.</p>
+<h4>
+  <a name="998314"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998315"> </a></code><h4>
+  <a name="998316"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998317"></a>void TblSetRowData (
+   TableType *tableP,
+   Int16 row,
+   UInt32 data
+)
+</pre>
+<h4>
+  <a name="998318"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998319"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998323"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998324"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998325"> </a>Row number (zero-based).</dd>
+
+<dt><a name="998326"> </a><code>&rarr;  <i><code>data</code></i></code></dt>
+<dd><a name="998327"> </a>Application-specific data value to store for this row. For example, the Datebook and ToDo applications use this field to store the unique ID of the database record displayed by this row.</dd>
+
+</dl>
+<h4>
+  <a name="998328"> </a>Returns 
+</h4>
+
+<p><a name="998329"> </a>Returns nothing. </p>
+
+<p><a name="998330"> </a>This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="998331"> </a>See Also 
+</h4>
+
+<p><a name="998338"> </a><a href="Table.html#997111"><code>TblGetRowData()</code></a>, <a href="Table.html#996710"><code>TblFindRowData()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998341"> </a>TblSetRowHeight Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998343"> </a>Purpose 
+</h4>
+
+<p><a name="998344"> </a>Set the height of the specified row.</p>
+<h4>
+  <a name="998345"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998346"> </a></code><h4>
+  <a name="998347"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998348"></a>void TblSetRowHeight (
+   TableType *tableP,
+   Int16 row,
+   Coord height
+)
+</pre>
+<h4>
+  <a name="998349"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998350"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998354"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998355"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998356"> </a>Row number (zero-based).</dd>
+
+<dt><a name="998357"> </a><code>&rarr;  <i><code>height</code></i></code></dt>
+<dd><a name="998358"> </a>New height in pixels.</dd>
+
+</dl>
+<h4>
+  <a name="998359"> </a>Returns 
+</h4>
+
+<p><a name="998360"> </a>Returns nothing. </p>
+
+<p><a name="998361"> </a>This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="998362"> </a>See Also 
+</h4>
+
+<p><a name="998369"> </a><a href="Table.html#997143"><code>TblGetRowHeight()</code></a>, <a href="Table.html#998498"><code>TblSetRowStaticHeight()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998372"> </a>TblSetRowID Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998374"> </a>Purpose 
+</h4>
+
+<p><a name="998375"> </a>Set the ID value of the specified row.</p>
+<h4>
+  <a name="998376"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998377"> </a></code><h4>
+  <a name="998378"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998379"></a>void TblSetRowID (
+   TableType *tableP,
+   Int16 row,
+   UInt16 id
+)
+</pre>
+<h4>
+  <a name="998380"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998381"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998385"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998386"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998387"> </a>Row number (zero-based).</dd>
+
+<dt><a name="998388"> </a><code>&rarr;  <i><code>id</code></i></code></dt>
+<dd><a name="998389"> </a>ID to identify a row.</dd>
+
+</dl>
+<h4>
+  <a name="998390"> </a>Returns 
+</h4>
+
+<p><a name="998391"> </a>Returns nothing. </p>
+
+<p><a name="998392"> </a>This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="998393"> </a>See Also 
+</h4>
+
+<p><a name="998403"> </a><a href="Table.html#997171"><code>TblGetRowID()</code></a>, <a href="Table.html#996748"><code>TblFindRowID()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998406"> </a>TblSetRowMasked Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998408"> </a>Purpose 
+</h4>
+
+<p><a name="998409"> </a>Set a row in a table to masked or unmasked.</p>
+<h4>
+  <a name="998410"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998411"> </a></code><h4>
+  <a name="998412"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998413"></a>void TblSetRowMasked (
+   TableType *tableP,
+   Int16 row,
+   Boolean masked
+)
+</pre>
+<h4>
+  <a name="998414"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998415"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998419"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998420"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998421"> </a>Row number (zero-based).</dd>
+
+<dt><a name="998422"> </a><code>&rarr;  <i><code>masked</code></i></code></dt>
+<dd><a name="998423"> </a><code>true</code> to have the row be masked, <code>false</code> otherwise. </dd>
+
+</dl>
+<h4>
+  <a name="998424"> </a>Returns 
+</h4>
+
+<p><a name="998425"> </a>Returns nothing. </p>
+<h4>
+  <a name="998426"> </a>Comments 
+</h4>
+
+<p><a name="998427"> </a>Masked cells are displayed as shaded. You should call this function before drawing or redrawing the table. If a table row contains a private database record and the user has set the display preference for private records to masked, you must call this function on that row. For example: </p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+UInt16 attr;<a name="998428"> </a>
+privateRecordViewEnum privateRecordStatus; <a name="998429"> </a>
+Boolean masked;<a name="998430"> </a>
+ <a name="998431"> </a>
+privateRecordStatus = (privateRecordViewEnum)<a name="998432"> </a>
+  PrefGetPreference(prefShowPrivateRecords);<a name="998433"> </a>
+....<a name="998434"> </a>
+DmRecordInfo (ToDoDB, recordNum, &amp;attr, NULL, <a name="998435"> </a>
+  NULL);<a name="998436"> </a>
+masked = ((attr &amp; dmRecAttrSecret) &amp;&amp; <a name="998437"> </a>
+  (privateRecordStatus == maskPrivateRecords));<a name="998438"> </a>
+TblSetRowMasked(tableP, row, masked);<a name="998439"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+
+<p><a name="998440"> </a>Note that a table cell is not masked unless both its row and column are masked. This allows non-private information in the row item to remain visible. For example, the Datebook application shows the time for a private appointment, but it does not show the description. </p>
+<h4>
+  <a name="998441"> </a>Compatibility 
+</h4>
+
+<p><a name="998445"> </a>Implemented only if <a href="CompatibilityApdx.html#994671">3.5 New Feature Set</a> is present. </p>
+<h4>
+  <a name="998446"> </a>See Also 
+</h4>
+
+<p><a name="998453"> </a><a href="Table.html#997719"><code>TblRowMasked()</code></a>, <a href="Table.html#997920"><code>TblSetColumnMasked()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a>, <a href="PrivateRecords.html#995840"><code>SecSelectViewStatus()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998462"> </a>TblSetRowSelectable Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998464"> </a>Purpose 
+</h4>
+
+<p><a name="998465"> </a>Set a row in a table to selectable or nonselectable.</p>
+<h4>
+  <a name="998466"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998467"> </a></code><h4>
+  <a name="998468"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998469"></a>void TblSetRowSelectable (
+   TableType *tableP,
+   Int16 row,
+   Boolean selectable
+)
+</pre>
+<h4>
+  <a name="998470"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998471"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998475"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998476"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998477"> </a>Row number (zero-based).</dd>
+
+<dt><a name="998478"> </a><code>&rarr;  <i><code>selectable</code></i></code></dt>
+<dd><a name="998479"> </a><code>true</code> or <code>false</code>.</dd>
+
+</dl>
+<h4>
+  <a name="998480"> </a>Returns 
+</h4>
+
+<p><a name="998481"> </a>Returns nothing. </p>
+
+<p><a name="998482"> </a>This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="998483"> </a>Comments 
+</h4>
+
+<p><a name="998484"> </a>Rows that are not selectable don't highlight when touched.</p>
+<h4>
+  <a name="998485"> </a>See Also 
+</h4>
+
+<p><a name="998492"> </a><a href="Table.html#997761"><code>TblRowSelectable()</code></a>, <a href="Table.html#998528"><code>TblSetRowUsable()</code></a>, <a href="Table.html#996265"><code>TableRowAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998498"> </a>TblSetRowStaticHeight Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998500"> </a>Purpose 
+</h4>
+
+<p><a name="998501"> </a>Set the static height attribute of a row. </p>
+<h4>
+  <a name="998502"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998503"> </a></code><h4>
+  <a name="998504"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998505"></a>void TblSetRowStaticHeight (
+   TableType *tableP,
+   Int16 row,
+   Boolean staticHeight
+)
+</pre>
+<h4>
+  <a name="998506"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998507"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998511"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998512"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998513"> </a>Row number (zero-based).</dd>
+
+<dt><a name="998514"> </a><code>&rarr;  <i><code>staticHeight</code></i></code></dt>
+<dd><a name="998515"> </a><code>true</code> to set the static height, <code>false</code> to unset it.</dd>
+
+</dl>
+<h4>
+  <a name="998516"> </a>Returns 
+</h4>
+
+<p><a name="998517"> </a>Nothing.</p>
+
+<p><a name="998518"> </a>This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="998519"> </a>Comments 
+</h4>
+
+<p><a name="998520"> </a>A row that has its static height attribute set will not expand or contract the height of the row as text is added or removed from a text item.</p>
+<h4>
+  <a name="998521"> </a>Compatibility 
+</h4>
+
+<p><a name="998525"> </a>Implemented only if <a href="CompatibilityApdx.html#992789">2.0 New Feature Set</a> is present.</p>
+
+<h3 class="hbH3">
+  <a name="998528"> </a>TblSetRowUsable Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998530"> </a>Purpose 
+</h4>
+
+<p><a name="998531"> </a>Set a row in a table to usable or unusable. Rows that are not usable do not display.</p>
+<h4>
+  <a name="998532"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998533"> </a></code><h4>
+  <a name="998534"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998535"></a>void TblSetRowUsable (
+   TableType *tableP,
+   Int16 row,
+   Boolean usable
+)
+</pre>
+<h4>
+  <a name="998536"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998537"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998541"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998542"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998543"> </a>Row number (zero-based).</dd>
+
+<dt><a name="998544"> </a><code>&rarr;  <i><code>usable</code></i></code></dt>
+<dd><a name="998545"> </a><code>true</code> or <code>false</code>.</dd>
+
+</dl>
+<h4>
+  <a name="998546"> </a>Returns 
+</h4>
+
+<p><a name="998547"> </a>Returns nothing. </p>
+
+<p><a name="998548"> </a>This function may display a fatal error message if the <code>row</code> parameter is invalid. </p>
+<h4>
+  <a name="998549"> </a>See Also 
+</h4>
+
+<p><a name="998556"> </a><a href="Table.html#997788"><code>TblRowUsable()</code></a>, <a href="Table.html#998462"><code>TblSetRowSelectable()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998560"> </a>TblSetSaveDataProcedure Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998562"> </a>Purpose 
+</h4>
+
+<p><a name="998563"> </a>Set the save-data callback procedure for the specified column.</p>
+<h4>
+  <a name="998564"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998565"> </a></code><h4>
+  <a name="998566"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998567"></a>void TblSetSaveDataProcedure (
+   TableType *tableP,
+   Int16 column,
+   TableSaveDataFuncPtr saveDataCallback
+)
+</pre>
+<h4>
+  <a name="998568"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998569"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998573"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998574"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998575"> </a>Column number (zero-based).</dd>
+
+<dt><a name="998576"> </a><code>&rarr;  <i><code>saveDataCallback</code></i></code></dt>
+<dd><a name="998580"> </a>Callback function. See <a href="Table.html#998770"><code>TableSaveDataFuncType()</code></a>.</dd>
+
+</dl>
+<h4>
+  <a name="998581"> </a>Returns 
+</h4>
+
+<p><a name="998582"> </a>Returns nothing. </p>
+
+<p><a name="998583"> </a>This function may display a fatal error message if the <code>column</code> parameter is invalid. </p>
+<h4>
+  <a name="998584"> </a>Comments 
+</h4>
+
+<p><a name="998585"> </a>The callback procedure is called when the table object determines the data of a text object needs to be saved.</p>
+<h4>
+  <a name="998586"> </a>See Also 
+</h4>
+
+<p><a name="998590"> </a><a href="Table.html#998060"><code>TblSetCustomDrawProcedure()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998593"> </a>TblSetSelection Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998595"> </a>Purpose 
+</h4>
+
+<p><a name="998596"> </a>Set a table item.</p>
+<h4>
+  <a name="998597"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998598"> </a></code><h4>
+  <a name="998599"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998600"></a>void TblSetSelection (
+   TableType *tableP,
+   Int16 row,
+   Int16 column
+)
+</pre>
+<h4>
+  <a name="998601"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998602"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998606"> </a>Pointer to a <a href="Table.html#996397"><code>TableType</code></a>.</dd>
+
+<dt><a name="998607"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998608"> </a>Table row.</dd>
+
+<dt><a name="998609"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998610"> </a>Table column.</dd>
+
+</dl>
+<h4>
+  <a name="998611"> </a>Returns 
+</h4>
+
+<dl>
+<dt><a name="998612"> </a><code>Returns nothing.</code></dt>
+</dl>
+<h4>
+  <a name="998613"> </a>Comments 
+</h4>
+
+<p><a name="998614"> </a>This function sets a table item, determined by the row and column arguments, as the current selection. <a href="Table.html#996579"><code>TblDrawTable()</code></a> must be called afterwards to update the UI.</p>
+<h4>
+  <a name="998618"> </a>Compatibility 
+</h4>
+
+<p><a name="998622"> </a>Implemented only if <a href="CompatibilityApdx.html#995256">4.0 New Feature Set</a> is present. To use this function in code intended to be run on earlier versions of Palm OS, link with the PalmOSGlue library and call <code>TblGlueSetSelection</code>. For more information, see <a href="PalmOSGlueLib.html#1030875">Chapter 80, "PalmOSGlue Library."</a></p>
+<h4>
+  <a name="998627"> </a>See Also 
+</h4>
+
+<p><a name="998634"> </a><a href="Table.html#997056"><code>TblGetNumberOfColumns()</code></a>, <a href="Table.html#997231"><code>TblGetTopRow()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="998637"> </a>TblUnhighlightSelection Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998639"> </a>Purpose 
+</h4>
+
+<p><a name="998640"> </a>Unhighlight the currently selected item in a table.</p>
+<h4>
+  <a name="998641"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998642"> </a></code><h4>
+  <a name="998643"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998644"></a>void TblUnhighlightSelection (
+   TableType *tableP
+)
+</pre>
+<h4>
+  <a name="998645"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998646"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998650"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+</dl>
+<h4>
+  <a name="998651"> </a>Returns 
+</h4>
+
+<p><a name="998653"> </a>Returns nothing.</p>
+
+<h2 class="haH2">
+  <a name="998655"> </a>Application-Defined Functions <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h2>
+
+
+<h3 class="hbH3">
+  <a name="998658"> </a>TableDrawItemFuncType Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998660"> </a>Purpose 
+</h4>
+
+<p><a name="998661"> </a>Draw a custom table item. </p>
+<h4>
+  <a name="998662"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998663"> </a></code><h4>
+  <a name="998664"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998666"></a><code>void TableDrawItemFuncType (
+   void *tableP,
+   Int16 row,
+   Int16 column,
+   RectangleType *bounds
+)</code>
+</pre>
+<h4>
+  <a name="998667"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998668"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998672"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998673"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998674"> </a>Row number of the item to be drawn (zero-based). </dd>
+
+<dt><a name="998675"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998676"> </a>Column number of the item to be drawn (zero-based).</dd>
+
+<dt><a name="998677"> </a><code>&rarr;  <i><code>bounds</code></i></code></dt>
+<dd><a name="998678"> </a>The area of the screen in which the item is to be drawn. </dd>
+
+</dl>
+<h4>
+  <a name="998679"> </a>Returns 
+</h4>
+
+<p><a name="998680"> </a>Returns nothing. </p>
+<h4>
+  <a name="998681"> </a>Comments 
+</h4>
+
+<p><a name="998685"> </a>This function is called during <a href="Table.html#996579"><code>TblDrawTable()</code></a> and <a href="Table.html#997553"><code>TblRedrawTable()</code></a>. </p>
+
+<p><a name="998689"> </a>You implement a custom drawing function when your table contains items of type <code>customTableItem</code> or <code>tallCustomTableItem</code> (to draw the entire item) or <code>narrowTextTableItem</code> (to draw whatever is required in the space between the text and the right edge of the table cell). </p>
+
+<p><a name="998691"> </a>You may implement a custom drawing function to include any style of information in the table. If you don't like the way a predefined item is drawn, you may prefer to use a <code>customTableItem</code> or <code>tallCustomTableItem</code> instead. For example, if you want to include a date in your table but you want it to show the year as well as the month and day, you should implement a custom drawing function. </p>
+<h4>
+  <a name="998692"> </a>See Also 
+</h4>
+
+<p><a name="998699"> </a><a href="Table.html#998060"><code>TblSetCustomDrawProcedure()</code></a>, <a href="Table.html#996034"><code>TableItemType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998702"> </a>TableLoadDataFuncType Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998704"> </a>Purpose 
+</h4>
+
+<p><a name="998705"> </a>Load data into a column. </p>
+<h4>
+  <a name="998706"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998707"> </a></code><h4>
+  <a name="998708"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998710"></a><code>Err TableLoadDataFuncType (
+   void *tableP,
+   Int16 row,
+   Int16 column,
+   Boolean editable,
+   MemHandle *dataH,
+   Int16 *dataOffset,
+   Int16 *dataSize,
+   FieldPtr fld
+)</code>
+</pre>
+<h4>
+  <a name="998711"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998712"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998716"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998717"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998718"> </a>Row number of the table item to load.</dd>
+
+<dt><a name="998719"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998720"> </a>Column number of the table item to load. </dd>
+
+<dt><a name="998721"> </a><code>&rarr;  <i><code>editable</code></i></code></dt>
+<dd><a name="998722"> </a>If <code>true</code>, the table is currently being edited. If <code>false</code>, the table is being drawn but not necessarily being edited. </dd>
+
+<dt><a name="998723"> </a><code>&larr;  <i><code>dataH</code></i></code></dt>
+<dd><a name="998724"> </a>Unlocked handle of a block containing a null-terminated text string. </dd>
+
+<dt><a name="998725"> </a><code>&larr;  <i><code>dataOffset</code></i></code></dt>
+<dd><a name="998726"> </a>Offset from start of block to start of the text string.</dd>
+
+<dt><a name="998727"> </a><code>&larr;  <i><code>dataSize</code></i></code></dt>
+<dd><a name="998728"> </a>Allocated size of text string, <i>not</i> the string length.</dd>
+
+<dt><a name="998729"> </a><code>&rarr;  <i><code>fld</code></i></code></dt>
+<dd><a name="998730"> </a>Pointer to the text field in this table cell. </dd>
+
+</dl>
+<h4>
+  <a name="998731"> </a>Returns 
+</h4>
+
+<p><a name="998732"> </a>Returns 0 upon success or an error if unsuccessful. </p>
+<h4>
+  <a name="998733"> </a>Comments 
+</h4>
+
+<p><a name="998734"> </a>This function is called in two cases: when a text field item is being drawn (<a href="Table.html#996579"><code>TblDrawTable()</code></a> or <a href="Table.html#997553"><code>TblRedrawTable()</code></a>) and when a text field item is being selected (part of <a href="Table.html#997334"><code>TblHandleEvent()</code></a>'s handling of <a href="EventRef.html#997812"><code>tblEnterEvent</code></a>). If this function returns an error (any nonzero value) and the item is being selected, then the item is not selected and the table's <code>editing</code> attribute is set to <code>false</code>. </p>
+
+<p><a name="998747"> </a>You return the same values for <code>dataH</code>, <code>dataOffset</code>, and <code>dataSize</code> that you would pass to <a href="Field.html#997853"><code>FldSetText()</code></a>. That is, you can use this function to point the table cell's text field to a string in a database record so that you can edit that string directly using text field routines. To do so, return the handle to a database record in <code>dataH</code>, the offset from the start of the record to the start of the string in <code>dataOffset</code>, and the allocated size of the string in <code>dataSize</code>. </p>
+
+<p><a name="998751"> </a>The handle that you return from this function is assumed to contain a null-terminated string starting at <code>dataOffset</code> bytes in the memory chunk. The string should be between 0 and <code>dataSize</code> - 1 bytes in length. </p>
+
+<p><a name="998752"> </a>As with <code>FldSetText</code>, you are responsible for freeing the memory associated with the <code>dataH</code> parameter. You can do so in the <a href="Table.html#998770"><code>TableSaveDataFuncType()</code></a> function, but it is only called for a cell that has been edited. For non-editable text cells or text cells that are editable but were never selected, free the memory when you close the form. </p>
+
+<p><a name="998756"> </a>The <code>fld</code> pointer passed to your function has already been initialized with default values by the table code. If you want to override a field's attributes (for example, if you want to change the underline mode) you can do so in this function. </p>
+<h4>
+  <a name="998757"> </a>See Also 
+</h4>
+
+<p><a name="998764"> </a><a href="Table.html#996579"><code>TblDrawTable()</code></a>, <a href="Table.html#997334"><code>TblHandleEvent()</code></a>, <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998770"> </a>TableSaveDataFuncType Function <a href="Table.html#995794"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998772"> </a>Purpose 
+</h4>
+
+<p><a name="998773"> </a>Save the data associated with a text field. </p>
+<h4>
+  <a name="998774"> </a>Declared In 
+</h4>
+<code>Table.h<a name="998775"> </a></code><h4>
+  <a name="998776"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998778"></a><code>Boolean TableSaveDataFuncType (
+   void *tableP,
+   Int16 row,
+   Int16 column
+)</code>
+</pre>
+<h4>
+  <a name="998779"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998780"> </a><code>&rarr;  <i><code>tableP</code></i></code></dt>
+<dd><a name="998784"> </a>Pointer to a table object. (See <a href="Table.html#996397"><code>TableType</code></a>.)</dd>
+
+<dt><a name="998785"> </a><code>&rarr;  <i><code>row</code></i></code></dt>
+<dd><a name="998786"> </a>Row number of the table item to load.</dd>
+
+<dt><a name="998787"> </a><code>&rarr;  <i><code>column</code></i></code></dt>
+<dd><a name="998788"> </a>Column number of the table item to load. </dd>
+
+</dl>
+<h4>
+  <a name="998789"> </a>Returns 
+</h4>
+
+<p><a name="998790"> </a>Return <code>true</code> if the table should be redrawn, or <code>false</code> if the table does not need to be redrawn. </p>
+<h4>
+  <a name="998791"> </a>Comments 
+</h4>
+
+<p><a name="998792"> </a>This is called before the memory associated with the currently selected text field in a table cell is freed. Implement this function if you need to do any special cleanup before this memory is freed. </p>
+
+<p><a name="998793"> </a>This function is called only when the currently selected editable text field is releasing the focus. You can use <a href="Table.html#996869"><code>TblGetCurrentField()</code></a> to retrieve a pointer to this field. It is called only on the currently selected field, not on any other fields in the table. </p>
+
+<p><a name="998797"> </a>Note that the table manager already disassociates the memory handle from the text field for you so that the memory associated with your data is not freed when the field is freed. The table manager also calls <a href="Field.html#996322"><code>FldCompactText()</code></a> for you. </p>
+
+<p><a name="998801"> </a>If the text handle you returned in your <a href="Table.html#998702"><code>TableLoadDataFuncType()</code></a> callback points to a string on the dynamic heap, you should implement this callback function to store or free the handle. You can use <a href="Field.html#996869"><code>FldGetTextHandle()</code></a> to obtain the handle.</p>
+
+<p><a name="998811"> </a>If you return <code>true</code> from this function, <a href="Table.html#997553"><code>TblRedrawTable()</code></a> is called. You should mark invalid any table rows that you want redrawn before returning. </p>
+<h4>
+  <a name="998812"> </a>See Also 
+</h4>
+
+<p><a name="998816"> </a><a href="Table.html#998560"><code>TblSetSaveDataProcedure()</code></a></p>
+
+<p><a name="986245"> </a></p>
+&nbsp;<br>
+</div>
+<!--END CONTENT-->
+
+</td>
+<td width="5">&nbsp;&nbsp;</td>
+</tr>
+
+</table>
+
+<!-- BEGIN FOOTER -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="7" rowspan="2"><img name="index_x" src="images/shim.gif" width="7" height="33" border="0" alt=""></td>
+<td align="left"><img name="dashes" src="images/dashes.gif" width="744" height="3" border="0" alt=""></td>
+<td width="10" rowspan="2"><img name="index_x" src="images/shim.gif" width="10" height="33" border="0" alt=""></td>
+</tr>
+<tr>
+<td align="center">
+<p class="footer">
+Copyright © 1996-2004, PalmSource, Inc. and its affiliates.  All rights reserved. <br>
+<a href="http://www.palmsource.com/contact/">Write Us</a> | <a href="http://www.palmos.com/dev/training/">Training</a> | <a href="http://www.palmos.com/dev/support/kb/">Knowledge Base</a> | <a href="Reference_Front.html" target="_blank">Legal</a></p>
+<br>
+<!--BEGIN BOOK NAVIGATION-->
+<p class="nav">
+<A href="http://www.palmos.com/dev/support/docs/">Documentation</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+<a href="ReferenceTOC.html">Table of Contents</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="SystemDialogs.html">&lt;&nbsp;Previous</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="UIColor.html">Next&nbsp;&gt;</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="ReferenceIX.html">Index</a>
+</p>
+</td>
+</tr>
+</table>
+<!-- END FOOTER -->
+
+</body>
+</html>

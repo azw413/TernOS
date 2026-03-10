@@ -107,6 +107,9 @@ pub fn apply_prc_runtime_trap_stub(
     if crate::prc_app::traps::dm::DmApi::handle_trap(cpu, runtime, memory, trap_word) {
         return;
     }
+    if crate::prc_app::traps::tbl::TblApi::handle_trap(cpu, runtime, memory, trap_word) {
+        return;
+    }
 
     fn resolve_handle(runtime: &PrcRuntimeContext, raw: u32) -> Option<u32> {
         if raw == 0 {
@@ -130,11 +133,12 @@ pub fn apply_prc_runtime_trap_stub(
         let sp = cpu.a[7];
         // Palm ABI passes MemHandle as the first stack argument.
         // Some glue stubs mirror it in A0/D0, so allow those as fallback only.
-        let stack_raw = memory.read_u32_be(sp).unwrap_or(0);
-        if let Some(handle) = resolve_handle(runtime, stack_raw) {
-            return handle;
-        }
-        if stack_raw != 0 {
+        if let Some(stack_raw) = memory.read_u32_be(sp) {
+            if let Some(handle) = resolve_handle(runtime, stack_raw) {
+                return handle;
+            }
+            // If an explicit stack argument was present, trust it.
+            // This avoids treating null handles as stale A0/D0 values.
             return 0;
         }
         for raw in [cpu.a[0], cpu.d[0]] {
@@ -152,7 +156,17 @@ pub fn apply_prc_runtime_trap_stub(
         resource_kind: Option<u32>,
         resource_id: Option<u16>,
     ) -> (u32, u32) {
-        let size = data.len().max(16) as u32;
+        let size = data.len().clamp(16, 1_048_576) as u32;
+        // Keep Palm heap-ish allocations inside a stable synthetic window.
+        if runtime.next_ptr < 0x2000_0000 || runtime.next_ptr > 0x2FFF_0000 {
+            let mut high = 0x2000_0000u32;
+            for b in &runtime.mem_blocks {
+                if (0x2000_0000..=0x2FFF_FFFF).contains(&b.ptr) {
+                    high = high.max(b.ptr.saturating_add(b.size).saturating_add(16));
+                }
+            }
+            runtime.next_ptr = high.max(0x2000_0000);
+        }
         let handle = runtime.next_handle;
         runtime.next_handle = runtime.next_handle.saturating_add(1);
         let ptr = runtime.next_ptr;
@@ -226,14 +240,22 @@ pub fn apply_prc_runtime_trap_stub(
         memory: &mut MemoryMap,
         handle: u32,
     ) -> Option<u32> {
-        for block in &mut runtime.mem_blocks {
-            if block.handle == handle {
-                block.locked = true;
-                memory.upsert_overlay(block.ptr, block.data.clone());
-                return Some(block.ptr);
+        let idx = runtime.mem_blocks.iter().position(|b| b.handle == handle)?;
+        if runtime.mem_blocks[idx].ptr == u32::MAX || runtime.mem_blocks[idx].ptr < 0x1000 {
+            let mut high = runtime.next_ptr.max(0x2000_0000);
+            for (i, b) in runtime.mem_blocks.iter().enumerate() {
+                if i != idx && (0x2000_0000..=0x2FFF_FFFF).contains(&b.ptr) {
+                    high = high.max(b.ptr.saturating_add(b.size).saturating_add(16));
+                }
             }
+            runtime.mem_blocks[idx].ptr = high;
+            runtime.next_ptr = high.saturating_add(runtime.mem_blocks[idx].size.saturating_add(16));
         }
-        None
+        runtime.mem_blocks[idx].locked = true;
+        let ptr = runtime.mem_blocks[idx].ptr;
+        let data = runtime.mem_blocks[idx].data.clone();
+        memory.upsert_overlay(ptr, data);
+        Some(ptr)
     }
 
     fn free_handle(runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap, handle: u32) -> bool {
@@ -527,6 +549,7 @@ pub fn apply_prc_runtime_trap_stub(
             runtime.active_form_handler = 0;
             runtime.event_queue.clear();
             runtime.pending_dispatch_event = None;
+            runtime.startup_open_dispatched = false;
             runtime.evt_polls = 0;
             runtime.blink_next_tick = 175;
             runtime.blink_phase = 0;
@@ -594,6 +617,7 @@ pub fn apply_prc_runtime_trap_stub(
                 e_type: EVT_FRM_OPEN,
                 data_u16: form_id,
             });
+            runtime.startup_open_dispatched = false;
             cpu.d[0] = 0;
         }
         0xA173 => {
@@ -605,7 +629,23 @@ pub fn apply_prc_runtime_trap_stub(
             let form_h = memory.read_u32_be(sp).unwrap_or(0);
             if form_h != 0 {
                 runtime.active_form_handle = form_h;
-                runtime.active_form_id = Some((form_h & 0xFFFF) as u16);
+                let form_id = (form_h & 0xFFFF) as u16;
+                runtime.active_form_id = Some(form_id);
+                runtime.startup_open_dispatched = false;
+                let has_form_transition = runtime
+                    .event_queue
+                    .iter()
+                    .any(|e| e.e_type == EVT_FRM_LOAD || e.e_type == EVT_FRM_OPEN);
+                if !has_form_transition && form_id != 0 {
+                    runtime.event_queue.push(RuntimeEvent {
+                        e_type: EVT_FRM_LOAD,
+                        data_u16: form_id,
+                    });
+                    runtime.event_queue.push(RuntimeEvent {
+                        e_type: EVT_FRM_OPEN,
+                        data_u16: form_id,
+                    });
+                }
             }
         }
         0xA16F => {
@@ -645,6 +685,7 @@ pub fn apply_prc_runtime_trap_stub(
             let form_h = 0x3000_0000u32 | (form_id as u32);
             cpu.a[0] = form_h;
             runtime.active_form_id = Some(form_id);
+            runtime.startup_open_dispatched = false;
             if runtime.trace_traps && runtime.trace_trap_budget > 0 {
                 let ep = runtime.evt_event_p;
                 let e_type = memory.read_u16_be(ep).unwrap_or(0xFFFF);
@@ -662,6 +703,7 @@ pub fn apply_prc_runtime_trap_stub(
             if runtime.drawn_form_id.is_none() {
                 runtime.drawn_form_id = runtime.active_form_id;
             }
+            runtime.startup_open_dispatched = true;
             cpu.d[0] = 0;
         }
         0xA19F => {
@@ -674,6 +716,63 @@ pub fn apply_prc_runtime_trap_stub(
         0xA17C => {
             cpu.a[0] = 0;
             cpu.d[0] = 0;
+        }
+        0xA17E => {
+            // FormType* FrmGetFormPtr(UInt16 formID)
+            let sp = cpu.a[7];
+            let form_id = [
+                memory.read_u16_be(sp).unwrap_or(0),
+                (cpu.d[0] & 0xFFFF) as u16,
+                (cpu.a[0] & 0xFFFF) as u16,
+            ]
+            .into_iter()
+            .find(|v| *v != 0)
+            .unwrap_or(0);
+            let has_form_resource = runtime
+                .resources
+                .iter()
+                .any(|res| res.kind == u32::from_be_bytes(*b"tFRM") && res.id == form_id);
+            let form_h = if has_form_resource {
+                0x3000_0000u32 | (form_id as u32)
+            } else {
+                0
+            };
+            cpu.a[0] = form_h;
+            cpu.d[0] = (cpu.d[0] & 0xFFFF_0000) | (form_h & 0xFFFF);
+        }
+        0xA17F => {
+            // UInt16 FrmGetNumberOfObjects(const FormType *formP)
+            let sp = cpu.a[7];
+            let form_h = [
+                memory.read_u32_be(sp).unwrap_or(0),
+                cpu.a[0],
+                cpu.d[0],
+                runtime.active_form_handle,
+            ]
+            .into_iter()
+            .find(|v| (*v & 0xFFFF_0000) == 0x3000_0000)
+            .unwrap_or(runtime.active_form_handle);
+            let count = decode_form_id_from_handle_or_active(runtime, form_h)
+                .map(|fid| {
+                    runtime
+                        .form_objects
+                        .iter()
+                        .filter(|o| o.form_id == fid)
+                        .count() as u16
+                })
+                .unwrap_or(0);
+            cpu.d[0] = (cpu.d[0] & 0xFFFF_0000) | count as u32;
+        }
+        0xA18B => {
+            // void FrmSetControlGroupSelection(formP, groupNum, controlID)
+            // For now we accept and no-op; this unblocks apps that set up
+            // radio/option groups during form-open.
+            cpu.d[0] = 0;
+        }
+        0xA18C => {
+            // UInt16 FrmGetControlGroupSelection(formP, groupNum)
+            // Unknown selection in current lightweight form model.
+            cpu.d[0] = (cpu.d[0] & 0xFFFF_0000) | 0xFFFF;
         }
         0xA084 => {
             // ErrDisplayFileLineMsg: swallow diagnostics/assert displays in exploratory mode.
@@ -723,6 +822,12 @@ pub fn apply_prc_runtime_trap_stub(
                         event_p
                     );
                 }
+            }
+            if evt_type == EVT_FRM_OPEN {
+                // Even when an app installs a custom form handler, Palm's
+                // default behavior is an opened/visible form. Mark it drawn so
+                // our preview/UI layer can present the active form immediately.
+                runtime.drawn_form_id = runtime.active_form_id;
             }
             if runtime.active_form_handler != 0 {
                 let ret_pc = cpu.pc;
@@ -787,6 +892,9 @@ pub fn apply_prc_runtime_trap_stub(
                 if runtime.pending_dispatch_event == Some(evt) {
                     runtime.pending_dispatch_event = None;
                 }
+                if evt.e_type == EVT_FRM_OPEN {
+                    runtime.startup_open_dispatched = true;
+                }
                 write_event(memory, event_p, evt.e_type, evt.data_u16);
                 if evt.e_type != EVT_NIL {
                     log::info!(
@@ -815,6 +923,26 @@ pub fn apply_prc_runtime_trap_stub(
                 cpu.d[0] = 0;
                 return;
             }
+            if !runtime.startup_open_dispatched {
+                if let Some(form_id) = runtime.active_form_id {
+                    let evt = RuntimeEvent {
+                        e_type: EVT_FRM_OPEN,
+                        data_u16: form_id,
+                    };
+                    runtime.startup_open_dispatched = true;
+                    write_event(memory, event_p, evt.e_type, evt.data_u16);
+                    log::info!(
+                        "PRC trap detail EvtGetEvent synth eType={} data=0x{:04X} eventP=0x{:08X}",
+                        evt.e_type,
+                        evt.data_u16,
+                        event_p
+                    );
+                    runtime.blocked_on_evt_get_event = false;
+                    runtime.blocked_evt_timeout_ticks = 0;
+                    cpu.d[0] = 0;
+                    return;
+                }
+            }
             runtime.ticks = runtime.ticks.saturating_add(timeout.max(1));
             write_event(memory, event_p, EVT_NIL, 0);
             if runtime.trace_traps && runtime.trace_trap_budget > 0 {
@@ -834,10 +962,16 @@ pub fn apply_prc_runtime_trap_stub(
             }
         }
         0xA01E => {
-            let size = cpu.d[0].max(16);
+            let sp = cpu.a[7];
+            let stack_size = memory.read_u32_be(sp).unwrap_or(0);
+            let size = [stack_size, cpu.a[0], cpu.d[0], cpu.a[1], cpu.d[1]]
+                .into_iter()
+                .find(|v| *v > 0 && *v <= 1_048_576)
+                .unwrap_or(16);
             let data = vec![0u8; size as usize];
             let (handle, _ptr) = alloc_mem(runtime, memory, data, None, None);
             cpu.a[0] = handle;
+            cpu.d[0] = handle;
         }
         0xA021 => {
             let handle = decode_handle_arg(runtime, cpu, memory);
@@ -872,16 +1006,95 @@ pub fn apply_prc_runtime_trap_stub(
             }
             cpu.d[0] = 0;
         }
+        0xA02D => {
+            // UInt32 MemHandleSize(MemHandle h)
+            let handle = decode_handle_arg(runtime, cpu, memory);
+            let size = runtime
+                .mem_blocks
+                .iter()
+                .find(|b| b.handle == handle)
+                .map(|b| b.size)
+                .unwrap_or(0);
+            cpu.d[0] = size;
+            if runtime.trace_traps && runtime.trace_trap_budget > 0 {
+                log::info!(
+                    "PRC trap detail MemHandleSize handle=0x{:08X} -> {}",
+                    handle, size
+                );
+            }
+        }
         0xA02B => {
             let handle = decode_handle_arg(runtime, cpu, memory);
             cpu.d[0] = if free_handle(runtime, memory, handle) { 0 } else { 1 };
         }
         0xA013 => {
-            let size = cpu.d[0].max(16);
+            let sp = cpu.a[7];
+            let stack_size = memory.read_u32_be(sp).unwrap_or(0);
+            let size = [stack_size, cpu.a[0], cpu.d[0], cpu.a[1], cpu.d[1]]
+                .into_iter()
+                .find(|v| *v > 0 && *v <= 1_048_576)
+                .unwrap_or(16);
             let data = vec![0u8; size as usize];
             let (_handle, ptr) = alloc_mem(runtime, memory, data, None, None);
             cpu.a[0] = ptr;
             cpu.d[0] = ptr;
+        }
+        0xA012 => {
+            // MemChunkFree(ptr): best-effort free by pointer.
+            let sp = cpu.a[7];
+            let ptr = [memory.read_u32_be(sp).unwrap_or(0), cpu.a[0], cpu.d[0]]
+                .into_iter()
+                .find(|p| *p != 0)
+                .unwrap_or(0);
+            if let Some(pos) = runtime.mem_blocks.iter().position(|b| b.ptr == ptr) {
+                let block = runtime.mem_blocks.swap_remove(pos);
+                memory.remove_overlay(block.ptr);
+                cpu.d[0] = 0;
+            } else {
+                // Tolerate unknown/free-twice patterns.
+                cpu.d[0] = 0;
+            }
+        }
+        0xA035 => {
+            // MemPtrUnlock(ptr): no-op in this model.
+            cpu.d[0] = 0;
+        }
+        0xA026 => {
+            // MemMove(dstP, srcP, numBytes)
+            let sp = cpu.a[7];
+            let s0 = memory.read_u32_be(sp).unwrap_or(0);
+            let s1 = memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0);
+            let s2 = memory.read_u32_be(sp.saturating_add(8)).unwrap_or(0);
+            let looks_ptr = |p: u32, runtime: &PrcRuntimeContext| {
+                runtime.mem_blocks.iter().any(|b| p >= b.ptr && p < b.ptr.saturating_add(b.size))
+                    || (p & 0xF000_0000) == 0x2000_0000
+            };
+            let dst = if looks_ptr(s0, runtime) { s0 } else { cpu.a[0] };
+            let src = if looks_ptr(s1, runtime) { s1 } else { cpu.a[1] };
+            let count = [s2, cpu.d[0], cpu.d[1], cpu.d[2]]
+                .into_iter()
+                .find(|v| *v > 0 && *v < 0x0010_0000)
+                .unwrap_or(0) as usize;
+
+            if count == 0 {
+                cpu.d[0] = 0;
+                cpu.a[0] = dst;
+            } else {
+                // Be permissive: Palm code often calls MemMove on pointers that are
+                // valid in the app's view but may partially miss our overlays.
+                // Copy readable bytes and write where possible, defaulting missing
+                // source bytes to zero. Report success to keep control flow moving.
+                let mut tmp = alloc::vec::Vec::with_capacity(count);
+                for i in 0..count {
+                    let b = memory.read_u8(src.saturating_add(i as u32)).unwrap_or(0);
+                    tmp.push(b);
+                }
+                for (i, b) in tmp.iter().enumerate() {
+                    let _ = memory.write_u8(dst.saturating_add(i as u32), *b);
+                }
+                cpu.d[0] = 0;
+                cpu.a[0] = dst;
+            }
         }
         0xA027 => {
             // MemSet(dst, value, count) style decode from stack/registers.
@@ -1156,8 +1369,87 @@ pub fn apply_prc_runtime_trap_stub(
             cpu.a[0] = db_ref;
             cpu.d[0] = 0;
         }
+        0xA0F5 => {
+            // UInt32 TimGetSeconds()
+            cpu.d[0] = runtime.ticks / 100;
+        }
         0xA0F7 => {
             cpu.d[0] = runtime.ticks;
+        }
+        0xA0FC => {
+            // void TimSecondsToDateTime(UInt32 seconds, DateTimeType *dtP)
+            let sp = cpu.a[7];
+            let mut seconds = memory.read_u32_be(sp).unwrap_or(cpu.d[0]);
+            if seconds == 0 {
+                seconds = cpu.d[0];
+            }
+            let dt_p = memory.read_u32_be(sp.saturating_add(4)).unwrap_or(cpu.a[0]);
+            if dt_p != 0 && memory.contains_addr(dt_p) {
+                let sec = (seconds % 60) as u16;
+                let min = ((seconds / 60) % 60) as u16;
+                let hour = ((seconds / 3600) % 24) as u16;
+                let day = (((seconds / 86400) % 28) + 1) as u16;
+                let month = (((seconds / (86400 * 30)) % 12) + 1) as u16;
+                let year = (2000 + ((seconds / (86400 * 365)) % 50)) as u16;
+                let weekday = ((seconds / 86400) % 7) as u16;
+                let _ = memory.write_u16_be(dt_p, sec);
+                let _ = memory.write_u16_be(dt_p.saturating_add(2), min);
+                let _ = memory.write_u16_be(dt_p.saturating_add(4), hour);
+                let _ = memory.write_u16_be(dt_p.saturating_add(6), day);
+                let _ = memory.write_u16_be(dt_p.saturating_add(8), month);
+                let _ = memory.write_u16_be(dt_p.saturating_add(10), year);
+                let _ = memory.write_u16_be(dt_p.saturating_add(12), weekday);
+            }
+            cpu.d[0] = 0;
+        }
+        0xA25F => {
+            // UInt16 DayOfWeek(month, day, year), return 0=Sunday..6=Saturday.
+            let sp = cpu.a[7];
+            let mut month = memory.read_u16_be(sp).unwrap_or((cpu.d[0] & 0xFFFF) as u16);
+            let mut day = memory
+                .read_u16_be(sp.saturating_add(2))
+                .unwrap_or((cpu.d[1] & 0xFFFF) as u16);
+            let mut year = memory
+                .read_u16_be(sp.saturating_add(4))
+                .unwrap_or((cpu.d[2] & 0xFFFF) as u16);
+            if month == 0 || month > 12 {
+                month = 1;
+            }
+            if day == 0 || day > 31 {
+                day = 1;
+            }
+            if year < 100 {
+                year = year.saturating_add(1900);
+            }
+            let (y, m) = if month < 3 {
+                (year as i32 - 1, month as i32 + 12)
+            } else {
+                (year as i32, month as i32)
+            };
+            let d = day as i32;
+            // Zeller's congruence: h=0 Saturday..6 Friday.
+            let h = (d + ((13 * (m + 1)) / 5) + (y % 100) + ((y % 100) / 4) + ((y / 100) / 4)
+                + (5 * (y / 100)))
+                % 7;
+            // Convert to Palm convention 0=Sunday..6=Saturday.
+            let dow = ((h + 6) % 7) as u16;
+            cpu.d[0] = (cpu.d[0] & 0xFFFF_0000) | dow as u32;
+        }
+        0xA22C => {
+            // PrefGetPreferences(prefsP)
+            let sp = cpu.a[7];
+            let prefs_p = [memory.read_u32_be(sp).unwrap_or(0), cpu.a[0], cpu.a[1]]
+                .into_iter()
+                .find(|p| *p != 0 && memory.contains_addr(*p))
+                .unwrap_or(0);
+            if prefs_p != 0 {
+                // Minimal stable defaults expected by older apps.
+                // Most fields are zeroed; set country to US (0), date/time format defaults.
+                for i in 0..64u32 {
+                    let _ = memory.write_u8(prefs_p.saturating_add(i), 0);
+                }
+            }
+            cpu.d[0] = 0;
         }
         0xA0BA => {
             // Err SysLibFind(const Char* nameP, UInt16* refNumP)
@@ -1733,6 +2025,25 @@ pub fn apply_prc_runtime_trap_stub(
                     text.len()
                 );
             }
+            cpu.d[0] = 0;
+        }
+        0xA194 => {
+            // UInt16 FrmCustomAlert(alertId, s1, s2, s3)
+            // Keep flow moving and return default button index.
+            cpu.d[0] = 0;
+        }
+        0xA1D3 | 0xA1EA => {
+            // TblSetRowUsable / TblSetColumnUsable.
+            // Table UI is not modeled yet; acknowledge and continue.
+            cpu.d[0] = 0;
+        }
+        0xA1CA | 0xA1D5 | 0xA1F5 => {
+            // TblDrawTable / TblSetCustomDrawProcedure / TblSetColumnSpacing.
+            // Keep table setup paths alive while full table emulation lands.
+            cpu.d[0] = 0;
+        }
+        0xA10F => {
+            // CtlHideControl
             cpu.d[0] = 0;
         }
         0xA1A1 | 0xA234 | 0xA9F0 => {

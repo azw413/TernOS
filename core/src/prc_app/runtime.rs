@@ -22,6 +22,7 @@ pub struct PrcRuntimeContext {
     pub shutting_down: bool,
     pub event_queue: alloc::vec::Vec<RuntimeEvent>,
     pub pending_dispatch_event: Option<RuntimeEvent>,
+    pub startup_open_dispatched: bool,
     pub mem_blocks: alloc::vec::Vec<MemBlock>,
     pub resources: alloc::vec::Vec<ResourceBlob>,
     pub prc_image: alloc::vec::Vec<u8>,
@@ -40,6 +41,7 @@ pub struct PrcRuntimeContext {
     pub drawn_bitmaps: alloc::vec::Vec<RuntimeBitmapDraw>,
     pub form_objects: alloc::vec::Vec<RuntimeFormObject>,
     pub field_draws: alloc::vec::Vec<RuntimeFieldDraw>,
+    pub table_states: alloc::vec::Vec<RuntimeTableState>,
     pub help_dialog: Option<RuntimeHelpDialog>,
     pub blink_next_tick: u32,
     pub blink_phase: u8,
@@ -185,6 +187,7 @@ pub struct RuntimeBitmapDraw {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RuntimeFormObjectKind {
     Field,
+    Table,
     Other,
 }
 
@@ -203,6 +206,40 @@ pub struct RuntimeFieldDraw {
     pub form_id: u16,
     pub field_id: u16,
     pub text: alloc::string::String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeTableState {
+    pub form_id: u16,
+    pub table_id: u16,
+    pub table_ptr: u32,
+    pub rows: u16,
+    pub cols: u16,
+    pub row_usable: alloc::vec::Vec<bool>,
+    pub row_selectable: alloc::vec::Vec<bool>,
+    pub row_height: alloc::vec::Vec<i16>,
+    pub row_id: alloc::vec::Vec<u16>,
+    pub row_data: alloc::vec::Vec<u32>,
+    pub col_usable: alloc::vec::Vec<bool>,
+    pub col_width: alloc::vec::Vec<i16>,
+    pub col_spacing: alloc::vec::Vec<i16>,
+    pub custom_draw_proc: alloc::vec::Vec<u32>,
+    pub load_data_proc: alloc::vec::Vec<u32>,
+    pub save_data_proc: alloc::vec::Vec<u32>,
+    pub selected_row: i16,
+    pub selected_col: i16,
+    pub cells: alloc::vec::Vec<RuntimeTableCellState>,
+    pub drawn: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeTableCellState {
+    pub row: u16,
+    pub col: u16,
+    pub style: u16,
+    pub int_value: i16,
+    pub ptr_value: u32,
+    pub font_id: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -249,6 +286,7 @@ impl Default for PrcRuntimeContext {
             shutting_down: false,
             event_queue: alloc::vec::Vec::new(),
             pending_dispatch_event: None,
+            startup_open_dispatched: false,
             mem_blocks: alloc::vec::Vec::new(),
             resources: alloc::vec::Vec::new(),
             prc_image: alloc::vec::Vec::new(),
@@ -267,6 +305,7 @@ impl Default for PrcRuntimeContext {
             drawn_bitmaps: alloc::vec::Vec::new(),
             form_objects: alloc::vec::Vec::new(),
             field_draws: alloc::vec::Vec::new(),
+            table_states: alloc::vec::Vec::new(),
             help_dialog: None,
             blink_next_tick: 175,
             blink_phase: 0,

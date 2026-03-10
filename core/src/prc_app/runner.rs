@@ -25,6 +25,7 @@ pub struct RuntimeUiSnapshot {
     pub form_id: Option<u16>,
     pub bitmap_draws: Vec<RuntimeBitmapDraw>,
     pub field_draws: Vec<RuntimeFieldDraw>,
+    pub table_draws: Vec<RuntimeTableDraw>,
     pub help_dialog: Option<RuntimeHelpDialog>,
 }
 
@@ -40,6 +41,25 @@ pub struct RuntimeFieldDraw {
     pub form_id: u16,
     pub field_id: u16,
     pub text: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeTableDraw {
+    pub form_id: u16,
+    pub table_id: u16,
+    pub rows: u16,
+    pub cols: u16,
+    pub row_usable: Vec<bool>,
+    pub row_selectable: Vec<bool>,
+    pub row_height: Vec<i16>,
+    pub row_id: Vec<u16>,
+    pub row_data: Vec<u32>,
+    pub col_usable: Vec<bool>,
+    pub col_width: Vec<i16>,
+    pub col_spacing: Vec<i16>,
+    pub selected_row: i16,
+    pub selected_col: i16,
+    pub drawn: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -162,6 +182,9 @@ impl PrcRuntimeSession {
                         }
                         crate::prc_app::form_preview::FormPreviewObject::Button { id, .. } => {
                             (*id, runtime::RuntimeFormObjectKind::Other)
+                        }
+                        crate::prc_app::form_preview::FormPreviewObject::Table { id, .. } => {
+                            (*id, runtime::RuntimeFormObjectKind::Table)
                         }
                         _ => (0, runtime::RuntimeFormObjectKind::Other),
                     };
@@ -534,6 +557,30 @@ impl PrcRuntimeSession {
     }
 
     fn snapshot(&self) -> RuntimeUiSnapshot {
+        let mut table_draws: Vec<RuntimeTableDraw> = self
+            .runtime
+            .table_states
+            .iter()
+            .map(|t| RuntimeTableDraw {
+                form_id: t.form_id,
+                table_id: t.table_id,
+                rows: t.rows,
+                cols: t.cols,
+                row_usable: t.row_usable.clone(),
+                row_selectable: t.row_selectable.clone(),
+                row_height: t.row_height.clone(),
+                row_id: t.row_id.clone(),
+                row_data: t.row_data.clone(),
+                col_usable: t.col_usable.clone(),
+                col_width: t.col_width.clone(),
+                col_spacing: t.col_spacing.clone(),
+                selected_row: t.selected_row,
+                selected_col: t.selected_col,
+                drawn: t.drawn,
+            })
+            .collect();
+        table_draws.sort_by_key(|t| ((t.form_id as u32) << 16) | t.table_id as u32);
+
         RuntimeUiSnapshot {
             form_id: self.runtime.drawn_form_id.or(self.runtime.active_form_id),
             bitmap_draws: self
@@ -556,6 +603,7 @@ impl PrcRuntimeSession {
                     text: f.text.clone(),
                 })
                 .collect(),
+            table_draws,
             help_dialog: self.runtime.help_dialog.as_ref().map(|h| RuntimeHelpDialog {
                 help_id: h.help_id,
                 text: h.text.clone(),
@@ -1184,6 +1232,7 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
         form_id: best.drawn_form_id.or(best.active_form_id),
         bitmap_draws: best.drawn_bitmaps.clone(),
         field_draws: Vec::new(),
+        table_draws: Vec::new(),
         help_dialog: None,
     };
     let stop_text = match stop_reason {

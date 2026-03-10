@@ -16,7 +16,7 @@ use crate::prc_app::{
     bitmap::PrcBitmap,
     form_preview::{FormPreview, FormPreviewObject},
     menu_preview::MenuBarPreview,
-    runner::{RuntimeBitmapDraw, RuntimeFieldDraw, RuntimeHelpDialog},
+    runner::{RuntimeBitmapDraw, RuntimeFieldDraw, RuntimeHelpDialog, RuntimeTableDraw},
     runtime::PalmFont,
 };
 use crate::ui::{prc_alert, prc_components};
@@ -148,6 +148,36 @@ fn draw_button_outline<T: DrawTarget<Color = BinaryColor>>(
     prc_components::draw_button_frame(target, bx, by, bw, bh, BinaryColor::Off);
 }
 
+fn draw_dotted_hline<T: DrawTarget<Color = BinaryColor>>(
+    target: &mut T,
+    x0: i32,
+    x1: i32,
+    y: i32,
+) {
+    let start = x0.min(x1);
+    let end = x0.max(x1);
+    let mut x = start;
+    while x <= end {
+        let _ = Pixel(Point::new(x, y), BinaryColor::Off).draw(target);
+        x += 2;
+    }
+}
+
+fn draw_dotted_vline<T: DrawTarget<Color = BinaryColor>>(
+    target: &mut T,
+    x: i32,
+    y0: i32,
+    y1: i32,
+) {
+    let start = y0.min(y1);
+    let end = y0.max(y1);
+    let mut y = start;
+    while y <= end {
+        let _ = Pixel(Point::new(x, y), BinaryColor::Off).draw(target);
+        y += 2;
+    }
+}
+
 struct MonoCanvas160 {
     px: [BinaryColor; 160 * 160],
 }
@@ -231,6 +261,16 @@ fn find_field_text<'a>(
         .iter()
         .find(|f| f.form_id == form_id && f.field_id == field_id)
         .map(|f| f.text.as_str())
+}
+
+fn find_table_draw<'a>(
+    table_draws: &'a [RuntimeTableDraw],
+    form_id: u16,
+    table_id: u16,
+) -> Option<&'a RuntimeTableDraw> {
+    table_draws
+        .iter()
+        .find(|t| t.form_id == form_id && t.table_id == table_id)
 }
 
 fn draw_wrapped_text_in_rect<T: DrawTarget<Color = BinaryColor>>(
@@ -622,6 +662,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     bitmaps: &[PrcBitmap],
     runtime_bitmap_draws: &[RuntimeBitmapDraw],
     runtime_field_draws: &[RuntimeFieldDraw],
+    runtime_table_draws: &[RuntimeTableDraw],
     focused_control_id: Option<u16>,
     menu_overlay: Option<(&MenuBarPreview, usize, Option<usize>)>,
     help_overlay: Option<&RuntimeHelpDialog>,
@@ -708,6 +749,128 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
             FormPreviewObject::Bitmap { x, y, resource_id } => {
                 if let Some(bmp) = find_bitmap(bitmaps, *resource_id) {
                     draw_prc_bitmap(&mut canvas, bmp, map_x(*x), map_y(*y));
+                }
+            }
+            FormPreviewObject::Table { id, x, y, w, h } => {
+                let tx = map_x(*x);
+                let ty = map_y(*y);
+                let tw = (*w).max(8) as i32;
+                let th = (*h).max(8) as i32;
+                if tw <= 2 || th <= 2 {
+                    continue;
+                }
+                let _ = Rectangle::new(
+                    Point::new(tx, ty),
+                    Size::new(tw as u32, th as u32),
+                )
+                .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
+                .draw(&mut canvas);
+
+                let state = find_table_draw(runtime_table_draws, form.form_id, *id);
+                let rows_decl = state.map(|s| s.rows as usize).unwrap_or(0);
+                let cols_decl = state.map(|s| s.cols as usize).unwrap_or(0);
+                let row_usable = state.map(|s| s.row_usable.as_slice()).unwrap_or(&[]);
+                let col_usable = state.map(|s| s.col_usable.as_slice()).unwrap_or(&[]);
+                let row_hints = state.map(|s| s.row_height.as_slice()).unwrap_or(&[]);
+                let col_hints = state.map(|s| s.col_width.as_slice()).unwrap_or(&[]);
+                let col_spacing = state.map(|s| s.col_spacing.as_slice()).unwrap_or(&[]);
+
+                let mut visible_rows: alloc::vec::Vec<usize> = (0..rows_decl.max(1))
+                    .filter(|r| row_usable.get(*r).copied().unwrap_or(true))
+                    .collect();
+                let mut visible_cols: alloc::vec::Vec<usize> = (0..cols_decl.max(1))
+                    .filter(|c| col_usable.get(*c).copied().unwrap_or(true))
+                    .collect();
+                if visible_rows.is_empty() {
+                    visible_rows.push(0);
+                }
+                if visible_cols.is_empty() {
+                    visible_cols.push(0);
+                }
+
+                let inner_w = (tw - 2).max(1);
+                let inner_h = (th - 2).max(1);
+
+                let col_widths: alloc::vec::Vec<i32> = visible_cols
+                    .iter()
+                    .map(|idx| col_hints.get(*idx).copied().unwrap_or(28).max(1) as i32)
+                    .collect();
+                let row_heights: alloc::vec::Vec<i32> = visible_rows
+                    .iter()
+                    .map(|idx| row_hints.get(*idx).copied().unwrap_or(11).max(1) as i32)
+                    .collect();
+                let spacing_total: i32 = visible_cols
+                    .iter()
+                    .take(visible_cols.len().saturating_sub(1))
+                    .map(|idx| col_spacing.get(*idx).copied().unwrap_or(0).max(0) as i32)
+                    .sum();
+
+                let natural_w: i32 = col_widths.iter().sum::<i32>().max(1) + spacing_total;
+                let natural_h: i32 = row_heights.iter().sum::<i32>().max(1);
+                let mut x_boundaries: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
+                let mut y_boundaries: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
+
+                let mut x_cursor = tx + 1;
+                for (i, idx) in visible_cols.iter().enumerate() {
+                    let w_px = (col_widths[i] * inner_w) / natural_w.max(1);
+                    x_cursor += w_px.max(1);
+                    if i + 1 < visible_cols.len() {
+                        x_boundaries.push(x_cursor);
+                        x_cursor += col_spacing.get(*idx).copied().unwrap_or(0).max(0) as i32;
+                    }
+                }
+                let mut y_cursor = ty + 1;
+                for (i, _) in visible_rows.iter().enumerate() {
+                    let h_px = (row_heights[i] * inner_h) / natural_h.max(1);
+                    y_cursor += h_px.max(1);
+                    if i + 1 < visible_rows.len() {
+                        y_boundaries.push(y_cursor);
+                    }
+                }
+
+                for y in y_boundaries.iter().copied() {
+                    draw_dotted_hline(&mut canvas, tx + 1, tx + tw - 2, y);
+                }
+                for x in x_boundaries.iter().copied() {
+                    draw_dotted_vline(&mut canvas, x, ty + 1, ty + th - 2);
+                }
+
+                if let Some(s) = state {
+                    if s.selected_row >= 0 && s.selected_col >= 0 {
+                        let sel_r = s.selected_row as usize;
+                        let sel_c = s.selected_col as usize;
+                        if let (Some(vr), Some(vc)) = (
+                            visible_rows.iter().position(|r| *r == sel_r),
+                            visible_cols.iter().position(|c| *c == sel_c),
+                        ) {
+                            let mut left = tx + 1;
+                            for b in x_boundaries.iter().take(vc) {
+                                left = *b + 1;
+                            }
+                            let right = if vc < x_boundaries.len() {
+                                x_boundaries[vc] - 1
+                            } else {
+                                tx + tw - 2
+                            };
+                            let mut top = ty + 1;
+                            for b in y_boundaries.iter().take(vr) {
+                                top = *b + 1;
+                            }
+                            let bottom = if vr < y_boundaries.len() {
+                                y_boundaries[vr] - 1
+                            } else {
+                                ty + th - 2
+                            };
+                            if right > left && bottom > top {
+                                let _ = Rectangle::new(
+                                    Point::new(left, top),
+                                    Size::new((right - left + 1) as u32, (bottom - top + 1) as u32),
+                                )
+                                .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 2))
+                                .draw(&mut canvas);
+                            }
+                        }
+                    }
                 }
             }
             FormPreviewObject::Field { id, x, y, w, h, font } => {

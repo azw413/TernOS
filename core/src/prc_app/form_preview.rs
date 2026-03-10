@@ -35,6 +35,13 @@ pub enum FormPreviewObject {
         y: i16,
         resource_id: u16,
     },
+    Table {
+        id: u16,
+        x: i16,
+        y: i16,
+        w: i16,
+        h: i16,
+    },
 }
 
 #[derive(Clone, Debug, Default)]
@@ -316,6 +323,19 @@ fn parse_packed_field(form_data: &[u8], off: usize) -> Option<FormPreviewObject>
     })
 }
 
+fn parse_packed_table(form_data: &[u8], off: usize) -> Option<FormPreviewObject> {
+    // TableType starts with object id + bounds in Palm packed resources.
+    if off + 10 > form_data.len() {
+        return None;
+    }
+    let id = read_u16_be(form_data, off)?;
+    let x = read_i16_be(form_data, off + 2)?;
+    let y = read_i16_be(form_data, off + 4)?;
+    let w = read_i16_be(form_data, off + 6)?;
+    let h = read_i16_be(form_data, off + 8)?;
+    Some(FormPreviewObject::Table { id, x, y, w, h })
+}
+
 fn parse_packed_form(resource_id: u16, form_data: &[u8]) -> Option<FormPreview> {
     // PumpkinOS parser layout:
     // RCWindow (40 bytes) + RCForm (28 bytes) + object table (6 bytes each).
@@ -354,6 +374,7 @@ fn parse_packed_form(resource_id: u16, form_data: &[u8]) -> Option<FormPreview> 
         let obj = match object_type {
             0 => parse_packed_field(form_data, obj_off),   // frmFieldObj
             1 => parse_packed_control(form_data, obj_off), // frmControlObj
+            3 => parse_packed_table(form_data, obj_off),   // frmTableObj
             4 => parse_packed_bitmap(form_data, obj_off),  // frmBitmapObj
             8 => parse_packed_label(form_data, obj_off),   // frmLabelObj
             9 => parse_packed_title(form_data, obj_off),   // frmTitleObj

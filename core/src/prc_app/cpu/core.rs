@@ -100,7 +100,7 @@ pub fn run_with_config(state: &mut CpuState68k, memory: &mut MemoryMap, cfg: Exe
     trace.a2_changes.push((0, state.pc, last_a2));
     while trace.steps < cfg.step_limit {
         let pc = state.pc;
-        if trace.recent_pcs.len() == 16 {
+        if trace.recent_pcs.len() == 64 {
             trace.recent_pcs.remove(0);
         }
         trace.recent_pcs.push(pc);

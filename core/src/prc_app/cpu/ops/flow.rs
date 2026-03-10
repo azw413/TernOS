@@ -112,13 +112,16 @@ fn execute_rts(
     if word != 0x4E75 {
         return Ok(false);
     }
+    let expected_ret = state.call_stack.pop();
     let mut ret = if let Some(v) = memory.read_u32_be(state.a[7]) {
         state.a[7] = state.a[7].wrapping_add(4);
         v
+    } else if let Some(expected) = expected_ret {
+        expected
     } else {
         return Err(StopReason::ReturnUnderflow { pc });
     };
-    if let Some(expected_ret) = state.call_stack.pop() {
+    if let Some(expected_ret) = expected_ret {
         // Prefer tracked callsite when the stack return is clearly invalid.
         if ret != expected_ret && memory.contains_addr(expected_ret) && !memory.contains_addr(ret) {
             ret = expected_ret;
@@ -145,6 +148,7 @@ fn execute_link_unlk(
         };
         let disp = (disp16 as i16) as i32;
         let old_an = state.a[an];
+        state.frame_stack.push(old_an);
         state.a[7] = state.a[7].wrapping_sub(4);
         memory.write_u32_be(state.a[7], old_an);
         state.a[an] = state.a[7];
@@ -157,12 +161,26 @@ fn execute_link_unlk(
     if (word & 0xFFF8) == 0x4E58 {
         let an = (word & 0x0007) as usize;
         let frame = state.a[an];
+        if frame == 0 || !memory.contains_addr(frame) {
+            // Permissive fallback for malformed frames: restore A6 from our
+            // tracked frame history but do not smash SP.
+            state.a[an] = state.frame_stack.pop().unwrap_or(state.a[an]);
+            state.pc = pc.saturating_add(2);
+            return Ok(true);
+        }
         state.a[7] = frame;
-        let Some(old_an) = memory.read_u32_be(state.a[7]) else {
-            return Err(StopReason::OutOfBounds { pc });
+        let mut popped_frame_stack = false;
+        let old_an = if let Some(v) = memory.read_u32_be(state.a[7]) {
+            v
+        } else {
+            popped_frame_stack = true;
+            state.frame_stack.pop().unwrap_or(0)
         };
         state.a[an] = old_an;
         state.a[7] = state.a[7].wrapping_add(4);
+        if !popped_frame_stack && !state.frame_stack.is_empty() {
+            let _ = state.frame_stack.pop();
+        }
         state.pc = pc.saturating_add(2);
         return Ok(true);
     }

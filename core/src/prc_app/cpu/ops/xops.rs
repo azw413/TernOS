@@ -99,11 +99,14 @@ fn execute_addx_subx(
         return Ok(false);
     }
     let size = (word >> 6) & 0x0003;
+    if size == 0x0003 {
+        return Ok(false);
+    }
     let bytes = match size {
         0 => 1u32,
         1 => 2u32,
         2 => 4u32,
-        _ => return Ok(false),
+        _ => unreachable!(),
     };
     let rm_predec = (word & 0x0008) != 0;
     let dst = ((word >> 9) & 0x0007) as usize;

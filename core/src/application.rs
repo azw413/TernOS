@@ -6,10 +6,11 @@ use alloc::vec;
 
 use embedded_graphics::{
     Drawable,
+    Pixel,
     mono_font::{MonoTextStyle, ascii::FONT_10X20},
     pixelcolor::BinaryColor,
     prelude::{DrawTarget, OriginDimensions, Point, Primitive, Size},
-    primitives::{PrimitiveStyle, Rectangle},
+    primitives::{Circle, PrimitiveStyle, Rectangle},
     text::Text,
 };
 
@@ -82,6 +83,7 @@ pub struct Application<'a, S: AppSource> {
     prc_ui_controller: prc_app::controller::PrcUiController,
     prc_runtime_bitmap_draws: Vec<prc_app::runner::RuntimeBitmapDraw>,
     prc_runtime_field_draws: Vec<prc_app::runner::RuntimeFieldDraw>,
+    prc_runtime_table_draws: Vec<prc_app::runner::RuntimeTableDraw>,
     prc_system_fonts: Vec<prc_app::runtime::PalmFont>,
     home_system_fonts: Vec<prc_app::runtime::PalmFont>,
     prc_menu_controller: prc_app::controller::PrcMenuController,
@@ -90,6 +92,8 @@ pub struct Application<'a, S: AppSource> {
     prc_session: Option<prc_app::runner::PrcRuntimeSession>,
     prc_blocked_timeout_ticks: u32,
     prc_blocked_elapsed_ms: u32,
+    prc_soft_menu_focused: bool,
+    prc_soft_menu_last_control: Option<u16>,
     prc_return_to_start_menu: bool,
     prc_reserved_gray_initialized: bool,
     install_scan_elapsed_ms: u32,
@@ -135,6 +139,70 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
     }
 
+    fn prc_soft_menu_button_rect(&self, strip_top: i32, strip_h: i32) -> Rect {
+        let size = self.display_buffers.size();
+        let btn = 68i32;
+        let pad = 14i32;
+        let x = pad;
+        let mut y = strip_top + strip_h - btn - pad;
+        if y < strip_top + 4 {
+            y = strip_top + 4;
+        }
+        let max_x = (size.width as i32 - btn - 4).max(0);
+        Rect::new(x.min(max_x), y, btn, btn)
+    }
+
+    fn draw_prc_soft_menu_button(&mut self, rect: Rect) {
+        let focused = self.prc_soft_menu_focused;
+        let circle_d = (rect.w - 12).max(24);
+        let cx = rect.x + (rect.w - circle_d) / 2;
+        let cy = rect.y + (rect.h - circle_d) / 2;
+        let _ = Circle::new(Point::new(cx, cy), circle_d as u32)
+            .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+            .draw(self.display_buffers);
+        let _ = Circle::new(Point::new(cx, cy), circle_d as u32)
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
+            .draw(self.display_buffers);
+
+        let mut draw_symbol_px = |x: i32, y: i32| {
+            if focused || ((x + y) & 1) == 0 {
+                let _ = Pixel(Point::new(x, y), BinaryColor::Off).draw(self.display_buffers);
+            }
+        };
+
+        let lx = cx + 9;
+        let ly = cy + 10;
+        for x in (lx - 2)..(lx + 20) {
+            draw_symbol_px(x, ly - 5);
+        }
+        for i in 0..3 {
+            let y = ly + i * 9;
+            for x in lx..(lx + 14) {
+                draw_symbol_px(x, y);
+                draw_symbol_px(x, y + 1);
+            }
+            draw_symbol_px(lx, y + 4);
+            draw_symbol_px(lx + 1, y + 4);
+            draw_symbol_px(lx, y + 5);
+            draw_symbol_px(lx + 1, y + 5);
+        }
+
+        let ax = cx + circle_d - 17;
+        let ay = cy + 17;
+        for y in ay..(ay + 12) {
+            draw_symbol_px(ax + 2, y);
+            draw_symbol_px(ax + 3, y);
+        }
+        for row in 0..5 {
+            let start = ax - row;
+            let w = 6 + row * 2;
+            let y = ay + 12 + row;
+            for x in start..(start + w) {
+                draw_symbol_px(x, y);
+            }
+        }
+    }
+
     pub fn new(display_buffers: &'a mut DisplayBuffers, source: &'a mut S) -> Self {
         display_buffers.set_rotation(Rotation::Rotate90);
         let resume_name = source.load_resume();
@@ -165,6 +233,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_ui_controller: prc_app::controller::PrcUiController::default(),
             prc_runtime_bitmap_draws: Vec::new(),
             prc_runtime_field_draws: Vec::new(),
+            prc_runtime_table_draws: Vec::new(),
             prc_system_fonts: Vec::new(),
             home_system_fonts: Vec::new(),
             prc_menu_controller: prc_app::controller::PrcMenuController::default(),
@@ -173,6 +242,8 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_session: None,
             prc_blocked_timeout_ticks: 0,
             prc_blocked_elapsed_ms: 0,
+            prc_soft_menu_focused: false,
+            prc_soft_menu_last_control: None,
             prc_return_to_start_menu: false,
             prc_reserved_gray_initialized: false,
             install_scan_elapsed_ms: 0,
@@ -506,31 +577,82 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 }
                 if buttons.is_pressed(input::Buttons::Left) {
-                    if self.prc_menu_controller.open() {
-                        self.dirty = true;
-                    } else {
-                        log::info!("PRC menu open requested but no menu resources were parsed");
+                    if !self.prc_soft_menu_focused {
+                        let form = self.runtime_prc_form();
+                        if self.prc_ui_controller.move_focus_direction(
+                            form.as_ref(),
+                            prc_app::controller::FocusDirection::Left,
+                        ) {
+                            self.dirty = true;
+                        }
+                    }
+                } else if buttons.is_pressed(input::Buttons::Right) {
+                    if !self.prc_soft_menu_focused {
+                        let form = self.runtime_prc_form();
+                        if self.prc_ui_controller.move_focus_direction(
+                            form.as_ref(),
+                            prc_app::controller::FocusDirection::Right,
+                        ) {
+                            self.dirty = true;
+                        }
                     }
                 } else if buttons.is_pressed(input::Buttons::Up) {
                     let form = self.runtime_prc_form();
-                    if self.prc_ui_controller.move_focus(form.as_ref(), -1) {
+                    if self.prc_soft_menu_focused {
+                        self.prc_soft_menu_focused = false;
+                        let restored = self
+                            .prc_soft_menu_last_control
+                            .and_then(|id| {
+                                if self.prc_ui_controller.select_control_id(form.as_ref(), id) {
+                                    Some(())
+                                } else {
+                                    None
+                                }
+                            })
+                            .is_some();
+                        if !restored {
+                            let _ = self.prc_ui_controller.move_focus_direction(
+                                form.as_ref(),
+                                prc_app::controller::FocusDirection::Up,
+                            );
+                        }
+                        self.dirty = true;
+                    } else if self.prc_ui_controller.move_focus_direction(
+                        form.as_ref(),
+                        prc_app::controller::FocusDirection::Up,
+                    ) {
                         self.dirty = true;
                     }
                 } else if buttons.is_pressed(input::Buttons::Down) {
                     let form = self.runtime_prc_form();
-                    if self.prc_ui_controller.move_focus(form.as_ref(), 1) {
+                    if self.prc_soft_menu_focused {
+                        // Single soft button in this bar; nothing further down.
+                    } else if self.prc_ui_controller.move_focus_direction(
+                        form.as_ref(),
+                        prc_app::controller::FocusDirection::Down,
+                    ) {
+                        self.dirty = true;
+                    } else {
+                        self.prc_soft_menu_last_control = self.prc_ui_controller.focused_control_id();
+                        self.prc_soft_menu_focused = true;
                         self.dirty = true;
                     }
                 } else if buttons.is_pressed(input::Buttons::Confirm) {
-                    if let (Some(control_id), Some(session)) =
-                        (self.prc_ui_controller.focused_control_id(), self.prc_session.as_mut())
-                    {
-                        session.inject_control_select_now(control_id);
-                        self.prc_blocked_elapsed_ms = 0;
-                        self.prc_blocked_timeout_ticks = 0;
-                        self.resume_prc_runtime_session();
+                    if self.prc_soft_menu_focused {
+                        if self.prc_menu_controller.open() {
+                            self.dirty = true;
+                        }
                     } else {
-                        self.set_state_menu();
+                        if let (Some(control_id), Some(session)) =
+                            (self.prc_ui_controller.focused_control_id(), self.prc_session.as_mut())
+                        {
+                            session.inject_control_select_now(control_id);
+                            self.prc_blocked_elapsed_ms = 0;
+                            self.prc_blocked_timeout_ticks = 0;
+                            self.resume_prc_runtime_session();
+                        } else {
+                            self.set_state_menu();
+                        }
                     }
                 } else if buttons.is_pressed(input::Buttons::Back) {
                     self.exit_prc_viewer_to_origin();
@@ -771,11 +893,13 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_ui_controller.reset();
                 self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
                 self.prc_runtime_field_draws = runtime_snapshot.field_draws;
+                self.prc_runtime_table_draws = runtime_snapshot.table_draws;
                 log::info!(
-                    "PRC runtime_ui form_id={:?} bitmap_draws={} field_draws={} help={}",
+                    "PRC runtime_ui form_id={:?} bitmap_draws={} field_draws={} tables={} help={}",
                     self.prc_runtime_form_id,
                     self.prc_runtime_bitmap_draws.len(),
                     self.prc_runtime_field_draws.len(),
+                    self.prc_runtime_table_draws.len(),
                     runtime_snapshot.help_dialog.is_some()
                 );
                 self.prc_system_fonts = self.source.load_prc_system_fonts();
@@ -861,6 +985,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_ui_controller.reset();
                 self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
                 self.prc_runtime_field_draws = runtime_snapshot.field_draws;
+                self.prc_runtime_table_draws = runtime_snapshot.table_draws;
                 self.prc_system_fonts = self.source.load_prc_system_fonts();
                 self.prc_forms.clear();
                 self.prc_bitmaps.clear();
@@ -911,12 +1036,14 @@ impl<'a, S: AppSource> Application<'a, S> {
                 .zip(runtime_snapshot.bitmap_draws.iter())
                 .any(|(a, b)| a.resource_id != b.resource_id || a.x != b.x || a.y != b.y)
             || self.prc_runtime_field_draws != runtime_snapshot.field_draws
+            || self.prc_runtime_table_draws != runtime_snapshot.table_draws
             || prev_help_dialog != runtime_snapshot.help_dialog;
         log::info!(
-            "PRC runtime_ui update form_id={:?} bitmap_draws={} field_draws={} first_field={:?} help={:?} changed={}",
+            "PRC runtime_ui update form_id={:?} bitmap_draws={} field_draws={} tables={} first_field={:?} help={:?} changed={}",
             runtime_snapshot.form_id,
             runtime_snapshot.bitmap_draws.len(),
             runtime_snapshot.field_draws.len(),
+            runtime_snapshot.table_draws.len(),
             runtime_snapshot
                 .field_draws
                 .first()
@@ -927,6 +1054,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_runtime_form_id = runtime_snapshot.form_id;
         self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
         self.prc_runtime_field_draws = runtime_snapshot.field_draws;
+        self.prc_runtime_table_draws = runtime_snapshot.table_draws;
         {
             let form = self.runtime_prc_form();
             if self.prc_ui_controller.sync_with_form(form.as_ref()) {
@@ -1264,6 +1392,8 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_runtime_form_id = None;
         self.prc_blocked_timeout_ticks = 0;
         self.prc_blocked_elapsed_ms = 0;
+        self.prc_soft_menu_focused = false;
+        self.prc_soft_menu_last_control = None;
         self.prc_scroll = 0;
         self.prc_form_index = 0;
         self.prc_ui_controller.reset();
@@ -1272,6 +1402,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_bitmaps = Vec::new();
         self.prc_runtime_bitmap_draws = Vec::new();
         self.prc_runtime_field_draws = Vec::new();
+        self.prc_runtime_table_draws = Vec::new();
         self.prc_system_fonts = Vec::new();
         self.prc_menu_controller.reset();
         self.prc_reserved_gray_initialized = false;
@@ -1319,6 +1450,8 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn set_state_prc_viewing(&mut self) {
         self.state = AppState::PrcViewing;
+        self.prc_soft_menu_focused = false;
+        self.prc_soft_menu_last_control = None;
         self.prc_reserved_gray_initialized = false;
         self.system.full_refresh = true;
         self.dirty = true;
@@ -1508,6 +1641,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 &self.prc_bitmaps,
                 &self.prc_runtime_bitmap_draws,
                 &self.prc_runtime_field_draws,
+                &self.prc_runtime_table_draws,
                 self.prc_ui_controller.focused_control_id(),
                 self.prc_menu_controller.overlay(),
                 self.prc_session
@@ -1531,6 +1665,15 @@ impl<'a, S: AppSource> Application<'a, S> {
         let pane_h = 160 * scale;
         let strip_top = (content_top + pane_h).clamp(0, size.height as i32);
         let strip_h = (size.height as i32 - strip_top).max(0);
+        let soft_menu_rect = if strip_h > 0 {
+            Some(self.prc_soft_menu_button_rect(strip_top, strip_h))
+        } else {
+            None
+        };
+
+        if let Some(rect) = soft_menu_rect {
+            self.draw_prc_soft_menu_button(rect);
+        }
 
         if strip_h > 0 && !self.prc_reserved_gray_initialized {
             self.gray2_lsb.fill(0);
@@ -1574,6 +1717,9 @@ impl<'a, S: AppSource> Application<'a, S> {
             size.height as i32
         };
         rq.push(Rect::new(0, 0, size.width as i32, update_h), mode);
+        if let Some(rect) = soft_menu_rect {
+            rq.push(rect, mode);
+        }
         flush_queue(display, self.display_buffers, &mut rq, mode);
     }
 
