@@ -1,6 +1,7 @@
 extern crate alloc;
 
 use alloc::{format, string::String, vec, vec::Vec};
+use ::core::fmt::Write;
 
 use crate::{
     image_viewer::{AppSource, ImageEntry, ImageError},
@@ -86,10 +87,15 @@ impl PrcRuntimeSession {
             .or_else(|| info.code_scan.first().map(|scan| scan.resource_id))
             .ok_or(ImageError::Unsupported)?;
         let code = source.load_prc_code_resource(path, entry, code_id)?;
+        let code_len = code.len() as u32;
         let code0 = source.load_prc_code_resource(path, entry, 0).ok();
         if code.len() < 2 {
             return Err(ImageError::Unsupported);
         }
+        let entry_pc = code0
+            .as_deref()
+            .and_then(|c0| bootstrap::derive_prc_entry_from_code0(c0, code_len))
+            .unwrap_or_else(|| bootstrap::derive_prc_entry_in_code1(&code));
         let prc_raw = source.load_prc_bytes(path, entry).ok();
         let prc_resources = prc_raw
             .as_deref()
@@ -122,6 +128,29 @@ impl PrcRuntimeSession {
             }
         }
         runtime_ctx.prc_image = prc_raw.unwrap_or_default();
+        let current_db_local_id = runtime_ctx.next_local_id;
+        runtime_ctx.next_local_id = runtime_ctx.next_local_id.saturating_add(1);
+        runtime_ctx.databases.push(runtime::RuntimeDatabase {
+            local_id: current_db_local_id,
+            card_no: 0,
+            name: info.db_name.clone(),
+            creator: fourcc_to_u32(&info.creator_code),
+            db_type: fourcc_to_u32(&info.type_code),
+            is_resource_db: matches!(info.kind, crate::prc_app::PrcDbKind::Resource),
+            version: info.version,
+            attributes: info.attributes,
+            mod_number: 0,
+            app_info_id: 0,
+            sort_info_id: 0,
+            record_handles: alloc::vec::Vec::new(),
+        });
+        let current_db_ref = runtime_ctx.next_db_ref;
+        runtime_ctx.next_db_ref = runtime_ctx.next_db_ref.saturating_add(1);
+        runtime_ctx.open_databases.push(runtime::RuntimeOpenDatabase {
+            db_ref: current_db_ref,
+            local_id: current_db_local_id,
+            mode: 0,
+        });
         if !runtime_ctx.prc_image.is_empty() {
             let parsed_forms = crate::prc_app::form_preview::parse_form_previews(&runtime_ctx.prc_image);
             let mut next_ptr = 0x3002_0000u32;
@@ -160,9 +189,9 @@ impl PrcRuntimeSession {
             resource_kind: Some(u32::from_be_bytes(*b"code")),
             resource_id: Some(code_id),
                 });
-        // SysAppInfo.codeH is consumed by startup glue as an opaque pointer-like
-        // value; use the mapped code base address to match Palm/Pumpkin layout.
-        runtime_ctx.code_handle = PRC_CODE_BASE;
+        // SysAppInfo.codeH is a MemHandle for code#1, not a raw pointer.
+        // Apps may pass it to MemHandleLock to get executable code pointer.
+        runtime_ctx.code_handle = code_handle;
         // Build A5 world from code#0/data#0 layout when available.
         // Per Palm/Pumpkin contract:
         // code0[0..4] = aboveA5 size, code0[4..8] = belowA5(data) size.
@@ -271,9 +300,10 @@ impl PrcRuntimeSession {
         // Seed a synthetic caller return so top-level RTS cleanly stops the session.
         let _ = memory.write_u32_be(sp, u32::MAX);
         cpu.a[7] = sp;
-        // Match Pumpkin's 68k launch contract: start execution at the beginning
-        // of code #1. code #0 is used for globals/relocation metadata, not entry PC.
-        cpu.pc = PRC_CODE_BASE;
+        cpu.call_stack.push(u32::MAX);
+        // Start at derived code#1 entry. Some apps use code0 trampolines or a
+        // code#1 prologue offset and won't start correctly from raw base.
+        cpu.pc = PRC_CODE_BASE.saturating_add(entry_pc.min(code_len));
 
         Ok(Self {
             cpu,
@@ -339,6 +369,93 @@ impl PrcRuntimeSession {
                     continue;
                 }
                 other => {
+                    if let core::StopReason::UnknownOpcode { pc, word } = other {
+                        let mut around = String::new();
+                        let start = pc.saturating_sub(12);
+                        let end = pc.saturating_add(12);
+                        let mut cur = start;
+                        while cur <= end {
+                            if let Some(w) = self.memory.read_u16_be(cur) {
+                                let _ = Write::write_fmt(
+                                    &mut around,
+                                    format_args!(
+                                        "{}{:04X}@{:04X}",
+                                        if cur == pc { "[" } else { " " },
+                                        w,
+                                        cur
+                                    ),
+                                );
+                                if cur == pc {
+                                    around.push(']');
+                                }
+                            }
+                            cur = cur.saturating_add(2);
+                            if cur == 0 {
+                                break;
+                            }
+                        }
+                        log::info!(
+                            "PRC unknown opcode context pc=0x{:08X} word=0x{:04X} d0=0x{:08X} d1=0x{:08X} a0=0x{:08X} a5=0x{:08X} a7=0x{:08X} mem:{}",
+                            pc,
+                            word,
+                            self.cpu.d[0],
+                            self.cpu.d[1],
+                            self.cpu.a[0],
+                            self.cpu.a[5],
+                            self.cpu.a[7],
+                            around
+                        );
+                    }
+                    if let core::StopReason::OutOfBounds { pc } = other {
+                        let mut pcs = String::new();
+                        for (idx, p) in trace.recent_pcs.iter().enumerate() {
+                            if idx > 0 {
+                                pcs.push(' ');
+                            }
+                            let _ = Write::write_fmt(&mut pcs, format_args!("{:08X}", p));
+                        }
+                        let mut pc_words = String::new();
+                        for (idx, p) in trace.recent_pcs.iter().enumerate() {
+                            if idx > 0 {
+                                pc_words.push(' ');
+                            }
+                            let w = self.memory.read_u16_be(*p).unwrap_or(0xFFFF);
+                            let _ = Write::write_fmt(&mut pc_words, format_args!("{:08X}:{:04X}", p, w));
+                        }
+                        let prev_pc = if trace.recent_pcs.len() >= 2 {
+                            trace.recent_pcs[trace.recent_pcs.len() - 2]
+                        } else {
+                            0
+                        };
+                        let prev_word = self.memory.read_u16_be(prev_pc).unwrap_or(0xFFFF);
+                        let sp0 = self.memory.read_u32_be(self.cpu.a[7]).unwrap_or(0);
+                        let sp1 = self.memory.read_u32_be(self.cpu.a[7].saturating_add(4)).unwrap_or(0);
+                        let sp2 = self.memory.read_u32_be(self.cpu.a[7].saturating_add(8)).unwrap_or(0);
+                        let sp3 = self.memory.read_u32_be(self.cpu.a[7].saturating_add(12)).unwrap_or(0);
+                        log::info!(
+                            "PRC out-of-bounds context bad_pc=0x{:08X} prev_pc=0x{:08X} prev_word=0x{:04X} d0=0x{:08X} d1=0x{:08X} d2=0x{:08X} d3=0x{:08X} a0=0x{:08X} a1=0x{:08X} a2=0x{:08X} a3=0x{:08X} a5=0x{:08X} a6=0x{:08X} a7=0x{:08X} sp[0..16]=[{:08X} {:08X} {:08X} {:08X}] recent_pcs=[{}] recent_words=[{}]",
+                            pc,
+                            prev_pc,
+                            prev_word,
+                            self.cpu.d[0],
+                            self.cpu.d[1],
+                            self.cpu.d[2],
+                            self.cpu.d[3],
+                            self.cpu.a[0],
+                            self.cpu.a[1],
+                            self.cpu.a[2],
+                            self.cpu.a[3],
+                            self.cpu.a[5],
+                            self.cpu.a[6],
+                            self.cpu.a[7],
+                            sp0,
+                            sp1,
+                            sp2,
+                            sp3,
+                            pcs,
+                            pc_words
+                        );
+                    }
                     self.stopped = true;
                     return RuntimeRunOutput {
                         snapshot: self.snapshot(),
@@ -483,6 +600,15 @@ impl PrcRuntimeSession {
         }
         help.scroll_line = next;
         true
+    }
+}
+
+fn fourcc_to_u32(s: &str) -> u32 {
+    let bytes = s.as_bytes();
+    if bytes.len() == 4 {
+        u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+    } else {
+        0
     }
 }
 

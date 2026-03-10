@@ -728,7 +728,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             Ok(()) => {
                 self.current_entry = Some(entry_name.clone());
                 self.last_viewed_entry = Some(entry_name.clone());
-                self.system.mark_recent(entry_name);
+                self.mark_recent_now(entry_name);
                 log::info!("Opened book entry: {:?}", self.current_entry);
                 self.set_state_book_viewing();
             }
@@ -742,7 +742,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 let entry_name = self.home.entry_path_string(&entry);
                 self.current_entry = Some(entry_name.clone());
                 self.last_viewed_entry = Some(entry_name.clone());
-                self.system.mark_recent(entry_name);
+                self.mark_recent_now(entry_name);
                 log::info!("Opened image entry: {:?}", self.current_entry);
                 self.set_state_viewing();
                 self.system.reset_idle();
@@ -756,6 +756,10 @@ impl<'a, S: AppSource> Application<'a, S> {
     fn open_prc_entry(&mut self, entry: ImageEntry) {
         match self.source.load_prc_info(&self.home.path, &entry) {
             Ok(info) => {
+                let entry_name = self.home.entry_path_string(&entry);
+                self.current_entry = Some(entry_name.clone());
+                self.last_viewed_entry = Some(entry_name.clone());
+                self.mark_recent_now(entry_name);
                 self.prc_return_to_start_menu = matches!(self.state, AppState::StartMenu);
                 self.prc_active_entry = Some(entry.clone());
                 self.prc_session = None;
@@ -842,6 +846,10 @@ impl<'a, S: AppSource> Application<'a, S> {
         };
         match self.source.load_prc_info(&path, &entry) {
             Ok(info) => {
+                let recent_path = full_path.to_string();
+                self.current_entry = Some(recent_path.clone());
+                self.last_viewed_entry = Some(recent_path.clone());
+                self.mark_recent_now(recent_path);
                 self.prc_return_to_start_menu = true;
                 self.prc_active_entry = Some(entry.clone());
                 self.prc_session = None;
@@ -881,6 +889,11 @@ impl<'a, S: AppSource> Application<'a, S> {
             }
             Err(err) => Err(err),
         }
+    }
+
+    fn mark_recent_now(&mut self, path: String) {
+        self.system.mark_recent(path);
+        self.system.save_recent_entries_now(self.source);
     }
 
     fn resume_prc_runtime_session(&mut self) {

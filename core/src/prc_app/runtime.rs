@@ -53,6 +53,11 @@ pub struct PrcRuntimeContext {
     pub code_handle: u32,
     pub globals_ptr: u32,
     pub prev_globals_ptr: u32,
+    pub next_local_id: u32,
+    pub next_db_ref: u32,
+    pub dm_last_err: u16,
+    pub databases: alloc::vec::Vec<RuntimeDatabase>,
+    pub open_databases: alloc::vec::Vec<RuntimeOpenDatabase>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -207,6 +212,29 @@ pub struct RuntimeHelpDialog {
     pub scroll_line: usize,
 }
 
+#[derive(Clone, Debug)]
+pub struct RuntimeDatabase {
+    pub local_id: u32,
+    pub card_no: u16,
+    pub name: alloc::string::String,
+    pub creator: u32,
+    pub db_type: u32,
+    pub is_resource_db: bool,
+    pub version: u16,
+    pub attributes: u16,
+    pub mod_number: u32,
+    pub app_info_id: u32,
+    pub sort_info_id: u32,
+    pub record_handles: alloc::vec::Vec<u32>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeOpenDatabase {
+    pub db_ref: u32,
+    pub local_id: u32,
+    pub mode: u16,
+}
+
 impl Default for PrcRuntimeContext {
     fn default() -> Self {
         Self {
@@ -252,6 +280,11 @@ impl Default for PrcRuntimeContext {
             code_handle: 0,
             globals_ptr: 0,
             prev_globals_ptr: 0,
+            next_local_id: 0x1000,
+            next_db_ref: 0x5000_0000,
+            dm_last_err: 0,
+            databases: alloc::vec::Vec::new(),
+            open_databases: alloc::vec::Vec::new(),
         }
     }
 }

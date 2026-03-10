@@ -1458,6 +1458,26 @@ impl HomeState {
             return (label_fallback, None);
         }
         if !lower.ends_with(".trbk") && !lower.ends_with(".tbk") {
+            if lower.ends_with(".prc") || lower.ends_with(".tdb") {
+                let apps = ctx.source.list_installed_apps();
+                if let Some(app) = apps
+                    .iter()
+                    .find(|app| same_launcher_path(&app.path, path))
+                    .cloned()
+                {
+                    let title = if app.title.is_empty() {
+                        label_fallback
+                    } else {
+                        app.title
+                    };
+                    if let Some(image) = app.icon.as_ref() {
+                        ctx.source.save_thumbnail(path, image);
+                        ctx.source.save_thumbnail_title(path, &title);
+                        return (title, Some(image.clone()));
+                    }
+                    return (title, None);
+                }
+            }
             return (label_fallback, None);
         }
         let mut parts: Vec<String> = path
@@ -1586,6 +1606,12 @@ fn map_display_point(rotation: Rotation, x: i32, y: i32) -> Option<(usize, usize
 
 fn basename_from_path(path: &str) -> String {
     path.rsplit('/').next().unwrap_or(path).to_string()
+}
+
+fn same_launcher_path(a: &str, b: &str) -> bool {
+    let na = a.trim_start_matches('/');
+    let nb = b.trim_start_matches('/');
+    na.eq_ignore_ascii_case(nb)
 }
 
 fn thumbnail_from_image(image: &ImageData, size: u32) -> Option<ImageData> {

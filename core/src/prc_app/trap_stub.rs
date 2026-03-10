@@ -104,6 +104,10 @@ pub fn apply_prc_runtime_trap_stub(
         runtime.trace_trap_budget = runtime.trace_trap_budget.saturating_sub(1);
     }
 
+    if crate::prc_app::traps::dm::DmApi::handle_trap(cpu, runtime, memory, trap_word) {
+        return;
+    }
+
     fn resolve_handle(runtime: &PrcRuntimeContext, raw: u32) -> Option<u32> {
         if raw == 0 {
             return None;
@@ -124,8 +128,16 @@ pub fn apply_prc_runtime_trap_stub(
         memory: &MemoryMap,
     ) -> u32 {
         let sp = cpu.a[7];
-        let candidates = [memory.read_u32_be(sp).unwrap_or(0)];
-        for raw in candidates {
+        // Palm ABI passes MemHandle as the first stack argument.
+        // Some glue stubs mirror it in A0/D0, so allow those as fallback only.
+        let stack_raw = memory.read_u32_be(sp).unwrap_or(0);
+        if let Some(handle) = resolve_handle(runtime, stack_raw) {
+            return handle;
+        }
+        if stack_raw != 0 {
+            return 0;
+        }
+        for raw in [cpu.a[0], cpu.d[0]] {
             if let Some(handle) = resolve_handle(runtime, raw) {
                 return handle;
             }
@@ -435,6 +447,76 @@ pub fn apply_prc_runtime_trap_stub(
             }
         }
         raw
+    }
+
+    fn type_to_name(db_type: u32) -> alloc::string::String {
+        let b = db_type.to_be_bytes();
+        if b.iter().all(|c| (0x20..=0x7E).contains(c)) {
+            alloc::string::String::from_utf8_lossy(&b).into_owned()
+        } else {
+            alloc::format!("DB{:08X}", db_type)
+        }
+    }
+
+    fn write_c_string(memory: &mut MemoryMap, dst: u32, s: &str) {
+        if dst == 0 || !memory.contains_addr(dst) {
+            return;
+        }
+        for (i, ch) in s.as_bytes().iter().enumerate() {
+            let _ = memory.write_u8(dst.saturating_add(i as u32), *ch);
+        }
+        let _ = memory.write_u8(dst.saturating_add(s.len() as u32), 0);
+    }
+
+    fn ensure_db_for_type_creator(
+        runtime: &mut PrcRuntimeContext,
+        db_type: u32,
+        creator: u32,
+    ) -> u32 {
+        if let Some(existing) = runtime
+            .databases
+            .iter()
+            .find(|db| db.db_type == db_type && db.creator == creator)
+            .cloned()
+        {
+            return existing.local_id;
+        }
+        let local_id = runtime.next_local_id;
+        runtime.next_local_id = runtime.next_local_id.saturating_add(1);
+        runtime.databases.push(crate::prc_app::runtime::RuntimeDatabase {
+            local_id,
+            card_no: 0,
+            name: type_to_name(db_type),
+            creator,
+            db_type,
+            is_resource_db: false,
+            version: 1,
+            attributes: 0,
+            mod_number: 0,
+            app_info_id: 0,
+            sort_info_id: 0,
+            record_handles: alloc::vec::Vec::new(),
+        });
+        local_id
+    }
+
+    fn open_db_local_id(runtime: &mut PrcRuntimeContext, local_id: u32) -> u32 {
+        if let Some(existing) = runtime
+            .open_databases
+            .iter()
+            .find(|o| o.local_id == local_id)
+            .cloned()
+        {
+            return existing.db_ref;
+        }
+        let db_ref = runtime.next_db_ref;
+        runtime.next_db_ref = runtime.next_db_ref.saturating_add(1);
+        runtime.open_databases.push(crate::prc_app::runtime::RuntimeOpenDatabase {
+            db_ref,
+            local_id,
+            mode: 0,
+        });
+        db_ref
     }
 
     match trap_word {
@@ -882,6 +964,198 @@ pub fn apply_prc_runtime_trap_stub(
         0xA061 => {
             cpu.d[0] = 0;
         }
+        0xA046 => {
+            // DmDatabaseInfo(cardNo, localID, ...out pointers...)
+            let sp = cpu.a[7];
+            let local_id = [
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
+                cpu.d[0],
+                cpu.a[0],
+            ]
+            .into_iter()
+            .find(|v| *v >= 0x1000)
+            .unwrap_or(0);
+            let db = runtime
+                .databases
+                .iter()
+                .find(|db| db.local_id == local_id)
+                .cloned()
+                .unwrap_or(crate::prc_app::runtime::RuntimeDatabase {
+                    local_id,
+                    card_no: 0,
+                    name: alloc::string::String::new(),
+                    creator: 0,
+                    db_type: 0,
+                    is_resource_db: false,
+                    version: 0,
+                    attributes: 0,
+                    mod_number: 0,
+                    app_info_id: 0,
+                    sort_info_id: 0,
+                    record_handles: alloc::vec::Vec::new(),
+                });
+
+            // Signature:
+            // cardNo(0), localID(2), nameP(6), attributesP(10), versionP(14),
+            // crDateP(18), modDateP(22), bckUpDateP(26), modNumP(30),
+            // appInfoIDP(34), sortInfoIDP(38), typeP(42), creatorP(46)
+            let name_p = memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0);
+            let attrs_p = memory.read_u32_be(sp.saturating_add(10)).unwrap_or(0);
+            let vers_p = memory.read_u32_be(sp.saturating_add(14)).unwrap_or(0);
+            let cr_p = memory.read_u32_be(sp.saturating_add(18)).unwrap_or(0);
+            let mod_p = memory.read_u32_be(sp.saturating_add(22)).unwrap_or(0);
+            let bkp_p = memory.read_u32_be(sp.saturating_add(26)).unwrap_or(0);
+            let modn_p = memory.read_u32_be(sp.saturating_add(30)).unwrap_or(0);
+            let appi_p = memory.read_u32_be(sp.saturating_add(34)).unwrap_or(0);
+            let sorti_p = memory.read_u32_be(sp.saturating_add(38)).unwrap_or(0);
+            let type_p = memory.read_u32_be(sp.saturating_add(42)).unwrap_or(0);
+            let creator_p = memory.read_u32_be(sp.saturating_add(46)).unwrap_or(0);
+
+            write_c_string(memory, name_p, &db.name);
+            if attrs_p != 0 && memory.contains_addr(attrs_p) {
+                let _ = memory.write_u16_be(attrs_p, if db.is_resource_db { 1 } else { 0 });
+            }
+            if vers_p != 0 && memory.contains_addr(vers_p) {
+                let _ = memory.write_u16_be(vers_p, 1);
+            }
+            if cr_p != 0 && memory.contains_addr(cr_p) {
+                let _ = memory.write_u32_be(cr_p, 0);
+            }
+            if mod_p != 0 && memory.contains_addr(mod_p) {
+                let _ = memory.write_u32_be(mod_p, 0);
+            }
+            if bkp_p != 0 && memory.contains_addr(bkp_p) {
+                let _ = memory.write_u32_be(bkp_p, 0);
+            }
+            if modn_p != 0 && memory.contains_addr(modn_p) {
+                let _ = memory.write_u32_be(modn_p, 0);
+            }
+            if appi_p != 0 && memory.contains_addr(appi_p) {
+                let _ = memory.write_u32_be(appi_p, 0);
+            }
+            if sorti_p != 0 && memory.contains_addr(sorti_p) {
+                let _ = memory.write_u32_be(sorti_p, 0);
+            }
+            if type_p != 0 && memory.contains_addr(type_p) {
+                let _ = memory.write_u32_be(type_p, db.db_type);
+            }
+            if creator_p != 0 && memory.contains_addr(creator_p) {
+                let _ = memory.write_u32_be(creator_p, db.creator);
+            }
+            cpu.d[0] = 0; // errNone
+        }
+        0xA049 => {
+            // DmOpenDatabase(cardNo, localID, mode) -> DmOpenRef
+            let sp = cpu.a[7];
+            let local_id = [
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
+                cpu.d[0],
+                cpu.a[0],
+            ]
+            .into_iter()
+            .find(|v| *v >= 0x1000)
+            .unwrap_or(0);
+            if local_id == 0 || runtime.databases.iter().all(|db| db.local_id != local_id) {
+                cpu.a[0] = 0;
+                cpu.d[0] = 0x8000;
+            } else {
+                let db_ref = open_db_local_id(runtime, local_id);
+                cpu.a[0] = db_ref;
+                cpu.d[0] = 0;
+            }
+        }
+        0xA04A => {
+            // DmCloseDatabase(dbRef)
+            let sp = cpu.a[7];
+            let db_ref = [
+                memory.read_u32_be(sp).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                cpu.a[0],
+                cpu.d[0],
+            ]
+            .into_iter()
+            .find(|v| (*v & 0xF000_0000) == 0x5000_0000)
+            .unwrap_or(0);
+            if let Some(i) = runtime.open_databases.iter().position(|o| o.db_ref == db_ref) {
+                runtime.open_databases.remove(i);
+            }
+            cpu.d[0] = 0;
+        }
+        0xA04C => {
+            // DmOpenDatabaseInfo(dbRef, ...) -> errNone
+            let sp = cpu.a[7];
+            let db_ref = [
+                memory.read_u32_be(sp).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                cpu.a[0],
+                cpu.d[0],
+            ]
+            .into_iter()
+            .find(|v| (*v & 0xF000_0000) == 0x5000_0000)
+            .unwrap_or(0);
+            let local_id = runtime
+                .open_databases
+                .iter()
+                .find(|o| o.db_ref == db_ref)
+                .map(|o| o.local_id)
+                .unwrap_or(0);
+            // Signature: (dbRef, localIDP, openCountP, modeP, cardNoP, resDBP)
+            let local_id_p = memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0);
+            let open_count_p = memory.read_u32_be(sp.saturating_add(8)).unwrap_or(0);
+            let mode_p = memory.read_u32_be(sp.saturating_add(12)).unwrap_or(0);
+            let card_no_p = memory.read_u32_be(sp.saturating_add(16)).unwrap_or(0);
+            let res_db_p = memory.read_u32_be(sp.saturating_add(20)).unwrap_or(0);
+            if local_id_p != 0 && memory.contains_addr(local_id_p) {
+                let _ = memory.write_u32_be(local_id_p, local_id);
+            }
+            if open_count_p != 0 && memory.contains_addr(open_count_p) {
+                let _ = memory.write_u16_be(open_count_p, 1);
+            }
+            if mode_p != 0 && memory.contains_addr(mode_p) {
+                let _ = memory.write_u16_be(mode_p, 0);
+            }
+            if card_no_p != 0 && memory.contains_addr(card_no_p) {
+                let _ = memory.write_u16_be(card_no_p, 0);
+            }
+            if res_db_p != 0 && memory.contains_addr(res_db_p) {
+                let is_res = runtime
+                    .databases
+                    .iter()
+                    .find(|db| db.local_id == local_id)
+                    .map(|db| db.is_resource_db)
+                    .unwrap_or(false);
+                let _ = memory.write_u16_be(res_db_p, if is_res { 1 } else { 0 });
+            }
+            cpu.d[0] = 0;
+        }
+        0xA075 => {
+            // DmOpenDatabaseByTypeCreator(type, creator, mode) -> DmOpenRef
+            let sp = cpu.a[7];
+            let db_type = [
+                memory.read_u32_be(sp).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
+                cpu.d[0],
+            ]
+            .into_iter()
+            .find(|v| *v != 0)
+            .unwrap_or(0);
+            let creator = [
+                memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0),
+                memory.read_u32_be(sp.saturating_add(8)).unwrap_or(0),
+                cpu.d[1],
+            ]
+            .into_iter()
+            .find(|v| *v != 0)
+            .unwrap_or(0);
+            let local_id = ensure_db_for_type_creator(runtime, db_type, creator);
+            let db_ref = open_db_local_id(runtime, local_id);
+            cpu.a[0] = db_ref;
+            cpu.d[0] = 0;
+        }
         0xA0F7 => {
             cpu.d[0] = runtime.ticks;
         }
@@ -1017,8 +1291,22 @@ pub fn apply_prc_runtime_trap_stub(
                 memory.write_u32_be(value_p, f.value);
                 cpu.d[0] = 0;
             } else {
-                memory.write_u32_be(value_p, 0);
-                cpu.d[0] = 1;
+                // Palm compatibility defaults for common startup probes.
+                let sys_creator = u32::from_be_bytes(*b"psys");
+                let gdbs_creator = u32::from_be_bytes(*b"gdbS");
+                if creator == sys_creator && num == 1 {
+                    // sysFtrNumROMVersion: emulate a modern PalmOS ROM so apps
+                    // don't abort on minimum-version checks.
+                    memory.write_u32_be(value_p, 0x0500_0000);
+                    cpu.d[0] = 0;
+                } else if creator == gdbs_creator {
+                    // Optional Graffiti database feature probes.
+                    memory.write_u32_be(value_p, 0);
+                    cpu.d[0] = 0;
+                } else {
+                    memory.write_u32_be(value_p, 0);
+                    cpu.d[0] = 1;
+                }
             }
         }
         0xA2E9 => {

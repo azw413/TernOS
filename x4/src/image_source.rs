@@ -1773,6 +1773,9 @@ where
                 continue;
             }
             let name = entry.name().to_string();
+            if name.starts_with('.') || name.starts_with("._") {
+                continue;
+            }
             let lower = name.to_ascii_lowercase();
             if !lower.ends_with(".prc") && !lower.ends_with(".pdb") {
                 continue;

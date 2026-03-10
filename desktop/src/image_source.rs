@@ -597,6 +597,13 @@ impl ImageSource for DesktopImageSource {
             if !path.is_file() {
                 continue;
             }
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            if name.starts_with('.') || name.starts_with("._") {
+                continue;
+            }
             let ext = path
                 .extension()
                 .and_then(|e| e.to_str())
