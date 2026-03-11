@@ -598,3 +598,32 @@ pub fn parse_form_previews(raw: &[u8]) -> Vec<FormPreview> {
     }
     out
 }
+
+pub fn parse_form_previews_from_resource_blobs(
+    resources: &[crate::prc_app::runtime::ResourceBlob],
+) -> Vec<FormPreview> {
+    let mut out = Vec::new();
+    for res in resources {
+        if res.kind != u32::from_be_bytes(*b"tFRM") {
+            continue;
+        }
+        if let Some(form) = parse_single_form(res.id, &res.data, &[], &[]) {
+            out.push(form);
+        } else {
+            out.push(FormPreview {
+                resource_id: res.id,
+                form_id: res.id,
+                window_flags: 0,
+                form_attr: 0,
+                frame_type: 0,
+                x: 0,
+                y: 0,
+                w: 160,
+                h: 160,
+                object_count: 0,
+                objects: Vec::new(),
+            });
+        }
+    }
+    out
+}

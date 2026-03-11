@@ -687,6 +687,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     runtime_field_draws: &[RuntimeFieldDraw],
     runtime_table_draws: &[RuntimeTableDraw],
     focused_control_id: Option<u16>,
+    focused_field_id: Option<u16>,
     menu_overlay: Option<(&MenuBarPreview, usize, Option<usize>)>,
     help_overlay: Option<&RuntimeHelpDialog>,
     pane_x: i32,
@@ -932,6 +933,13 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
                         .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
                         .draw(&mut canvas);
                     }
+                } else if focused {
+                    let _ = Rectangle::new(
+                        Point::new(bx.max(0), by.max(0)),
+                        Size::new(bw.max(1) as u32, bh.max(1) as u32),
+                    )
+                    .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
+                    .draw(&mut canvas);
                 }
                 let (tw, th) = text_metrics(text, *font, fonts, 1);
                 let mut tx = bx + ((bw - tw) / 2).max(1);
@@ -1094,14 +1102,21 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
                 let fy = map_y(*y);
                 let fw = (*w).max(8) as i32;
                 let fh = (*h).max(8) as i32;
+                if focused_field_id == Some(*id) {
+                    let border_w = fw.max(2) as u32;
+                    let border_h = fh.max(2) as u32;
+                    let _ = Rectangle::new(Point::new(fx, fy), Size::new(border_w, border_h))
+                        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
+                        .draw(&mut canvas);
+                }
                 if let Some(text) = find_field_text(runtime_field_draws, form.form_id, *id) {
                     draw_wrapped_text_in_rect(
                         &mut canvas,
                         text,
-                        fx,
-                        fy,
-                        fw,
-                        fh,
+                        fx + 2,
+                        fy + 1,
+                        (fw - 4).max(1),
+                        (fh - 2).max(1),
                         *font,
                         fonts,
                         BinaryColor::Off,

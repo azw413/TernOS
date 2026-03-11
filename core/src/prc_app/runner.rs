@@ -20,10 +20,24 @@ const PRC_EXEC_TRAP_STUB_LIMIT: usize = 65_536;
 const PRC_IDLE_LOOP_POLLS: u32 = 4;
 const PRC_STACK_CANDIDATES: &[usize] = &[8 * 1024, 4 * 1024, 2 * 1024, 1024, 512, 256];
 
+fn launch_context_for_db_type(type_code: &str) -> (u16, u16, u32) {
+    if type_code == "panl" {
+        // Preference panels expect to be entered from Prefs app.
+        (
+            runtime::SYS_APP_LAUNCH_CMD_PANEL_CALLED_FROM_APP,
+            0x008C,
+            0,
+        )
+    } else {
+        (runtime::SYS_APP_LAUNCH_CMD_NORMAL_LAUNCH, 0x008C, 0)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeUiSnapshot {
     pub form_id: Option<u16>,
     pub underlay_form_id: Option<u16>,
+    pub focused_field_id: Option<u16>,
     pub bitmap_draws: Vec<RuntimeBitmapDraw>,
     pub field_draws: Vec<RuntimeFieldDraw>,
     pub table_draws: Vec<RuntimeTableDraw>,
@@ -118,18 +132,21 @@ impl PrcRuntimeSession {
             .and_then(|c0| bootstrap::derive_prc_entry_from_code0(c0, code_len))
             .unwrap_or_else(|| bootstrap::derive_prc_entry_in_code1(&code));
         let prc_raw = source.load_prc_bytes(path, entry).ok();
-        let prc_resources = prc_raw
+        let mut prc_resources = source.load_prc_app_resources(path, entry, info);
+        let base_resources = prc_raw
             .as_deref()
             .map(bootstrap::parse_prc_resource_blobs)
             .unwrap_or_default();
+        prc_resources.extend(base_resources);
         let system_resources = source.load_prc_system_resources();
         let system_fonts = source.load_prc_system_fonts();
 
         let mut cpu = core::CpuState68k::default();
         let mut runtime_ctx = runtime::PrcRuntimeContext::default();
-        runtime_ctx.launch_cmd = 0;
-        runtime_ctx.launch_flags = 0x008C;
-        runtime_ctx.cmd_pbp = 0;
+        let (launch_cmd, launch_flags, cmd_pbp) = launch_context_for_db_type(&info.type_code);
+        runtime_ctx.launch_cmd = launch_cmd;
+        runtime_ctx.launch_flags = launch_flags;
+        runtime_ctx.cmd_pbp = cmd_pbp;
         runtime_ctx.ticks = tick_seed;
         runtime_ctx.trace_traps = true;
         runtime_ctx.trace_trap_budget = 100_000;
@@ -172,10 +189,27 @@ impl PrcRuntimeSession {
             local_id: current_db_local_id,
             mode: 0,
         });
-        if !runtime_ctx.prc_image.is_empty() {
-            let parsed_forms = crate::prc_app::form_preview::parse_form_previews(&runtime_ctx.prc_image);
+        {
+            let mut parsed_forms =
+                crate::prc_app::form_preview::parse_form_previews_from_resource_blobs(
+                    &runtime_ctx.resources,
+                );
+            if parsed_forms.iter().all(|f| f.objects.is_empty()) && !runtime_ctx.prc_image.is_empty()
+            {
+                parsed_forms = crate::prc_app::form_preview::parse_form_previews(&runtime_ctx.prc_image);
+            }
+            let mut seen_form_ids: Vec<u16> = Vec::new();
             let mut next_ptr = 0x3002_0000u32;
-            for form in &parsed_forms {
+            for form in parsed_forms
+                .iter()
+                .filter(|f| {
+                    if seen_form_ids.contains(&f.form_id) {
+                        return false;
+                    }
+                    seen_form_ids.push(f.form_id);
+                    true
+                })
+            {
                 for (idx, obj) in form.objects.iter().enumerate() {
                     let (object_id, kind) = match obj {
                         crate::prc_app::form_preview::FormPreviewObject::Field { id, .. } => {
@@ -196,6 +230,10 @@ impl PrcRuntimeSession {
                         kind,
                         ptr: next_ptr,
                         text_handle: 0,
+                        sel_start: 0,
+                        sel_end: 0,
+                        ins_pt: 0,
+                        dirty: false,
                     });
                     next_ptr = next_ptr.saturating_add(0x20);
                 }
@@ -418,16 +456,61 @@ impl PrcRuntimeSession {
                                 break;
                             }
                         }
+                        let mut pcs = String::new();
+                        for (idx, p) in trace.recent_pcs.iter().enumerate() {
+                            if idx > 0 {
+                                pcs.push(' ');
+                            }
+                            let _ = Write::write_fmt(&mut pcs, format_args!("{:08X}", p));
+                        }
+                        let mut pc_words = String::new();
+                        for (idx, p) in trace.recent_pcs.iter().enumerate() {
+                            if idx > 0 {
+                                pc_words.push(' ');
+                            }
+                            let w = self.memory.read_u16_be(*p).unwrap_or(0xFFFF);
+                            let _ =
+                                Write::write_fmt(&mut pc_words, format_args!("{:08X}:{:04X}", p, w));
+                        }
+                        let prev_pc = if trace.recent_pcs.len() >= 2 {
+                            trace.recent_pcs[trace.recent_pcs.len() - 2]
+                        } else {
+                            0
+                        };
+                        let prev_word = self.memory.read_u16_be(prev_pc).unwrap_or(0xFFFF);
+                        let sp0 = self.memory.read_u32_be(self.cpu.a[7]).unwrap_or(0);
+                        let sp1 = self.memory.read_u32_be(self.cpu.a[7].saturating_add(4)).unwrap_or(0);
+                        let sp2 = self.memory.read_u32_be(self.cpu.a[7].saturating_add(8)).unwrap_or(0);
+                        let sp3 =
+                            self.memory.read_u32_be(self.cpu.a[7].saturating_add(12)).unwrap_or(0);
+                        let cs_top = self.cpu.call_stack.last().copied().unwrap_or(0);
                         log::info!(
-                            "PRC unknown opcode context pc=0x{:08X} word=0x{:04X} d0=0x{:08X} d1=0x{:08X} a0=0x{:08X} a5=0x{:08X} a7=0x{:08X} mem:{}",
+                            "PRC unknown opcode context pc=0x{:08X} word=0x{:04X} prev_pc=0x{:08X} prev_word=0x{:04X} d0=0x{:08X} d1=0x{:08X} d2=0x{:08X} d3=0x{:08X} a0=0x{:08X} a1=0x{:08X} a2=0x{:08X} a3=0x{:08X} a5=0x{:08X} a6=0x{:08X} a7=0x{:08X} sp[0..16]=[{:08X} {:08X} {:08X} {:08X}] call_stack_len={} call_stack_top=0x{:08X} mem:{} recent_pcs=[{}] recent_words=[{}]",
                             pc,
                             word,
+                            prev_pc,
+                            prev_word,
                             self.cpu.d[0],
                             self.cpu.d[1],
+                            self.cpu.d[2],
+                            self.cpu.d[3],
                             self.cpu.a[0],
+                            self.cpu.a[1],
+                            self.cpu.a[2],
+                            self.cpu.a[3],
                             self.cpu.a[5],
+                            self.cpu.a[6],
                             self.cpu.a[7],
+                            sp0,
+                            sp1,
+                            sp2,
+                            sp3,
+                            self.cpu.call_stack.len(),
+                            cs_top,
                             around
+                            ,
+                            pcs,
+                            pc_words
                         );
                     }
                     if let core::StopReason::OutOfBounds { pc } = other {
@@ -533,12 +616,19 @@ impl PrcRuntimeSession {
             let _ = self.memory.write_u16_be(event_p.saturating_add(4), 0);
             let _ = self.memory.write_u16_be(event_p.saturating_add(6), 0);
             let _ = self.memory.write_u16_be(event_p.saturating_add(8), data_u16);
-            let _ = self
-                .memory
-                .write_u32_be(event_p.saturating_add(10), 0x3001_0000u32);
-            let _ = self.memory.write_u8(event_p.saturating_add(14), 1);
-            let _ = self.memory.write_u8(event_p.saturating_add(15), 0);
-            let _ = self.memory.write_u16_be(event_p.saturating_add(16), 0);
+            if e_type == runtime::EVT_CTL_SELECT {
+                let _ = self
+                    .memory
+                    .write_u32_be(event_p.saturating_add(10), 0x3001_0000u32);
+                let _ = self.memory.write_u8(event_p.saturating_add(14), 1);
+                let _ = self.memory.write_u8(event_p.saturating_add(15), 0);
+                let _ = self.memory.write_u16_be(event_p.saturating_add(16), 0);
+            } else if e_type == runtime::EVT_KEY_DOWN {
+                let _ = self.memory.write_u16_be(event_p.saturating_add(10), data_u16);
+                let _ = self.memory.write_u16_be(event_p.saturating_add(12), 0);
+            } else {
+                let _ = self.memory.write_u16_be(event_p.saturating_add(10), e_type);
+            }
             log::info!(
                 "PRC runtime input injected {} eventP=0x{:08X} eType={} data=0x{:04X}",
                 label,
@@ -585,6 +675,16 @@ impl PrcRuntimeSession {
         RuntimeUiSnapshot {
             form_id: self.runtime.drawn_form_id.or(self.runtime.active_form_id),
             underlay_form_id: self.runtime.form_return_stack.last().copied(),
+            focused_field_id: self
+                .runtime
+                .focused_field_index
+                .and_then(|obj_idx| {
+                    self.runtime
+                        .form_objects
+                        .iter()
+                        .find(|o| o.object_index == obj_idx && o.form_id == self.runtime.active_form_id.unwrap_or(0))
+                        .map(|o| o.object_id)
+                }),
             bitmap_draws: self
                 .runtime
                 .drawn_bitmaps
@@ -717,10 +817,12 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
             return RuntimeUiSnapshot::default();
     }
     let prc_raw = source.load_prc_bytes(path, entry).ok();
-    let prc_resources = prc_raw
+    let mut prc_resources = source.load_prc_app_resources(path, entry, info);
+    let base_resources = prc_raw
         .as_deref()
         .map(bootstrap::parse_prc_resource_blobs)
         .unwrap_or_default();
+    prc_resources.extend(base_resources);
     let system_resources = source.load_prc_system_resources();
     let system_fonts = source.load_prc_system_fonts();
 
@@ -1144,17 +1246,41 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
             );
         }
     }
+    let (default_launch_cmd, default_launch_flags, default_cmd_pbp) =
+        launch_context_for_db_type(&info.type_code);
     let best = runs
         .first()
         .cloned()
-        .unwrap_or_else(|| run_candidate(primary_entry, true, 0, 0x000C, 0, &code, false, false));
+        .unwrap_or_else(|| {
+            run_candidate(
+                primary_entry,
+                true,
+                default_launch_cmd,
+                default_launch_flags & 0x007F,
+                default_cmd_pbp,
+                &code,
+                false,
+                false,
+            )
+        });
     let mut best = best;
-    let launch_scenarios = [
+    let mut launch_scenarios = vec![
         ("normal", 0u16, 0x000C_u16, 0u32),
         ("goto_new_globals", 2u16, 0x000C_u16, 0u32),
         ("goto_subcall", 2u16, 0x0018_u16, 0u32),
         ("goto_subcall_new_globals", 2u16, 0x001C_u16, 0u32),
     ];
+    if info.type_code == "panl" {
+        launch_scenarios.insert(
+            0,
+            (
+                "panel_called_from_app",
+                runtime::SYS_APP_LAUNCH_CMD_PANEL_CALLED_FROM_APP,
+                0x000C_u16,
+                0u32,
+            ),
+        );
+    }
     if !best.has_app_loop_trap || best.drawn_form_id.is_none() || best.drawn_bitmaps.is_empty() {
         let mut scenario_runs: Vec<(&str, BootstrapRun)> = launch_scenarios
             .iter()
@@ -1233,6 +1359,7 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
     let snapshot = RuntimeUiSnapshot {
         form_id: best.drawn_form_id.or(best.active_form_id),
         underlay_form_id: None,
+        focused_field_id: None,
         bitmap_draws: best.drawn_bitmaps.clone(),
         field_draws: Vec::new(),
         table_draws: Vec::new(),

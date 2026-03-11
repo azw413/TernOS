@@ -465,6 +465,112 @@ fn execute_immediate(
         }
     }
 
+    // Execute immediate ops to memory for simple address-indirect forms.
+    // ROM apps use `ADDI.L #imm,(A7)` in the code#1 startup veneer.
+    if mode == 2 && matches!(base, 0x0000 | 0x0200 | 0x0400 | 0x0600 | 0x0A00) {
+        let size_bytes = match size_bits {
+            0 => 1u32,
+            1 | 3 => 2u32,
+            2 => 4u32,
+            _ => 0u32,
+        };
+        if size_bytes != 0 {
+            let mut ext_pc = pc.saturating_add(2);
+            let imm = match size_bytes {
+                1 => match memory.read_u16_be(ext_pc) {
+                    Some(v) => {
+                        ext_pc = ext_pc.saturating_add(2);
+                        (v & 0x00FF) as u32
+                    }
+                    None => return Err(StopReason::OutOfBounds { pc }),
+                },
+                2 => match memory.read_u16_be(ext_pc) {
+                    Some(v) => {
+                        ext_pc = ext_pc.saturating_add(2);
+                        v as u32
+                    }
+                    None => return Err(StopReason::OutOfBounds { pc }),
+                },
+                _ => match memory.read_u32_be(ext_pc) {
+                    Some(v) => {
+                        ext_pc = ext_pc.saturating_add(4);
+                        v
+                    }
+                    None => return Err(StopReason::OutOfBounds { pc }),
+                },
+            };
+            let addr = state.a[reg as usize];
+            let cur = match size_bytes {
+                1 => memory.read_u8(addr).map(u32::from),
+                2 => memory.read_u16_be(addr).map(u32::from),
+                _ => memory.read_u32_be(addr),
+            }
+            .ok_or(StopReason::OutOfBounds { pc })?;
+            let (imm_v, cur_v, bits, out) = match size_bytes {
+                1 => {
+                    let i = imm & 0xFF;
+                    let c = cur & 0xFF;
+                    let o = match base {
+                        0x0000 => c | i,
+                        0x0200 => c & i,
+                        0x0400 => c.wrapping_sub(i) & 0xFF,
+                        0x0600 => c.wrapping_add(i) & 0xFF,
+                        0x0A00 => c ^ i,
+                        _ => c,
+                    };
+                    (i, c, 8u32, o)
+                }
+                2 => {
+                    let i = imm & 0xFFFF;
+                    let c = cur & 0xFFFF;
+                    let o = match base {
+                        0x0000 => c | i,
+                        0x0200 => c & i,
+                        0x0400 => c.wrapping_sub(i) & 0xFFFF,
+                        0x0600 => c.wrapping_add(i) & 0xFFFF,
+                        0x0A00 => c ^ i,
+                        _ => c,
+                    };
+                    (i, c, 16u32, o)
+                }
+                _ => {
+                    let i = imm;
+                    let c = cur;
+                    let o = match base {
+                        0x0000 => c | i,
+                        0x0200 => c & i,
+                        0x0400 => c.wrapping_sub(i),
+                        0x0600 => c.wrapping_add(i),
+                        0x0A00 => c ^ i,
+                        _ => c,
+                    };
+                    (i, c, 32u32, o)
+                }
+            };
+            let _ = match size_bytes {
+                1 => memory.write_u8(addr, out as u8),
+                2 => memory.write_u16_be(addr, out as u16),
+                _ => memory.write_u32_be(addr, out),
+            };
+            match base {
+                0x0400 => set_ccr_sub(state, imm_v, cur_v, out, bits),
+                0x0600 => set_ccr_add(state, imm_v, cur_v, out, bits),
+                _ => {
+                    let sign = if bits == 8 {
+                        (out & 0x80) != 0
+                    } else if bits == 16 {
+                        (out & 0x8000) != 0
+                    } else {
+                        (out & 0x8000_0000) != 0
+                    };
+                    set_ccr_nz(state, sign, out == 0);
+                }
+            }
+            state.pc = ext_pc;
+            return Ok(true);
+        }
+    }
+
     if mode == 0 {
         // Register-immediate ops on Dn used heavily by app logic.
         let dn = reg as usize;

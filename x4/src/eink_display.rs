@@ -13,6 +13,7 @@ use log::{error, info, warn};
 use tern_core::{
     display::{Display, GrayscaleMode, RefreshMode},
     framebuffer::{BUFFER_SIZE, DisplayBuffers},
+    platform::{DisplayCaps, DisplayDensity, DisplayDevice, DisplayRotation},
 };
 
 // SSD1677 Command Definitions
@@ -575,5 +576,32 @@ where
         self.set_custom_lut(lut).unwrap();
         self.refresh_display(RefreshMode::Fast, false).unwrap();
         self.custom_lut_active = false;
+    }
+}
+
+impl<SPI> DisplayDevice for EInkDisplay<'_, SPI>
+where
+    SPI: SpiDevice,
+{
+    fn size_px(&self) -> (u32, u32) {
+        (Self::WIDTH as u32, Self::HEIGHT as u32)
+    }
+
+    fn logical_density(&self) -> DisplayDensity {
+        DisplayDensity::DeviceNative
+    }
+
+    fn caps(&self) -> DisplayCaps {
+        DisplayCaps {
+            partial_refresh: true,
+            grayscale: true,
+            rotation: DisplayRotation::Rotate0,
+        }
+    }
+
+    fn present(&mut self, _mode: RefreshMode) {
+        // The current x4 path presents through `tern_core::display::Display`
+        // with explicit framebuffer ownership. This trait impl is metadata-only
+        // until the display pipeline is fully platform-driven.
     }
 }

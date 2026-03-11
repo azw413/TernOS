@@ -163,6 +163,7 @@ async fn main(_spawner: Spawner) {
 
         button_state.update();
         let buttons = button_state.get_buttons();
+        let platform_events = button_state.take_input_events();
         usb_poll(&mut usb_mode, &mut rx, &mut tx, application.source_mut()).await;
         let usb_state = usb_mode.state();
         let usb_status = usb_mode.status();
@@ -232,7 +233,7 @@ async fn main(_spawner: Spawner) {
             usb_mode::UsbModeState::Idle => {}
         }
 
-        application.update(&buttons, 10);
+        application.update_with_events(&buttons, &platform_events, 10);
         battery_timer_ms = battery_timer_ms.saturating_add(10);
         if battery_timer_ms >= 30_000 {
             battery_timer_ms = 0;

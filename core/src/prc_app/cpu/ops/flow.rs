@@ -112,19 +112,35 @@ fn execute_rts(
     if word != 0x4E75 {
         return Ok(false);
     }
-    let expected_ret = state.call_stack.pop();
+    let expected_ret = state.call_stack.last().copied();
     let mut ret = if let Some(v) = memory.read_u32_be(state.a[7]) {
         state.a[7] = state.a[7].wrapping_add(4);
         v
     } else if let Some(expected) = expected_ret {
+        let _ = state.call_stack.pop();
         expected
     } else {
         return Err(StopReason::ReturnUnderflow { pc });
     };
     if let Some(expected_ret) = expected_ret {
-        // Prefer tracked callsite when the stack return is clearly invalid.
-        if ret != expected_ret && memory.contains_addr(expected_ret) && !memory.contains_addr(ret) {
+        // Prefer tracked callsite when the stacked return does not look like
+        // executable code (for example stack sentinel patterns such as 0xFFFF).
+        let ret_word = memory.read_u16_be(ret);
+        let expected_word = memory.read_u16_be(expected_ret);
+        let ret_in_code = memory.contains_base_addr(ret);
+        let expected_in_code = memory.contains_base_addr(expected_ret);
+        let ret_plausible = ret_in_code && ret_word.is_some_and(|w| w != 0xFFFF);
+        let expected_plausible = expected_in_code && expected_word.is_some_and(|w| w != 0xFFFF);
+        if ret == expected_ret {
+            let _ = state.call_stack.pop();
+        } else if memory.contains_addr(expected_ret)
+            && (!memory.contains_addr(ret) || (!ret_plausible && expected_plausible))
+        {
             ret = expected_ret;
+            let _ = state.call_stack.pop();
+        } else if let Some(pos) = state.call_stack.iter().rposition(|v| *v == ret) {
+            // Non-linear unwind: drop all pending return sites at/above target.
+            state.call_stack.truncate(pos);
         }
     }
     if ret == u32::MAX {

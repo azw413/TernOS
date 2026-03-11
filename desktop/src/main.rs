@@ -42,9 +42,10 @@ fn main() {
 
     while display.is_open() {
         display.update();
+        let platform_events = display.take_input_events();
         let elapsed_ms = last_tick.elapsed().as_millis() as u32;
         last_tick = std::time::Instant::now();
-        application.update(&display.get_buttons(), elapsed_ms);
+        application.update_with_events(&display.get_buttons(), &platform_events, elapsed_ms);
         application.draw(&mut *display);
     }
 }

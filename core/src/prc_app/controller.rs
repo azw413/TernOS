@@ -122,6 +122,10 @@ fn focusable_controls(form: Option<&FormPreview>) -> Vec<ControlComponent> {
                 id: *id,
                 rect: Rect::new(*x as i32, *y as i32, *w as i32, *h as i32),
             }),
+            FormPreviewObject::Field { id, x, y, w, h, .. } => Some(ControlComponent {
+                id: *id,
+                rect: Rect::new(*x as i32, *y as i32, *w as i32, *h as i32),
+            }),
             _ => None,
         })
         .collect()

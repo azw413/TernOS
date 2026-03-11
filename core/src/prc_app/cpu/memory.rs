@@ -58,6 +58,14 @@ impl MemoryMap {
         })
     }
 
+    pub fn contains_base_addr(&self, addr: u32) -> bool {
+        if addr < self.base {
+            return false;
+        }
+        let off = (addr - self.base) as usize;
+        off < self.data.len()
+    }
+
     pub fn read_u16_be(&self, addr: u32) -> Option<u16> {
         let b0 = self.read_u8(addr)?;
         let b1 = self.read_u8(addr.saturating_add(1))?;

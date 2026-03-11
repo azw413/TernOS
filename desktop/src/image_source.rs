@@ -308,6 +308,14 @@ fn extract_app_icon(raw: &[u8]) -> Option<ImageData> {
     })
 }
 
+fn parse_tdb_uid_from_name(name: &str) -> Option<u64> {
+    let stem = name.strip_suffix(".tdb")?;
+    if stem.len() != 16 {
+        return None;
+    }
+    u64::from_str_radix(stem, 16).ok()
+}
+
 fn same_db_key(a: &InstalledDbIdentity, b: &InstalledDbIdentity) -> bool {
     a.name == b.name && a.db_type == b.db_type && a.creator == b.creator
 }
@@ -525,6 +533,40 @@ impl ImageSource for DesktopImageSource {
         fs::read(full_path).map_err(|_| ImageError::Io)
     }
 
+    fn load_prc_app_resources(
+        &mut self,
+        _path: &[String],
+        entry: &ImageEntry,
+        info: &tern_core::prc_app::PrcInfo,
+    ) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
+        let mut out = Vec::new();
+        let Some(current_uid) = parse_tdb_uid_from_name(&entry.name) else {
+            return out;
+        };
+        let creator = info.creator_code.as_bytes();
+        let Ok(creator_4) = <[u8; 4]>::try_from(creator.get(..4).unwrap_or(b"????")) else {
+            return out;
+        };
+        let catalog = load_catalog(&self.palmdb_catalog_path());
+        for meta in catalog {
+            if meta.uid == current_uid {
+                continue;
+            }
+            if meta.identity.db_type != *b"ovly" || meta.identity.creator != creator_4 {
+                continue;
+            }
+            let path = self
+                .root
+                .join(format!("palmdb/v1/db/{:016x}.tdb", meta.uid));
+            let Ok(raw) = fs::read(path) else {
+                continue;
+            };
+            let blobs = tern_core::prc_app::parse_prc_resource_blobs(&raw);
+            out.extend(blobs);
+        }
+        out
+    }
+
     fn load_prc_system_resources(&mut self) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
         let dir = self.fonts_dir();
         let Ok(read_dir) = fs::read_dir(&dir) else {
@@ -696,7 +738,9 @@ impl ImageSource for DesktopImageSource {
         let catalog = load_catalog(&self.palmdb_catalog_path());
         let mut out = Vec::new();
         for meta in catalog {
-            if meta.identity.db_type != *b"appl" {
+            // Show launchable app-like databases in Home > Apps.
+            // `panl` is used by Palm control-panel apps like Date & Time.
+            if meta.identity.db_type != *b"appl" && meta.identity.db_type != *b"panl" {
                 continue;
             }
             let path = format!("palmdb/v1/db/{:016x}.tdb", meta.uid);

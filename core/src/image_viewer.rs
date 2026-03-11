@@ -73,6 +73,15 @@ pub trait ImageSource {
     ) -> Result<Vec<u8>, ImageError> {
         Err(ImageError::Unsupported)
     }
+    /// Optional app-specific extra resources (e.g. `ovly` DB paired by creator).
+    fn load_prc_app_resources(
+        &mut self,
+        _path: &[String],
+        _entry: &ImageEntry,
+        _info: &crate::prc_app::PrcInfo,
+    ) -> Vec<crate::prc_app::runtime::ResourceBlob> {
+        Vec::new()
+    }
     fn load_prc_system_resources(&mut self) -> Vec<crate::prc_app::runtime::ResourceBlob> {
         Vec::new()
     }

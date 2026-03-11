@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use esp_hal::{
     Blocking,
     analog::adc::{Adc, AdcCalLine, AdcChannel, AdcConfig, AdcPin, Attenuation},
@@ -6,6 +7,7 @@ use esp_hal::{
 };
 use log::trace;
 use tern_core::input::ButtonState;
+use tern_core::platform::{ButtonId, PlatformInputEvent};
 
 const ADC_THRESHOLDS_1: [i16; 4] = [2635, 2015, 1117, 3];
 const ADC_THRESHOLDS_2: [i16; 2] = [1680, 3];
@@ -20,6 +22,7 @@ where
     PinBatt: AdcChannel + AnalogPin,
 {
     inner: ButtonState,
+    input_events: Vec<PlatformInputEvent>,
     pin1: AdcPin<Pin1, ADC1<'a>, AdcCal<'a>>,
     pin2: AdcPin<Pin2, ADC1<'a>, AdcCal<'a>>,
     pin_batt: AdcPin<PinBatt, ADC1<'a>, AdcCal<'a>>,
@@ -49,6 +52,7 @@ where
         let adc = Adc::new(adc, adc_config);
         GpioButtonState {
             inner: ButtonState::default(),
+            input_events: Vec::with_capacity(16),
             pin1,
             pin2,
             pin_batt,
@@ -70,6 +74,7 @@ where
     }
 
     pub fn update(&mut self) {
+        self.input_events.clear();
         let mut current: u8 = 0;
         let raw_button1 = nb::block!(self.adc.read_oneshot(&mut self.pin1)).unwrap();
         if let Some(button) = Self::get_button_from_adc(raw_button1 as _, &ADC_THRESHOLDS_1) {
@@ -87,10 +92,15 @@ where
             raw_button1, raw_button2, current
         );
         self.inner.update(current);
+        self.collect_button_events();
     }
 
     pub fn get_buttons(&self) -> ButtonState {
         self.inner
+    }
+
+    pub fn take_input_events(&mut self) -> Vec<PlatformInputEvent> {
+        core::mem::take(&mut self.input_events)
     }
 
     pub fn read_battery_percent(&mut self) -> Option<u8> {
@@ -113,5 +123,27 @@ where
             return 100;
         }
         (y + 0.5) as u8
+    }
+
+    fn collect_button_events(&mut self) {
+        const BUTTON_MAP: &[(tern_core::input::Buttons, ButtonId)] = &[
+            (tern_core::input::Buttons::Left, ButtonId::Left),
+            (tern_core::input::Buttons::Right, ButtonId::Right),
+            (tern_core::input::Buttons::Up, ButtonId::Up),
+            (tern_core::input::Buttons::Down, ButtonId::Down),
+            (tern_core::input::Buttons::Confirm, ButtonId::Confirm),
+            (tern_core::input::Buttons::Back, ButtonId::Back),
+            (tern_core::input::Buttons::Power, ButtonId::Power),
+        ];
+        for (button, button_id) in BUTTON_MAP {
+            if self.inner.is_pressed(*button) {
+                self.input_events
+                    .push(PlatformInputEvent::ButtonDown(*button_id));
+            }
+            if self.inner.is_released(*button) {
+                self.input_events
+                    .push(PlatformInputEvent::ButtonUp(*button_id));
+            }
+        }
     }
 }

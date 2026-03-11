@@ -9,6 +9,7 @@ pub mod framebuffer;
 pub mod image_viewer;
 pub mod input;
 pub mod palm_db;
+pub mod platform;
 pub mod prc_app;
 pub mod ui;
 pub mod trbk;

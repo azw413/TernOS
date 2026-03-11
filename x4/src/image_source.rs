@@ -1029,6 +1029,14 @@ fn extract_app_icon_streaming<R: File>(file: &mut R) -> Option<ImageData> {
     })
 }
 
+fn parse_tdb_uid_from_name(name: &str) -> Option<u64> {
+    let stem = name.strip_suffix(".tdb")?;
+    if stem.len() != 16 {
+        return None;
+    }
+    u64::from_str_radix(stem, 16).ok()
+}
+
 fn same_db_key(a: &InstalledDbIdentity, b: &InstalledDbIdentity) -> bool {
     a.name == b.name && a.db_type == b.db_type && a.creator == b.creator
 }
@@ -1641,6 +1649,50 @@ where
         Ok(out)
     }
 
+    fn load_prc_app_resources(
+        &mut self,
+        _path: &[String],
+        entry: &ImageEntry,
+        info: &PrcInfo,
+    ) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
+        let mut out = Vec::new();
+        let Some(current_uid) = parse_tdb_uid_from_name(&entry.name) else {
+            return out;
+        };
+        let creator = info.creator_code.as_bytes();
+        let Ok(creator_4) = <[u8; 4]>::try_from(creator.get(..4).unwrap_or(b"????")) else {
+            return out;
+        };
+        let catalog = self.load_palm_catalog();
+        for meta in catalog {
+            if meta.uid == current_uid {
+                continue;
+            }
+            if meta.identity.db_type != *b"ovly" || meta.identity.creator != creator_4 {
+                continue;
+            }
+            let file_path = format!("/palmdb/v1/db/{:016x}.tdb", meta.uid);
+            let Ok(mut file) = self.fs.open_file(&file_path, Mode::Read) else {
+                continue;
+            };
+            let size = file.size() as usize;
+            if size < 78 {
+                continue;
+            }
+            let mut raw = Vec::new();
+            if raw.try_reserve(size).is_err() {
+                continue;
+            }
+            raw.resize(size, 0);
+            if read_exact(&mut file, &mut raw).is_err() {
+                continue;
+            }
+            let blobs = tern_core::prc_app::parse_prc_resource_blobs(&raw);
+            out.extend(blobs);
+        }
+        out
+    }
+
     fn load_prc_system_resources(&mut self) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
         let mut out = Vec::new();
         let mut listed = None;
@@ -1981,7 +2033,9 @@ where
     fn list_installed_apps(&mut self) -> Vec<InstalledAppEntry> {
         let mut out = Vec::new();
         for meta in self.load_palm_catalog() {
-            if meta.identity.db_type != *b"appl" {
+            // Show launchable app-like databases in Home > Apps.
+            // `panl` is used by Palm control-panel apps like Date & Time.
+            if meta.identity.db_type != *b"appl" && meta.identity.db_type != *b"panl" {
                 continue;
             }
             let path = format!("/palmdb/v1/db/{:016x}.tdb", meta.uid);

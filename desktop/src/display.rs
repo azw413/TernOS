@@ -1,4 +1,5 @@
 use log::info;
+use tern_core::platform::{ButtonId, DisplayCaps, DisplayDensity, DisplayDevice, DisplayRotation, PlatformInputEvent};
 use tern_core::{
     display::{GrayscaleMode, HEIGHT, RefreshMode, WIDTH},
     framebuffer::DisplayBuffers,
@@ -17,6 +18,7 @@ pub struct MinifbDisplay {
     display_buffer: [u32; DISPLAY_BUFFER_SIZE],
     window: minifb::Window,
     buttons: ButtonState,
+    input_events: Vec<PlatformInputEvent>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -41,6 +43,7 @@ impl MinifbDisplay {
             display_buffer: [0; DISPLAY_BUFFER_SIZE],
             window,
             buttons: ButtonState::default(),
+            input_events: Vec::new(),
         };
 
         ret.display_buffer.fill(0xFFFFFFFF);
@@ -60,7 +63,10 @@ impl MinifbDisplay {
 
     pub fn update(&mut self) {
         self.window.update();
+        self.input_events.clear();
         let mut current: u8 = 0;
+        let mut typed: [u16; 16] = [0; 16];
+        let mut typed_len = 0usize;
         if self.window.is_key_down(minifb::Key::Left) {
             current |= 1 << (Buttons::Left as u8);
         }
@@ -82,11 +88,56 @@ impl MinifbDisplay {
         if self.window.is_key_down(minifb::Key::P) {
             current |= 1 << (Buttons::Power as u8);
         }
-        self.buttons.update(current);
+        for key in self.window.get_keys_pressed(minifb::KeyRepeat::Yes) {
+            if typed_len >= typed.len() {
+                break;
+            }
+            if let Some(ch) = map_key_to_char(
+                key,
+                self.window.is_key_down(minifb::Key::LeftShift)
+                    || self.window.is_key_down(minifb::Key::RightShift),
+            ) {
+                typed[typed_len] = ch;
+                typed_len += 1;
+                self.input_events.push(PlatformInputEvent::KeyDown {
+                    chr: ch,
+                    key_code: ch,
+                    modifiers: 0,
+                });
+            }
+        }
+        self.buttons.update_with_typed(current, &typed[..typed_len]);
+        self.collect_button_events();
     }
 
     pub fn get_buttons(&self) -> ButtonState {
         self.buttons
+    }
+
+    pub fn take_input_events(&mut self) -> Vec<PlatformInputEvent> {
+        core::mem::take(&mut self.input_events)
+    }
+
+    fn collect_button_events(&mut self) {
+        const BUTTON_MAP: &[(Buttons, ButtonId)] = &[
+            (Buttons::Left, ButtonId::Left),
+            (Buttons::Right, ButtonId::Right),
+            (Buttons::Up, ButtonId::Up),
+            (Buttons::Down, ButtonId::Down),
+            (Buttons::Confirm, ButtonId::Confirm),
+            (Buttons::Back, ButtonId::Back),
+            (Buttons::Power, ButtonId::Power),
+        ];
+        for (button, button_id) in BUTTON_MAP {
+            if self.buttons.is_pressed(*button) {
+                self.input_events
+                    .push(PlatformInputEvent::ButtonDown(*button_id));
+            }
+            if self.buttons.is_released(*button) {
+                self.input_events
+                    .push(PlatformInputEvent::ButtonUp(*button_id));
+            }
+        }
     }
 
     fn blit_internal(&mut self, mode: BlitMode) {
@@ -224,6 +275,62 @@ impl MinifbDisplay {
     }
 }
 
+fn map_key_to_char(key: minifb::Key, shifted: bool) -> Option<u16> {
+    use minifb::Key;
+    let ch = match key {
+        Key::Space => ' ',
+        Key::A => if shifted { 'A' } else { 'a' },
+        Key::B => if shifted { 'B' } else { 'b' },
+        Key::C => if shifted { 'C' } else { 'c' },
+        Key::D => if shifted { 'D' } else { 'd' },
+        Key::E => if shifted { 'E' } else { 'e' },
+        Key::F => if shifted { 'F' } else { 'f' },
+        Key::G => if shifted { 'G' } else { 'g' },
+        Key::H => if shifted { 'H' } else { 'h' },
+        Key::I => if shifted { 'I' } else { 'i' },
+        Key::J => if shifted { 'J' } else { 'j' },
+        Key::K => if shifted { 'K' } else { 'k' },
+        Key::L => if shifted { 'L' } else { 'l' },
+        Key::M => if shifted { 'M' } else { 'm' },
+        Key::N => if shifted { 'N' } else { 'n' },
+        Key::O => if shifted { 'O' } else { 'o' },
+        Key::P => if shifted { 'P' } else { 'p' },
+        Key::Q => if shifted { 'Q' } else { 'q' },
+        Key::R => if shifted { 'R' } else { 'r' },
+        Key::S => if shifted { 'S' } else { 's' },
+        Key::T => if shifted { 'T' } else { 't' },
+        Key::U => if shifted { 'U' } else { 'u' },
+        Key::V => if shifted { 'V' } else { 'v' },
+        Key::W => if shifted { 'W' } else { 'w' },
+        Key::X => if shifted { 'X' } else { 'x' },
+        Key::Y => if shifted { 'Y' } else { 'y' },
+        Key::Z => if shifted { 'Z' } else { 'z' },
+        Key::Key0 => if shifted { ')' } else { '0' },
+        Key::Key1 => if shifted { '!' } else { '1' },
+        Key::Key2 => if shifted { '@' } else { '2' },
+        Key::Key3 => if shifted { '#' } else { '3' },
+        Key::Key4 => if shifted { '$' } else { '4' },
+        Key::Key5 => if shifted { '%' } else { '5' },
+        Key::Key6 => if shifted { '^' } else { '6' },
+        Key::Key7 => if shifted { '&' } else { '7' },
+        Key::Key8 => if shifted { '*' } else { '8' },
+        Key::Key9 => if shifted { '(' } else { '9' },
+        Key::Backspace => '\u{0008}',
+        Key::Comma => if shifted { '<' } else { ',' },
+        Key::Period => if shifted { '>' } else { '.' },
+        Key::Slash => if shifted { '?' } else { '/' },
+        Key::Semicolon => if shifted { ':' } else { ';' },
+        Key::Apostrophe => if shifted { '"' } else { '\'' },
+        Key::LeftBracket => if shifted { '{' } else { '[' },
+        Key::RightBracket => if shifted { '}' } else { ']' },
+        Key::Backslash => if shifted { '|' } else { '\\' },
+        Key::Minus => if shifted { '_' } else { '-' },
+        Key::Equal => if shifted { '+' } else { '=' },
+        _ => return None,
+    };
+    Some(ch as u16)
+}
+
 impl tern_core::display::Display for MinifbDisplay {
     fn display(&mut self, buffers: &mut DisplayBuffers, mode: RefreshMode) {
         // revert grayscale first
@@ -259,5 +366,27 @@ impl tern_core::display::Display for MinifbDisplay {
     }
     fn display_absolute_grayscale(&mut self, _: GrayscaleMode) {
         self.blit_internal(BlitMode::GrayscaleOneshot);
+    }
+}
+
+impl DisplayDevice for MinifbDisplay {
+    fn size_px(&self) -> (u32, u32) {
+        (WIDTH as u32, HEIGHT as u32)
+    }
+
+    fn logical_density(&self) -> DisplayDensity {
+        DisplayDensity::DeviceNative
+    }
+
+    fn caps(&self) -> DisplayCaps {
+        DisplayCaps {
+            partial_refresh: true,
+            grayscale: true,
+            rotation: DisplayRotation::Rotate90,
+        }
+    }
+
+    fn present(&mut self, _mode: RefreshMode) {
+        self.update_display();
     }
 }

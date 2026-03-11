@@ -1,0 +1,3342 @@
+<html>
+<head>
+<title>(68K) Fields | Palm OS&#174; Programmer's  API Reference</title> 
+<link href="psi_devpubs.css" rel="stylesheet" type="text/css">
+
+<!-- BEGIN META DATA -->
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<META NAME="PSITEMPLATE" CONTENT="1006-007 PalmSource_HTML_2003 20041101">
+<META NAME="GENERATOR" CONTENT="Quadralay WebWorks AutoMap 2003 for FrameMaker 8.0.6.2138">
+<META NAME="LASTUPDATED" CONTENT="11/22/04 10:45:59">
+<!-- END META DATA -->
+</head>
+
+<body bgcolor="#ffffff" text="#000000" leftmargin="0" topmargin="0" marginwidth="0" marginheight="0">
+<a name="995796"></a>
+
+<!-- BEGIN TOPNAV -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td><img src="images/shim.gif" width="7" height="75" border="0" alt=""></td>
+<td align="left"><table border="0" cellpadding="0" cellspacing="0" width="744">
+<tr>
+<td><img name="index_r2_c1" src="images/shim.gif" width="25" height="75" border="0" alt=""></td>
+<td valign="top"><table border="0" cellpadding="0" cellspacing="0" width="96">
+<tr>
+<td><img name="index_r2_c4" src="images/shim.gif" width="96" height="15" border="0" alt=""></td>
+</tr>
+<tr>
+<td><a href="http://www.palmsource.com/"><img name="ps_logo" src="images/ps_logo.gif" width="96" height="54" border="0" alt=""></a></td>
+</tr>
+
+</table>
+</td>
+
+<td><table border="0" cellpadding="0" cellspacing="0" width="30">
+<td><img name="index_x" src="images/shim.gif" width="30" height="75" border="0" alt=""></td>
+</table></td>
+
+<!--BEGIN MASTHEAD-->
+<td><table border="0" cellpadding="0" cellspacing="0" width="96">
+<tr>
+<td><img name="index_x" src="images/shim.gif" width="615" height="5" border="0" alt=""></td>
+</tr>
+<tr>
+<td>
+<!--BEGIN BOOK NAVIGATION-->
+<span class="nav">
+<A href="http://www.palmos.com/dev/support/docs/">Documentation</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+<a href="ReferenceTOC.html">Table of Contents</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="DateAndTimeSelector.html">&lt;&nbsp;Previous</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="Find.html">Next&nbsp;&gt;</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="ReferenceIX.html">Index</a>
+</span>
+<!--END BOOK NAVIGATION-->
+</tr>
+<tr>
+<td>
+<!--BEGIN PAGE TITLE-->
+<h2 class="PageTitle">9 &nbsp;&nbsp;
+Fields</h2></td>
+<!--END PAGE TITLE-->
+</tr>
+<tr>
+<td>
+<!--BEGIN BOOK TITLE-->
+<p class="BookTitle">Palm OS&#174; Programmer's  API Reference</p>
+<p class="SubTitle">Palm OS&#174; 68K SDK </p>
+<!--END BOOK TITLE-->
+</td>
+</tr>
+<tr>
+<td><img name="index_x" src="images/shim.gif" width="615" height="5" border="0" alt=""></td>
+</tr>
+</table>
+</td>
+<!--END MASTHEAD-->
+</tr>
+</table>
+<img name="dashes" src="images/dashes.gif" width="744" height="3" border="0" alt=""></td>
+</tr>
+</table>
+<!-- END TOPNAV -->
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td valign="top" width="5"><img name="index_x" src="images/shim.gif" width="5" height="33" border="0" alt=""></td>
+
+<!--BEGIN SIDETOC-->
+<td valign="top" width="175">
+<div id="sidetoc" valign="bottom">
+<h1 class="SideTOC1-PartTab"><a href="PartI.html">Part I: User Interface</a> </h1>
+<h1 class="SideTOC1"><a href="Field.html">9  Fields</a></h1>
+
+   <h2 class="SideTOC2"><a href="Field.html#995860">
+   Field Data Structures</a></h2>
+
+      <h3 class="SideTOC3"><a href="Field.html#995863">
+      FieldAttrType</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996000">
+      FieldPtr</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996018">
+      FieldType</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996220">
+      LineInfoPtr</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996232">
+      LineInfoType</a></h3>
+
+   <h2 class="SideTOC2"><a href="Field.html#996283">
+   Field Resources</a></h2>
+
+   <h2 class="SideTOC2"><a href="Field.html#996286">
+   Field Functions</a></h2>
+
+      <h3 class="SideTOC3"><a href="Field.html#996290">
+      FldCalcFieldHeight</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996322">
+      FldCompactText</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996352">
+      FldCopy</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996382">
+      FldCut</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996416">
+      FldDelete</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996459">
+      FldDirty</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996492">
+      FldDrawField</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996520">
+      FldEraseField</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996554">
+      FldFreeMemory</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996579">
+      FldGetAttributes</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996607">
+      FldGetBounds</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996637">
+      FldGetFont</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996662">
+      FldGetInsPtPosition</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996687">
+      FldGetMaxChars</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996711">
+      FldGetNumberOfBlankLines</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996737">
+      FldGetScrollPosition</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996763">
+      FldGetScrollValues</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996816">
+      FldGetSelection</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996846">
+      FldGetTextAllocatedSize</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996869">
+      FldGetTextHandle</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996920">
+      FldGetTextHeight</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996945">
+      FldGetTextLength</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996963">
+      FldGetTextPtr</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#996996">
+      FldGetVisibleLines</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997022">
+      FldGrabFocus</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997059">
+      FldHandleEvent</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997123">
+      FldInsert</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997172">
+      FldMakeFullyVisible</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997208">
+      FldNewField</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997275">
+      FldPaste</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997317">
+      FldRecalculateField</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997370">
+      FldReleaseFocus</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997399">
+      FldScrollable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997425">
+      FldScrollField</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997479">
+      FldSendChangeNotification</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997500">
+      FldSendHeightChangeNotification</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997525">
+      FldSetAttributes</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997565">
+      FldSetBounds</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997604">
+      FldSetDirty</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997637">
+      FldSetFont</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997666">
+      FldSetInsertionPoint</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997702">
+      FldSetInsPtPosition</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997732">
+      FldSetMaxChars</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997760">
+      FldSetMaxVisibleLines</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997784">
+      FldSetScrollPosition</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997823">
+      FldSetSelection</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997853">
+      FldSetText</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997907">
+      FldSetTextAllocatedSize</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997937">
+      FldSetTextHandle</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#997995">
+      FldSetTextPtr</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#998039">
+      FldSetUsable</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#998079">
+      FldUndo</a></h3>
+
+      <h3 class="SideTOC3"><a href="Field.html#998111">
+      FldWordWrap</a></h3>
+
+</div>
+</td>
+
+<td width="5">&nbsp;&nbsp;</td>
+<td width="2" background="images/index_r8_c10.gif"><img src="images/shim.gif" width="2" height="75" border="0" alt=""></td>
+<td width="5">&nbsp;&nbsp;</td>
+
+<!--END SIDETOC-->
+
+<td valign="top">
+
+<!--BEGIN CONTENT-->
+<div id="content" valign="bottom">
+<p><a name="995837"> </a>This chapter provides the following information about field objects: </p>
+<ul type="disc">
+  <li><a name="995841"> </a><a href="Field.html#995860">Field Data Structures</a>
+  <li><a name="995845"> </a><a href="Field.html#996283">Field Resources</a>
+  <li><a name="995849"> </a><a href="Field.html#996286">Field Functions</a>
+</ul>
+
+<p><a name="995851"> </a>The header file <code>Field.h</code> declares the API that this chapter describes. For more information on fields, see the section <a href="../PalmOSCompanion/UserInterface.html#1009337">"Fields"</a> in the <i>Palm OS Programmer's Companion</i>, vol. I. </p>
+
+<h2 class="haH2">
+  <a name="995860"> </a>Field Data Structures <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h2>
+
+
+<h3 class="hbH3">
+  <a name="995863"> </a>FieldAttrType Struct <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="995865"> </a>Purpose 
+</h4>
+
+<p><a name="995867"> </a>The <code>FieldAttrType</code> bit field defines the visible characteristics of the field. The functions <a href="Field.html#996579"><code>FldGetAttributes()</code></a> and <a href="Field.html#997525"><code>FldSetAttributes()</code></a> return and set these values. There are other functions that retrieve or set individual attributes defined here. Those functions are noted below.</p>
+
+<div><hr>
+  <a name="1042860"> </a> <span class="warning">WARNING! </span> You must not call <a href="Field.html#997525"><code>FldSetAttributes()</code></a> to change any attributes that are noted as "for internal use only."
+<hr>
+</div>
+<h4>
+  <a name="995875"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="995876"></a>typedef struct {
+  UInt16 usable:1;
+  UInt16 visible:1;
+  UInt16 editable:1;
+  UInt16 singleLine:1;
+  UInt16 hasFocus:1;
+  UInt16 dynamicSize:1;
+  UInt16 insPtVisible:1;
+  UInt16 dirty:1;
+  UInt16 underlined:2;
+  UInt16 justification:2;
+  UInt16 autoShift:1;
+  UInt16 hasScrollBar:1;
+  UInt16 numeric:1;
+} FieldAttrType;
+</pre>
+<h4>
+  <a name="1045993"> </a>Fields 
+</h4>
+
+<dl>
+<dt><a name="995895"> </a><code><code>usable</code> </code></dt>
+<dd><a name="995897"> </a>If not set, the field object is not considered part of the current interface of the application, and it doesn't appear on screen. The function <a href="Field.html#998039"><code>FldSetUsable()</code></a> sets this value, but it is better to use <a href="Form.html#999211"><code>FrmShowObject()</code></a>.</dd>
+
+<dt><a name="995905"> </a><code><code>visible</code> </code></dt>
+<dd><a name="995907"> </a>Set or cleared internally when the field object is drawn with <a href="Field.html#996492"><code>FldDrawField()</code></a><code> </code>or <a href="Form.html#999211"><code>FrmShowObject()</code></a>, and erased with <a href="Field.html#996520"><code>FldEraseField()</code></a> or <a href="Form.html#998311"><code>FrmHideObject()</code></a>. </dd>
+
+<dt><a name="995921"> </a><code><code>editable</code> </code></dt>
+<dd><a name="995923"> </a>If not set, the field object doesn't accept text input or editing commands and the insertion point cannot be positioned with the pen. The text can still be selected and copied.</dd>
+
+<dt><a name="995925"> </a><code><code>singleLine</code> </code></dt>
+<dd><a name="995927"> </a>(This flag is for internal use only) If set, the field is a single line of text high and the text does not wrap when it exceeds the width of the field. If not set, the text wraps to fill multiple lines. You cannot change the field type from single-line to multi-line, or vice versa, by changing the value of this flag.</dd>
+
+<dt><a name="995929"> </a><code><code>hasFocus</code> </code></dt>
+<dd><a name="995931"> </a>Set internally when the field has the current focus. The blinking insertion point appears in the field that has the current focus. Use the function <a href="Form.html#998943"><code>FrmSetFocus()</code></a> and <a href="Field.html#997370"><code>FldReleaseFocus()</code></a> to set this value. Do <i>not</i> try to set this attribute with <code>FldSetAttributes</code>. </dd>
+
+<dt><a name="995939"> </a><code><code>dynamicSize</code> </code></dt>
+<dd><a name="995941"> </a>If set, a <code>fldHeightChangedEvent</code> is generated whenever the number of lines needs to increase or decrease. Your application needs to respond to this event by adjusting the size of the field's bounding box. If not set, the text wraps to fill more (or less) lines as required, but the event is not generated. <i>Note that this bit does not cause the field to change size automatically</i>; your application must respond to the <code>fldHeightChangedEvent</code> and resize the field itself.</dd>
+
+<dd><a name="995943"> </a>Set this attribute to <code>false</code> if the Single Line attribute is set.</dd>
+
+<dt><a name="995945"> </a><code><code>insPtVisible</code> </code></dt>
+<dd><a name="995947"> </a>If set, the insertion point is scrolled into view. This attribute is for internal use only..</dd>
+
+<dt><a name="995949"> </a><code><code>dirty</code> </code></dt>
+<dd><a name="995951"> </a>If set, the user has modified the field. The functions <a href="Field.html#996459"><code>FldDirty()</code></a> and <a href="Field.html#997604"><code>FldSetDirty()</code></a> retrieve this field's value. Do <i>not</i> try to set this attribute with <code>FldSetAttributes</code>. </dd>
+
+<dt><a name="995959"> </a><code><code>underlined</code> </code></dt>
+<dd><a name="995961"> </a>If set each line of the field, including blank lines, is underlined. Possible values are defined by the <code>UnderlineModeType</code> defined in <code>Window.h</code>:</dd>
+
+<dd><a name="995966"> </a><code>noUnderline</code></dd>
+
+<dd><a name="1046047"> </a><code>grayUnderline</code></dd>
+
+<dd><a name="1046056"> </a><code>solidUnderline</code></dd>
+
+<dd><a name="1046057"> </a><code>colorUnderline</code></dd>
+
+<dd><a name="995970"> </a>Editable text fields generally use <code>grayUnderline</code> as the value. </dd>
+
+<dd><a name="995974"> </a>The <code>solidUnderline</code> value is only valid for Palm OS 3.1 and higher. </dd>
+
+<dd><a name="995978"> </a>The <code>colorUnderline</code> value is only valid for Palm OS 3.5 and higher.</dd>
+
+<dt><a name="995980"> </a><code><code>justification</code> </code></dt>
+<dd><a name="995982"> </a>Specifies the text alignment. Possible values are <code>leftAlign</code> and <code>rightAlign</code>. (left or right justification only; <code>centerAlign</code> justification is not supported).</dd>
+
+<dt><a name="995984"> </a><code><code>autoShift</code> </code></dt>
+<dd><a name="995986"> </a>If set, auto-shift rules are applied.</dd>
+
+<dt><a name="995988"> </a><code><code>hasScrollBar</code> </code></dt>
+<dd><a name="995990"> </a>If set, the field has a scrollbar. The system sends more frequent <a href="EventRef.html#996458"><code>fldChangedEvent</code></a>s so the application can adjust the height appropriately.</dd>
+
+<dt><a name="995995"> </a><code><code>numeric</code> </code></dt>
+<dd><a name="995997"> </a>If set, only the characters 0 through 9 and associated separators are allowed to be entered in the field. The associated separators are the thousands separator and the decimal character. The values of these two characters depend on the settings in the Formats prefs panel.</dd>
+
+</dl>
+
+<h3 class="hbH3">
+  <a name="996000"> </a>FieldPtr Typedef <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996002"> </a>Purpose 
+</h4>
+
+<p><a name="996007"> </a>The <code>FieldPtr</code> type defines a pointer to a <a href="Field.html#996018"><code>FieldType</code></a> structure. </p>
+<h4>
+  <a name="996008"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996009"></a>typedef FieldType *FieldPtr;
+</pre>
+
+<p><a name="996010"> </a>You pass the <code>FieldPtr</code> as an argument to all field functions. You can obtain the <code>FieldPtr</code> using the function <a href="Form.html#997879"><code>FrmGetObjectPtr()</code></a> in this way:</p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+fldPtr = FrmGetObjectPtr(frm, 
+  FrmGetObjectIndex(frm, fldID));<a name="996014"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+
+<p><a name="996015"> </a>where <code>fldID</code> is the resource ID assigned when you created the field. </p>
+
+<h3 class="hbH3">
+  <a name="996018"> </a>FieldType Struct <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996020"> </a>Purpose 
+</h4>
+
+<p><a name="996023"> </a>The <code>FieldType</code> structure represents a field.</p>
+
+<div><hr>
+  <a name="996024"> </a> <span class="warning">WARNING! </span> PalmSource, Inc. does not support or provide backward compatibility for the <code>FieldType</code> structure. Never access its structure members directly, or your code may break in future versions. Use the information below for debugging purposes only.
+<hr>
+</div>
+<h4>
+  <a name="996025"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996026"></a>typedef struct {
+  UInt16 id;
+  RectangleType rect;
+  FieldAttrType attr;
+  Char *text;
+  MemHandle textHandle;
+  LineInfoPtr lines;
+  UInt16 textLen;
+  UInt16 textBlockSize;
+  UInt16 maxChars;
+  UInt16 selFirstPos;
+  UInt16 selLastPos;
+  UInt16 insPtXPos;
+  UInt16 insPtYPos;
+  FontID fontID;
+  UInt8 reserved;
+} FieldType;
+</pre>
+
+<p><a name="996043"> </a>Your code should treat the <code>FieldType</code> structure as opaque. Use the functions specified in the descriptions below to retrieve and set each value. Do not attempt to change structure member values directly. </p>
+<h4>
+  <a name="1048328"> </a>Fields 
+</h4>
+
+<dl>
+<dt><a name="996047"> </a><code>id </code></dt>
+<dd><a name="996049"> </a>ID value you specified when you created the field resource. This ID value is included as part of the event data of <a href="EventRef.html#996489"><code>fldEnterEvent</code></a>.</dd>
+
+<dt><a name="996054"> </a><code>rect </code></dt>
+<dd><a name="996056"> </a>Position and size of the field object. The functions <a href="Field.html#996607"><code>FldGetBounds()</code></a>, <a href="Form.html#997703"><code>FrmGetObjectBounds()</code></a>, <a href="Field.html#997565"><code>FldSetBounds()</code></a>, and <a href="Form.html#999108"><code>FrmSetObjectBounds()</code></a><code> </code>retrieve and set this value. </dd>
+
+<dt><a name="996070"> </a><code>attr </code></dt>
+<dd><a name="996075"> </a>Field object attributes. (See <a href="Field.html#995863"><code>FieldAttrType</code></a>.)</dd>
+
+<dt><a name="996077"> </a><code>text </code></dt>
+<dd><a name="996079"> </a>Pointer to the null-terminated string that is displayed by the field object. The functions <a href="Field.html#996963"><code>FldGetTextPtr()</code></a> and <a href="Field.html#997995"><code>FldSetTextPtr()</code></a> retrieve and set this value (see below). </dd>
+
+<dd><a name="996087"> </a>Never set the contents of this string directly; for example, do not pass this pointer as the destination value to a function such as <code>StrCopy</code>. </dd>
+
+<dt><a name="996089"> </a><code><code>textHandle </code></code></dt>
+<dd><a name="996091"> </a>Handle to the stored text or to a database record containing the stored text. The functions <a href="Field.html#996869"><code>FldGetTextHandle()</code></a> and <a href="Field.html#997937"><code>FldSetTextHandle()</code></a> retrieve and set this value. </dd>
+
+<dd><a name="996101"> </a>If <code>textHandle</code> is defined, the field calculates the <code>text</code> pointer when it locks the handle. In general, you should only use <a href="Field.html#996963"><code>FldGetTextPtr()</code></a> and <a href="Field.html#997995"><code>FldSetTextPtr()</code></a> on text fields that aren't editable. On editable text fields, use <a href="Field.html#996869"><code>FldGetTextHandle()</code></a> and <a href="Field.html#997937"><code>FldSetTextHandle()</code></a>.</dd>
+
+<dd><a name="996117"> </a>Also note that editable text fields allocate the text handle as necessary. If a user starts typing in a field that doesn't have a text handle allocated, the field will allocate one. The field also resizes the text's memory block as necessary when the user adds more text.</dd>
+
+<dt><a name="996119"> </a><code>lines </code></dt>
+<dd><a name="996121"> </a>Pointer to an array of <code>LineInfoType</code> structures. There is one entry in this array for each visible line of the text. (See <a href="Field.html#996232"><code>LineInfoType</code></a>.) The field code maintains this array internally; you should never change the <code>lines</code> array yourself. </dd>
+
+<dd><a name="996126"> </a>Note that this value is <code>NULL</code> for single line fields, and for fields that do not have an allocated text handle.</dd>
+
+<dt><a name="996128"> </a><code>textLen </code></dt>
+<dd><a name="996130"> </a>Length in bytes of the string currently displayed by the field object; the null terminator is excluded. You can retrieve this value with <a href="Field.html#996945"><code>FldGetTextLength()</code></a>. </dd>
+
+<dt><a name="996135"> </a><code><code>textBlockSize</code></code></dt>
+<dd><a name="996137"> </a>Allocated size of the memory block that holds the field object's text string. You can retrieve this value with <a href="Field.html#996846"><code>FldGetTextAllocatedSize()</code></a>. </dd>
+
+<dd><a name="996144"> </a>Fields allocate memory for the field text as needed, several bytes at a time. </dd>
+
+<dd><a name="996148"> </a>Note that <code>textBlockSize</code> may be different from the size of the chunk pointed to by <code>textHandle</code>. The <code>textHandle</code> may point to a database record that contains, in part, the text displayed by the field. If you called <a href="MemoryManager.html#1016582"><code>MemHandleSize()</code></a> on such a <code>textHandle</code>, the number returned may be greater than <code>textBlockSize</code>. </dd>
+
+<dt><a name="996153"> </a><code>maxChars </code></dt>
+<dd><a name="996155"> </a>Maximum number of bytes the field object accepts. The functions <a href="Field.html#996687"><code>FldGetMaxChars()</code></a> and <a href="Field.html#997732"><code>FldSetMaxChars()</code></a> retrieve and set this value.</dd>
+
+<dd><a name="996165"> </a>Note the difference between <code>textLen</code>, <code>textBlockSize</code>, and <code>maxChars</code>. <code>textLen</code> is the number of bytes of character data that <code>text</code> actually holds. <code>textBlockSize</code> is the amount of memory currently allocated for the text (which must be greater than or equal to <code>textLen</code>), and <code>maxChars</code> sets the maximum value that <code>textBlockSize</code> and <code>textLen</code> can expand to. </dd>
+
+<dd><a name="996169"> </a>For example, if you've created a text field for users to enter their first names in, you might specify that the maximum length of this field is 20 bytes. If a user enters "John" in this field, <code>textLen</code> is 4, <code>textBlockSize</code> is 16, and <code>maxChars</code> is 20. </dd>
+
+<dt><a name="996171"> </a><code><code>selFirstPos</code> </code></dt>
+<dd><a name="996173"> </a>Starting character offset in bytes of the current selection. Use <a href="Field.html#996816"><code>FldGetSelection()</code></a> and <a href="Field.html#997823"><code>FldSetSelection()</code></a> to retrieve and set this value and the <code>selLastPos</code> value. </dd>
+
+<dt><a name="996181"> </a><code>selLastPos </code></dt>
+<dd><a name="996183"> </a>Ending character offset in bytes of the current selection. When <code>selFirstPos</code> equals <code>selLastPos</code>, there is no selection.</dd>
+
+<dt><a name="996185"> </a><code><code>insPtXPos</code> </code></dt>
+<dd><a name="996187"> </a>Horizontal location of the insertion point, given as the offset in bytes into the line indicated by <code>insPtYPos</code>. The functions <a href="Field.html#996662"><code>FldGetInsPtPosition()</code></a> and <a href="Field.html#997702"><code>FldSetInsPtPosition()</code></a> retrieve and set a byte offset calculated from this value. If the insertion point isn't visible&#8212;if it's on a line that's either above or below the set of visible lines&#8212;<code>insPtXPos</code> is the absolute byte offset of the insertion point.</dd>
+
+<dt><a name="996195"> </a><code><code>insPtYPos</code> </code></dt>
+<dd><a name="996197"> </a>Vertical location of the insertion point, given as the display line where the insertion point is positioned. The first display line is zero. The first display line may be different from the first line of text in the field if the field has been scrolled. The functions <a href="Field.html#996662"><code>FldGetInsPtPosition()</code></a> and <a href="Field.html#997702"><code>FldSetInsPtPosition()</code></a> retrieve and set a byte offset calculated from this value. If the insertion point isn't visible&#8212;if it's on a line that's either above or below the set of visible lines&#8212;<code>insPtYPos</code> is set to <code>0x8000</code>.</dd>
+
+<dt><a name="996205"> </a><code><code>fontID </code></code></dt>
+<dd><a name="996207"> </a>Font ID for the field. See <code>Font.h</code> for more information. The functions <a href="Field.html#996637"><code>FldGetFont()</code></a> and <a href="Field.html#997637"><code>FldSetFont()</code></a> retrieve and set this value. </dd>
+
+<dt><a name="996215"> </a><code><code>reserved</code></code></dt>
+<dd><a name="996217"> </a>Reserved for future use.</dd>
+
+</dl>
+
+<h3 class="hbH3">
+  <a name="996220"> </a>LineInfoPtr Typedef <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996222"> </a>Purpose 
+</h4>
+
+<p><a name="996227"> </a>The <code>LineInfoPtr</code> type defines a pointer to the <a href="Field.html#996232"><code>LineInfoType</code></a>.</p>
+<h4>
+  <a name="996228"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996229"></a>typedef LineInfoType *LineInfoPtr;
+</pre>
+
+<h3 class="hbH3">
+  <a name="996232"> </a>LineInfoType Struct <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996234"> </a>Purpose 
+</h4>
+
+<p><a name="996236"> </a>The <code>LineInfoType</code> structure defines an element in the field's <code>lines</code> array. The <code>lines</code> array contains the field's word wrapping information. There is one element in the array per visible line in the field, including visible lines that contain no text. The field code maintains this array internally; you should never change the <code>lines</code> array yourself. </p>
+
+<p><a name="996240"> </a>The functions <a href="Field.html#996290"><code>FldCalcFieldHeight()</code></a>, <a href="Field.html#996996"><code>FldGetVisibleLines()</code></a>, <a href="Field.html#997317"><code>FldRecalculateField()</code></a>, and <a href="Field.html#996711"><code>FldGetNumberOfBlankLines()</code></a> retrieve or set information in this structure. The scrolling functions <a href="Field.html#996737"><code>FldGetScrollPosition()</code></a>, <a href="Field.html#996763"><code>FldGetScrollValues()</code></a>, <a href="Field.html#997425"><code>FldScrollField()</code></a>, and <a href="Field.html#997784"><code>FldSetScrollPosition()</code></a> also retrieve or set information in this structure. </p>
+
+<div><hr>
+  <a name="996262"> </a> <span class="warning">WARNING! </span> PalmSource, Inc. does not support or provide backward compatibility for the <code>LineInfoType</code> structure. Never access its structure members directly, or your code may break in future versions. Use the information below for debugging purposes only.
+<hr>
+</div>
+<h4>
+  <a name="996263"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996264"></a>typedef struct {
+  UInt16 start;
+  UInt16 length;
+} LineInfoType;
+</pre>
+<h4>
+  <a name="1052011"> </a>Fields 
+</h4>
+
+<dl>
+<dt><a name="996271"> </a><code><code>start</code> </code></dt>
+<dd><a name="996276"> </a>The byte offset into the <a href="Field.html#996018"><code>FieldType</code></a>'s <code>text</code> field of the first character displayed by this line. If the line is blank, <code>start</code> is equal to <code>textLen</code> and <code>length</code> is 0. </dd>
+
+<dt><a name="996278"> </a><code><code>length</code> </code></dt>
+<dd><a name="996280"> </a>The length in bytes of the portion of the string displayed on this line. If the line is blank, the length is 0. </dd>
+
+</dl>
+
+<h2 class="haH2">
+  <a name="996283"> </a>Field Resources <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h2>
+
+
+<p><a name="996284"> </a>The Field Resource (tFLD) represents a field on screen. See <i>Palm OS User Interface Guidelines</i> for more information.</p>
+
+<h2 class="haH2">
+  <a name="996286"> </a>Field Functions <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h2>
+
+
+<h3 class="hbH3">
+  <a name="996290"> </a>FldCalcFieldHeight Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996292"> </a>Purpose 
+</h4>
+
+<p><a name="996293"> </a>Determine the height of a field for a string.</p>
+<h4>
+  <a name="996294"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996295"> </a></code><h4>
+  <a name="996296"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996297"></a>UInt16 FldCalcFieldHeight (
+   const Char *chars,
+   UInt16 maxWidth
+)
+</pre>
+<h4>
+  <a name="996298"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996299"> </a><code>&rarr;  <i><code>chars</code></i></code></dt>
+<dd><a name="996300"> </a>Pointer to a null-terminated string.</dd>
+
+<dt><a name="996301"> </a><code>&rarr;  <i><code>maxWidth</code></i></code></dt>
+<dd><a name="996302"> </a>Maximum line width in pixels. </dd>
+
+</dl>
+<h4>
+  <a name="996303"> </a>Returns 
+</h4>
+
+<p><a name="996304"> </a>Returns the total number of lines needed to draw the string passed.</p>
+<h4>
+  <a name="996305"> </a>Comments 
+</h4>
+
+<p><a name="996306"> </a>The width of a field is contained in the <code>rect</code> member of the <a href="Field.html#996018"><code>FieldType</code></a> structure. You can retrieve this value in the following way: </p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+FrmGetObjectBounds(frm, <a name="996310"> </a>
+  FrmGetObjectIndex(frm, fldID),<a name="996311"> </a>
+  &amp;myRect);<a name="996312"> </a>
+fieldWidth = myRect.extent.x;<a name="996313"> </a>
+FldCalcFieldHeight(myString, fieldWidth);<a name="996314"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+<h4>
+  <a name="996315"> </a>See Also 
+</h4>
+
+<p><a name="996319"> </a><a href="Field.html#998111"><code>FldWordWrap()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996322"> </a>FldCompactText Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996324"> </a>Purpose 
+</h4>
+
+<p><a name="996325"> </a>Compact the memory block that contains the field's text to release any unused space.</p>
+<h4>
+  <a name="996326"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996327"> </a></code><h4>
+  <a name="996328"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996330"></a>void FldCompactText (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996331"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996332"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996336"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996337"> </a>Returns 
+</h4>
+
+<p><a name="996338"> </a>Returns nothing.</p>
+<h4>
+  <a name="996339"> </a>Comments 
+</h4>
+
+<p><a name="996340"> </a>As characters are added to the field's text, the block that contains the text is grown. The block is expanded several bytes at a time so that it doesn't have to expand each time a character is added. This expansion may result in some unused space in the text block.</p>
+
+<p><a name="996341"> </a>Applications should call this function on field objects that edit data records in place before the field is unlocked, or at any other time when a compact field is desirable; for example, before writing to the storage heap. </p>
+<h4>
+  <a name="996342"> </a>See Also 
+</h4>
+
+<p><a name="996348"> </a><a href="Field.html#996846"><code>FldGetTextAllocatedSize()</code></a>, <a href="Field.html#997907"><code>FldSetTextAllocatedSize()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996352"> </a>FldCopy Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996354"> </a>Purpose 
+</h4>
+
+<p><a name="996356"> </a>Copy the current selection to the text clipboard.</p>
+<h4>
+  <a name="996357"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996358"> </a></code><h4>
+  <a name="996359"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996360"></a>void FldCopy (
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996361"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996362"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996366"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996367"> </a>Returns 
+</h4>
+
+<p><a name="996368"> </a>Returns nothing.</p>
+<h4>
+  <a name="996369"> </a>Comments 
+</h4>
+
+<p><a name="996370"> </a>This function leaves the current selection highlighted. </p>
+
+<p><a name="996371"> </a>This function replaces anything previously in the text clipboard if there is text to copy. If no text is selected, the function beeps and the clipboard remains intact.</p>
+<h4>
+  <a name="996372"> </a>See Also 
+</h4>
+
+<p><a name="996379"> </a><a href="Field.html#996382"><code>FldCut()</code></a>, <a href="Field.html#997275"><code>FldPaste()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996382"> </a>FldCut Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996384"> </a>Purpose 
+</h4>
+
+<p><a name="996385"> </a>Copy the current selection to the text clipboard, delete the selection from the field, and redraw the field.</p>
+<h4>
+  <a name="996386"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996387"> </a></code><h4>
+  <a name="996388"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996389"></a>void FldCut (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996390"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996391"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996395"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996396"> </a>Returns 
+</h4>
+
+<p><a name="996397"> </a>Returns nothing.</p>
+<h4>
+  <a name="996398"> </a>Comments 
+</h4>
+
+<p><a name="996399"> </a>If text is selected, the text is removed from the field, the field's dirty attribute is set, and anything previously in the text clipboard is replaced by the selected text. </p>
+
+<p><a name="996402"> </a>If there is no selection or if the field is not editable, this function beeps.</p>
+<h4>
+  <a name="996403"> </a>See Also 
+</h4>
+
+<p><a name="996413"> </a><a href="Field.html#996352"><code>FldCopy()</code></a>, <a href="Field.html#997275"><code>FldPaste()</code></a>, <a href="Field.html#998079"><code>FldUndo()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996416"> </a>FldDelete Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996418"> </a>Purpose 
+</h4>
+
+<p><a name="996419"> </a>Delete the specified range of characters from the field and redraw the field.</p>
+<h4>
+  <a name="996420"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996421"> </a></code><h4>
+  <a name="996422"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996423"></a>void FldDelete (
+   FieldType *fldP,
+   UInt16 start,
+   UInt16 end
+)
+</pre>
+<h4>
+  <a name="996424"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996425"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996429"> </a>Pointer to the field object (<a href="Field.html#996018"><code>FieldType</code></a> structure) to delete from.</dd>
+
+<dt><a name="996430"> </a><code>&rarr;  <i><code>start</code></i></code></dt>
+<dd><a name="996431"> </a>The beginning of the range of characters to delete given as a valid byte offset into the field's <code>text</code> string.</dd>
+
+<dt><a name="996432"> </a><code>&rarr;  <i><code>end</code></i></code></dt>
+<dd><a name="996433"> </a>The end of the range of characters to delete given as a valid byte offset into the field's <code>text</code> string. On systems that support multi-byte characters, this position must be an inter-character boundary. That is, it must not point to a middle byte of a multi-byte character. </dd>
+
+<dd><a name="1045091"> </a>If you pass a value that is greater than the number of bytes in the field, all characters in the field are deleted. </dd>
+
+</dl>
+<h4>
+  <a name="996434"> </a>Returns 
+</h4>
+
+<p><a name="996435"> </a>Returns nothing.</p>
+<h4>
+  <a name="996436"> </a>Comments 
+</h4>
+
+<p><a name="996437"> </a>This function deletes all characters from the starting offset up to the ending offset and sets the field's dirty attribute. It does not delete the character at the ending offset. </p>
+
+<p><a name="996438"> </a>If <code>start</code> or <code>end</code> point to an intra-character boundary, <code>FldDelete</code> attempts to move the offset backward, toward the beginning of the text, until the offset points to an inter-character boundary (i.e., the start of a character). </p>
+
+<p><a name="996442"> </a><code>FldDelete</code> posts a <a href="EventRef.html#996458"><code>fldChangedEvent</code></a> to the event queue. If you call this function repeatedly, you may overflow the event queue with <code>fldChangedEvents</code>. An alternative is to remove the text handle from the field, change the text, and then set the field's handle again. See <a href="Field.html#996869"><code>FldGetTextHandle()</code></a> for a code example. </p>
+<h4>
+  <a name="996446"> </a>See Also 
+</h4>
+
+<p><a name="996456"> </a><a href="Field.html#997123"><code>FldInsert()</code></a>, <a href="Field.html#996520"><code>FldEraseField()</code></a>, <a href="TextMgr.html#1121040"><code>TxtCharBounds()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996459"> </a>FldDirty Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996461"> </a>Purpose 
+</h4>
+
+<p><a name="996463"> </a>Return <code>true</code> if the field has been modified since the text value was set.</p>
+<h4>
+  <a name="996464"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996465"> </a></code><h4>
+  <a name="996466"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996467"></a>Boolean FldDirty (
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996468"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996469"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996473"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996474"> </a>Returns 
+</h4>
+
+<p><a name="996475"> </a>Returns <code>true</code> if the field has been modified either by the user or through calls to certain functions such as <a href="Field.html#997123"><code>FldInsert()</code></a> and <a href="Field.html#996416"><code>FldDelete()</code></a>, <code>false</code> if the field has not been modified.</p>
+<h4>
+  <a name="996482"> </a>See Also 
+</h4>
+
+<p><a name="996489"> </a><a href="Field.html#997604"><code>FldSetDirty()</code></a>, <a href="Field.html#995863"><code>FieldAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996492"> </a>FldDrawField Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996494"> </a>Purpose 
+</h4>
+
+<p><a name="996495"> </a>Draw the text of the field. </p>
+<h4>
+  <a name="996496"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996497"> </a></code><h4>
+  <a name="996498"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996499"></a>void FldDrawField (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996500"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996501"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996505"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996506"> </a>Returns 
+</h4>
+
+<p><a name="996507"> </a>Returns nothing.</p>
+<h4>
+  <a name="996508"> </a>Comments 
+</h4>
+
+<p><a name="996509"> </a>The field's <code>usable</code> attribute must be <code>true</code> or the field won't be drawn.</p>
+
+<p><a name="996510"> </a>This function doesn't erase the area behind the field before drawing.</p>
+
+<p><a name="996512"> </a>If the field has the focus, the blinking insertion point is displayed in the field.</p>
+<h4>
+  <a name="996513"> </a>See Also 
+</h4>
+
+<p><a name="996517"> </a><a href="Field.html#996520"><code>FldEraseField()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996520"> </a>FldEraseField Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996522"> </a>Purpose 
+</h4>
+
+<p><a name="996523"> </a>Erase the text of a field and turn off the insertion point if it's in the field.</p>
+<h4>
+  <a name="996524"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996525"> </a></code><h4>
+  <a name="996526"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996527"></a>void FldEraseField (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996528"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996529"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996533"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996534"> </a>Returns 
+</h4>
+
+<p><a name="996535"> </a>Returns nothing.</p>
+<h4>
+  <a name="996536"> </a>Comments 
+</h4>
+
+<p><a name="996537"> </a>You rarely need to call this function directly. Instead, use <a href="Form.html#998311"><code>FrmHideObject()</code></a>, which calls <code>FldEraseField</code> for you. </p>
+
+<p><a name="996541"> </a>This function visibly erases the field from the display, but it doesn't modify the contents of the field or free the memory associated with it.</p>
+
+<p><a name="996542"> </a>If the field has the focus, the blinking insertion point is turned off.</p>
+
+<p><a name="996543"> </a>This function sets the <code>visible</code> attribute to <code>false</code>. (See <a href="Field.html#995863"><code>FieldAttrType</code></a>.)</p>
+<h4>
+  <a name="996547"> </a>See Also 
+</h4>
+
+<p><a name="996551"> </a><a href="Field.html#996492"><code>FldDrawField()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996554"> </a>FldFreeMemory Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996556"> </a>Purpose 
+</h4>
+
+<p><a name="996558"> </a>Release the handle-based memory allocated to the field's text and the associated word-wrapping information.</p>
+<h4>
+  <a name="996559"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996560"> </a></code><h4>
+  <a name="996561"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996562"></a>void FldFreeMemory (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996563"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996564"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996568"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996569"> </a>Returns 
+</h4>
+
+<p><a name="996570"> </a>Returns nothing. May raise a fatal error message if the text associated with the field is actually a record in a database.</p>
+<h4>
+  <a name="996571"> </a>Comments 
+</h4>
+
+<p><a name="996572"> </a>This function releases </p>
+<ul type="disc">
+  <li><a name="996573"> </a>The memory allocated to the text of a field&#8212;the memory block that the <code>textHandle</code> member of the <code>FieldType</code> data structure points to.
+   <p><a name="996574"> </a>If the field's <code>textHandle</code> is <code>NULL</code> but there is a <code>text</code> string associated with that field (which is often the case with noneditable text fields), the text string is not freed. </p>
+  <li><a name="996575"> </a>The memory allocated to hold the word-wrapping information&#8212;the memory block that the <code>lines</code> member of the <code>FieldType</code> data structure points to.
+</ul>
+
+<p><a name="996576"> </a>This function doesn't affect the display of the field. Fields allocate memory for the text string as needed, so it is not an error to call this function while the field is still displayed. That is, if <code>text</code> is <code>NULL</code> and the user starts typing in the field, the field simply allocates memory for text and continues. </p>
+
+<h3 class="hbH3">
+  <a name="996579"> </a>FldGetAttributes Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996581"> </a>Purpose 
+</h4>
+
+<p><a name="996582"> </a>Return the attributes of a field.</p>
+<h4>
+  <a name="996583"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996584"> </a></code><h4>
+  <a name="996585"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996586"></a>void FldGetAttributes (
+   const FieldType *fldP,
+   FieldAttrPtr attrP
+)
+</pre>
+<h4>
+  <a name="996587"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996588"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996592"> </a>Pointer to a <a href="Field.html#996018"><code>FieldType</code></a> structure.</dd>
+
+<dt><a name="996593"> </a><code>&larr;  <i><code>attrP</code></i></code></dt>
+<dd><a name="996597"> </a>Pointer to the <a href="Field.html#995863"><code>FieldAttrType</code></a> structure.</dd>
+
+</dl>
+<h4>
+  <a name="996598"> </a>Returns 
+</h4>
+
+<p><a name="996599"> </a>Returns the field's attributes in the <code>attrP</code> parameter.</p>
+<h4>
+  <a name="996600"> </a>See Also 
+</h4>
+
+<p><a name="996604"> </a><a href="Field.html#997525"><code>FldSetAttributes()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996607"> </a>FldGetBounds Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996609"> </a>Purpose 
+</h4>
+
+<p><a name="996610"> </a>Return the current bounds of a field.</p>
+<h4>
+  <a name="996611"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996612"> </a></code><h4>
+  <a name="996613"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996614"></a>void FldGetBounds (
+   const FieldType *fldP,
+   RectanglePtr rect
+)
+</pre>
+<h4>
+  <a name="996615"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996616"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996620"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="996621"> </a><code>&larr;  <i><code>rect</code></i></code></dt>
+<dd><a name="996622"> </a>Pointer to a <code>RectangleType</code> structure.</dd>
+
+</dl>
+<h4>
+  <a name="996623"> </a>Returns 
+</h4>
+
+<p><a name="996624"> </a>Returns nothing. Stores the field's bounds in the <code>RectangleType</code> structure reference by <code>rect</code>.</p>
+<h4>
+  <a name="996625"> </a>Comments 
+</h4>
+
+<p><a name="996626"> </a>Returns the <code>rect</code> field of the <code>FieldType</code> structure.</p>
+<h4>
+  <a name="996627"> </a>See Also 
+</h4>
+
+<p><a name="996634"> </a><a href="Field.html#997565"><code>FldSetBounds()</code></a>, <a href="Form.html#997703"><code>FrmGetObjectBounds()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996637"> </a>FldGetFont Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996639"> </a>Purpose 
+</h4>
+
+<p><a name="996641"> </a>Return the ID of the font used to draw the text of a field.</p>
+<h4>
+  <a name="996642"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996643"> </a></code><h4>
+  <a name="996644"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996645"></a>FontID FldGetFont (
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996646"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996647"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996651"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996652"> </a>Returns 
+</h4>
+
+<p><a name="996653"> </a>Returns the ID of the font.</p>
+<h4>
+  <a name="996654"> </a>See Also 
+</h4>
+
+<p><a name="996658"> </a><a href="Field.html#997637"><code>FldSetFont()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996662"> </a>FldGetInsPtPosition Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996664"> </a>Purpose 
+</h4>
+
+<p><a name="996665"> </a>Return the insertion point position within the string.</p>
+<h4>
+  <a name="996666"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996667"> </a></code><h4>
+  <a name="996668"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996669"></a>UInt16 FldGetInsPtPosition(
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996670"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996671"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996675"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996676"> </a>Returns 
+</h4>
+
+<p><a name="996677"> </a>Returns the byte offset of the insertion point.</p>
+<h4>
+  <a name="996678"> </a>Comments 
+</h4>
+
+<p><a name="996679"> </a>The insertion point is to the left of the byte offset that this function returns. That is, if this function returns 0, the insertion point is to the left of the first character in the string. In multiline fields, line feeds are counted as a single character in the string, and the byte offset after the line feed character is the beginning of the next line. </p>
+<h4>
+  <a name="996680"> </a>See Also 
+</h4>
+
+<p><a name="996684"> </a><a href="Field.html#997702"><code>FldSetInsPtPosition()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996687"> </a>FldGetMaxChars Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996689"> </a>Purpose 
+</h4>
+
+<p><a name="996690"> </a>Return the maximum number of bytes the field accepts.</p>
+<h4>
+  <a name="996691"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996692"> </a></code><h4>
+  <a name="996693"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996694"></a>UInt16 FldGetMaxChars (
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996695"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996696"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996700"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996701"> </a>Returns 
+</h4>
+
+<p><a name="996702"> </a>Returns the maximum length in bytes of characters the user is allowed to enter. This is the <code>maxChars</code> field in <code>FieldType</code>. </p>
+<h4>
+  <a name="996703"> </a>See Also 
+</h4>
+
+<p><a name="996707"> </a><a href="Field.html#997732"><code>FldSetMaxChars()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996711"> </a>FldGetNumberOfBlankLines Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996713"> </a>Purpose 
+</h4>
+
+<p><a name="996714"> </a>Return the number of blank lines that are displayed at the bottom of a field. </p>
+<h4>
+  <a name="996715"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996716"> </a></code><h4>
+  <a name="996717"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996718"></a>UInt16 FldGetNumberOfBlankLines(
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996719"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996720"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996724"> </a>Pointer to a <a href="Field.html#996018"><code>FieldType</code></a> structure.</dd>
+
+</dl>
+<h4>
+  <a name="996725"> </a>Returns 
+</h4>
+
+<p><a name="996726"> </a>Returns the number of blank lines visible.</p>
+<h4>
+  <a name="996727"> </a>Comments 
+</h4>
+
+<p><a name="996728"> </a>This routine is useful for updating a scroll bar after characters have been removed from the text in a field. See the <code>NoteViewScroll</code> function in the Address sample application for an example. </p>
+<h4>
+  <a name="996729"> </a>Compatibility 
+</h4>
+
+<p><a name="996733"> </a>Implemented only if <a href="CompatibilityApdx.html#992789">2.0 New Feature Set</a> is present.</p>
+
+<h3 class="hbH3">
+  <a name="996737"> </a>FldGetScrollPosition Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996739"> </a>Purpose 
+</h4>
+
+<p><a name="996740"> </a>Return the offset of the first character in the first visible line of a field.</p>
+<h4>
+  <a name="996741"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996742"> </a></code><h4>
+  <a name="996743"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996744"></a>UInt16 FldGetScrollPosition(
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996745"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996746"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996750"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996751"> </a>Returns 
+</h4>
+
+<p><a name="996752"> </a>Returns the offset of the first visible character.</p>
+<h4>
+  <a name="996753"> </a>See Also 
+</h4>
+
+<p><a name="996760"> </a><a href="Field.html#997784"><code>FldSetScrollPosition()</code></a>, <a href="Field.html#996232"><code>LineInfoType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996763"> </a>FldGetScrollValues Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996765"> </a>Purpose 
+</h4>
+
+<p><a name="996766"> </a>Return the values necessary to update a scroll bar.</p>
+<h4>
+  <a name="996767"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996768"> </a></code><h4>
+  <a name="996769"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996770"></a>void FldGetScrollValues (
+   const FieldType *fldP,
+   UInt16 *scrollPosP,
+   UInt16 *textHeightP,
+   UInt16 *fieldHeightP
+)
+</pre>
+<h4>
+  <a name="996771"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996772"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996776"> </a>Pointer to a <a href="Field.html#996018"><code>FieldType</code></a> structure. </dd>
+
+<dt><a name="996777"> </a><code>&larr;  <i><code>scrollPosP</code></i></code></dt>
+<dd><a name="996778"> </a>The line of text that is the topmost visible line. Line numbering starts with 0. </dd>
+
+<dt><a name="996779"> </a><code>&larr;  <i><code>textHeightP</code></i></code></dt>
+<dd><a name="996780"> </a>The number of lines needed to display the field's text, given the width of the field. </dd>
+
+<dt><a name="996781"> </a><code>&larr;  <i><code>fieldHeightP</code></i></code></dt>
+<dd><a name="996782"> </a>The number of visible lines in the field.</dd>
+
+</dl>
+<h4>
+  <a name="996783"> </a>Returns 
+</h4>
+
+<p><a name="996784"> </a>Returns nothing. Stores the position, text height, and field height in the parameters passed in. </p>
+<h4>
+  <a name="996785"> </a>Comments 
+</h4>
+
+<p><a name="996786"> </a>Use the values returned by this function to calculate the values you send to <a href="Scrollbar.html#996133"><code>SclSetScrollBar()</code></a> to update the scroll bar. For example:</p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+FldGetScrollValues (fldP, &amp;scrollPos, <a name="996790"> </a>
+  &amp;textHeight,  &amp;fieldHeight);<a name="996791"> </a>
+ <a name="996792"> </a>
+if (textHeight &gt; fieldHeight)<a name="996793"> </a>
+  maxValue = textHeight - fieldHeight;<a name="996794"> </a>
+else if (scrollPos)<a name="996795"> </a>
+  maxValue = scrollPos;<a name="996796"> </a>
+else<a name="996797"> </a>
+  maxValue = 0;<a name="996798"> </a>
+ <a name="996799"> </a>
+SclSetScrollBar (bar, scrollPos, 0, maxValue, <a name="996800"> </a>
+  fieldHeight-1);<a name="996801"> </a>
+}<a name="996802"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+<h4>
+  <a name="996803"> </a>Compatibility 
+</h4>
+
+<p><a name="996807"> </a>Implemented only if <a href="CompatibilityApdx.html#992789">2.0 New Feature Set</a> is present.</p>
+<h4>
+  <a name="996808"> </a>See Also 
+</h4>
+
+<p><a name="996812"> </a><a href="Field.html#997784"><code>FldSetScrollPosition()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996816"> </a>FldGetSelection Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996818"> </a>Purpose 
+</h4>
+
+<p><a name="996819"> </a>Return the current selection of a field.</p>
+<h4>
+  <a name="996820"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996821"> </a></code><h4>
+  <a name="996822"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996823"></a>void FldGetSelection (
+   const FieldType *fldP,
+   UInt16 *startPosition,
+   UInt16 *endPosition
+)
+</pre>
+<h4>
+  <a name="996824"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996825"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="996829"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="996830"> </a><code>&larr;  <i><code>startPosition</code></i></code></dt>
+<dd><a name="996831"> </a>Pointer to the start of the selected characters range, given as the byte offset into the field's text.</dd>
+
+<dt><a name="996832"> </a><code>&larr;  <i><code>endPosition</code></i></code></dt>
+<dd><a name="996833"> </a>Pointer to end of the selected characters range given as the byte offset into the field's text.</dd>
+
+</dl>
+<h4>
+  <a name="996834"> </a>Returns 
+</h4>
+
+<p><a name="996835"> </a>Returns the starting and ending byte offsets in <code>startPosition</code> and <code>endPosition</code>.</p>
+<h4>
+  <a name="996836"> </a>Comments 
+</h4>
+
+<p><a name="996837"> </a>The first character in a field is at offset zero.</p>
+
+<p><a name="996838"> </a>If the user has selected the first five characters of a field, <code>startPosition</code> will contain the value 0 and <code>endPosition</code> the value 5, assuming all characters are a single byte long. </p>
+<h4>
+  <a name="996839"> </a>See Also 
+</h4>
+
+<p><a name="996843"> </a><a href="Field.html#997823"><code>FldSetSelection()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996846"> </a>FldGetTextAllocatedSize Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996848"> </a>Purpose 
+</h4>
+
+<p><a name="996849"> </a>Return the number of bytes allocated to hold the field's text string. Don't confuse this number with the actual length of the text string displayed in the field.</p>
+<h4>
+  <a name="996850"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996851"> </a></code><h4>
+  <a name="996852"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996853"></a>UInt16 FldGetTextAllocatedSize(
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996854"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996855"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="996856"> </a>Pointer to a field object.</dd>
+
+</dl>
+<h4>
+  <a name="996857"> </a>Returns 
+</h4>
+
+<p><a name="996858"> </a>Returns the number of bytes allocated for the field's text. This is the <code>textBlockSize</code> field in <a href="Field.html#996018"><code>FieldType</code></a>. </p>
+<h4>
+  <a name="996862"> </a>See Also 
+</h4>
+
+<p><a name="996866"> </a><a href="Field.html#997907"><code>FldSetTextAllocatedSize()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996869"> </a>FldGetTextHandle Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996871"> </a>Purpose 
+</h4>
+
+<p><a name="996872"> </a>Return a handle to the block that contains the text string of a field.</p>
+<h4>
+  <a name="996873"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996874"> </a></code><h4>
+  <a name="996875"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996876"></a>MemHandle FldGetTextHandle (
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996877"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996878"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="996882"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996883"> </a>Returns 
+</h4>
+
+<p><a name="996884"> </a>Returns the handle to the text string of a field or <code>NULL</code> if no handle has been allocated for the field pointer. </p>
+<h4>
+  <a name="996885"> </a>Comments 
+</h4>
+
+<p><a name="996886"> </a>The handle returned by this function is not necessarily the handle to the start of the string. If you've used <a href="Field.html#997853"><code>FldSetText()</code></a> to set the field's text to a string that is part of a database record, the text handle points to the start of that record. You'll need to compute the offset from the start of the record to the start of the string. You can either store the offset that you passed to <code>FldSetText</code> or you can compute the offset by performing pointer arithmetic on the pointer you get by locking this handle and the pointer returned by <a href="Field.html#996963"><code>FldGetTextPtr()</code></a>.</p>
+
+<p><a name="996893"> </a>If you are obtaining the text handle so that you can edit the field's text, you must remove the handle from the field before you do so. If you change the text while it is being used by a field, the field's internal structures specifying the text length, allocated size, and word wrapping information can become out of sync. To avoid this problem, remove the text handle from the field, change the text, and then set the field's text handle again. For example:</p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+// Get the handle for the string and unlock<a name="996894"> </a>
+// it by removing it from the field.<a name="996895"> </a>
+textH = FldGetTextHandle(fldP);<a name="996896"> </a>
+FldSetTextHandle (fldP, NULL);<a name="996897"> </a>
+ <a name="996898"> </a>
+/* Insert code that modifies the string here.*/<a name="996899"> </a>
+/* The basic steps are: */<a name="996900"> </a>
+/* resize the chunk if necessary,*/<a name="996901"> </a>
+/* lock the chunk, write to it, and then */<a name="996902"> </a>
+/* unlock the chunk. If the text is in a */<a name="996903"> </a>
+/* database record, use Data Manager calls. */<a name="996904"> </a>
+ <a name="996905"> </a>
+/* Update the text in the field. */<a name="996906"> </a>
+FldSetTextHandle (fldP, textH);<a name="996907"> </a>
+FldDrawField(fldP);<a name="996908"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+<h4>
+  <a name="996909"> </a>See Also 
+</h4>
+
+<p><a name="996916"> </a><a href="Field.html#997937"><code>FldSetTextHandle()</code></a>, <a href="Field.html#996963"><code>FldGetTextPtr()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996920"> </a>FldGetTextHeight Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996922"> </a>Purpose 
+</h4>
+
+<p><a name="996923"> </a>Return the height in pixels of the number of visible lines that are not empty. </p>
+<h4>
+  <a name="996924"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996925"> </a></code><h4>
+  <a name="996926"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996927"></a>UInt16 FldGetTextHeight (
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996928"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996929"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="996933"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996934"> </a>Returns 
+</h4>
+
+<p><a name="996935"> </a>Returns the height in pixels of the number of visible lines that are not empty.</p>
+<h4>
+  <a name="996936"> </a>Comments 
+</h4>
+
+<p><a name="996937"> </a>Empty lines are all of the lines in the field following the last byte of text. Note that lines that contain only a linefeed are not empty. Also note that only lines that are visible are counted.</p>
+<h4>
+  <a name="996938"> </a>See Also 
+</h4>
+
+<p><a name="996942"> </a><a href="Field.html#996290"><code>FldCalcFieldHeight()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="996945"> </a>FldGetTextLength Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996947"> </a>Purpose 
+</h4>
+
+<p><a name="996948"> </a>Return the length in bytes of the field's text.</p>
+<h4>
+  <a name="996949"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996950"> </a></code><h4>
+  <a name="996951"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996952"></a>UInt16 FldGetTextLength (
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996953"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996954"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="996958"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996959"> </a>Returns 
+</h4>
+
+<p><a name="996960"> </a>Returns the length in bytes of a field's text, not including the terminating null character. This is the <code>textLen</code> field of <code>FieldType</code>. </p>
+
+<h3 class="hbH3">
+  <a name="996963"> </a>FldGetTextPtr Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996965"> </a>Purpose 
+</h4>
+
+<p><a name="996966"> </a>Return a locked pointer to the field's text string.</p>
+<h4>
+  <a name="996967"> </a>Declared In 
+</h4>
+<code>Field.h<a name="996968"> </a></code><h4>
+  <a name="996969"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="996970"></a>Char *FldGetTextPtr (
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="996971"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="996972"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="996976"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="996977"> </a>Returns 
+</h4>
+
+<p><a name="996978"> </a>Returns a locked pointer to the field's text string or <span style="color: #000000;  font-family: Courier; font-style: normal; font-weight: normal; text-decoration: none; text-transform: none; vertical-align: baseline">NULL</span> if the field is empty.</p>
+<h4>
+  <a name="996979"> </a>Comments 
+</h4>
+
+<p><a name="996980"> </a>The pointer returned by this function can become invalid if the user edits the text after you obtain the pointer. </p>
+
+<p><a name="996981"> </a>Do not modify the contents of the pointer yourself. If you change the text while it is being used by a field, the field's internal structures specifying the text length, allocated size, and word wrapping information can become out of sync. To avoid this problem, follow the instructions given under <a href="Field.html#996869"><code>FldGetTextHandle()</code></a>. </p>
+
+<div><hr>
+  <a name="996985"> </a> <span class="warning">WARNING! </span> The pointer returned by this function is "owned" by the field until you specify a different pointer for the field. You should not store this pointer for future use, since the field can modify the size of the string, which can cause the pointer to become invalid.
+<hr>
+</div>
+<h4>
+  <a name="996986"> </a>See Also 
+</h4>
+
+<p><a name="996993"> </a><a href="Field.html#997995"><code>FldSetTextPtr()</code></a>, <a href="Field.html#996869"><code>FldGetTextHandle()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="996996"> </a>FldGetVisibleLines Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="996998"> </a>Purpose 
+</h4>
+
+<p><a name="996999"> </a>Return the number of lines that can be displayed within the visible bounds of the field, regardless of what text is stored in the field.</p>
+<h4>
+  <a name="997000"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997001"> </a></code><h4>
+  <a name="997002"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997003"></a>UInt16 FldGetVisibleLines (
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="997004"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997005"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997009"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="997010"> </a>Returns 
+</h4>
+
+<p><a name="997011"> </a>Returns the number of lines the field displays. (This is the size of the <code>lines</code> array in the <code>FieldType</code> structure.)</p>
+<h4>
+  <a name="997012"> </a>See Also 
+</h4>
+
+<p><a name="997019"> </a><a href="Field.html#996711"><code>FldGetNumberOfBlankLines()</code></a>, <a href="Field.html#996290"><code>FldCalcFieldHeight()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997022"> </a>FldGrabFocus Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997024"> </a>Purpose 
+</h4>
+
+<p><a name="997025"> </a>Turn the insertion point on (if the specified field is visible) and position the blinking insertion point in the field.</p>
+<h4>
+  <a name="997027"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997028"> </a></code><h4>
+  <a name="997029"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997030"></a>void FldGrabFocus (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="997031"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997032"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997036"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="997037"> </a>Returns 
+</h4>
+
+<p><a name="997038"> </a>Returns nothing.</p>
+<h4>
+  <a name="997039"> </a>Comments 
+</h4>
+
+<p><a name="997040"> </a>You rarely need to call this function directly. Instead, use <a href="Form.html#998943"><code>FrmSetFocus()</code></a>, which calls <code>FldGrabFocus</code> for you. </p>
+
+<p><a name="997044"> </a>One instance where you need to call <code>FldGrabFocus</code> directly is to programmatically set the focus in a field that is contained in a table cell.</p>
+
+<p><a name="997045"> </a>This function sets the field attribute <code>hasFocus</code><span style="color: #000000;  font-style: normal; font-weight: bold; text-decoration: none; text-transform: none; vertical-align: baseline"> </span>to <code>true</code>. (See <a href="Field.html#995863"><code>FieldAttrType</code></a>.)</p>
+<h4>
+  <a name="997049"> </a>See Also 
+</h4>
+
+<p><a name="997056"> </a><a href="Form.html#998943"><code>FrmSetFocus()</code></a>, <a href="Field.html#997370"><code>FldReleaseFocus()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997059"> </a>FldHandleEvent Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997061"> </a>Purpose 
+</h4>
+
+<p><a name="997062"> </a>Handles events that affect the field, including the following: <a href="EventRef.html#997089"><code>keyDownEvent</code></a>, <a href="EventRef.html#997559"><code>penDownEvent</code></a>, and <a href="EventRef.html#996489"><code>fldEnterEvent</code></a>. </p>
+<h4>
+  <a name="997075"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997076"> </a></code><h4>
+  <a name="997077"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997078"></a>Boolean FldHandleEvent (
+   FieldType *fldP,
+   EventType *eventP
+)
+</pre>
+<h4>
+  <a name="997079"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997080"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997084"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997085"> </a><code>&rarr;  <i>eventP</i></code></dt>
+<dd><a name="997086"> </a>Pointer to an event (<code>EventType</code> data structure).</dd>
+
+</dl>
+<h4>
+  <a name="997087"> </a>Returns 
+</h4>
+
+<p><a name="997088"> </a>Returns <code>true</code> if the event was handled.</p>
+<h4>
+  <a name="997089"> </a>Comments 
+</h4>
+
+<p><a name="997093"> </a>When a <a href="EventRef.html#997089"><code>keyDownEvent</code></a> occurs in an editable text field, the keystroke appears in the field if it's a printable character or manipulates the insertion point if it's a "movement" character. The field is automatically updated. </p>
+
+<p><a name="997100"> </a>When a <a href="EventRef.html#997559"><code>penDownEvent</code></a> occurs, the field sends a <a href="EventRef.html#996489"><code>fldEnterEvent</code></a> to the event queue.</p>
+
+<p><a name="997104"> </a>When a <a href="EventRef.html#996489"><code>fldEnterEvent</code></a> occurs, the field grabs the focus. If the user has tapped twice in the current location, the word at that location is selected. If the user has tapped three times, the entire line is selected. Otherwise, the insertion point is placed in the specified position.</p>
+
+<p><a name="997109"> </a>When a <a href="EventRef.html#997429"><code>menuCmdBarOpenEvent</code></a> occurs, the field adds paste, copy, cut, and undo buttons to the command toolbar. These buttons are only added if they make sense in the current context. That is, the cut button is only added if the field is editable, the paste button is only added if there is text on the clipboard and the field is editable, and the undo button is only added if there is an action to undo. </p>
+
+<p><a name="997110"> </a>If the event alters the contents of the field, this function visually updates the field.</p>
+
+<p><a name="997111"> </a>This function doesn't handle any events if the field is not editable or usable.</p>
+<h4>
+  <a name="997112"> </a>Compatibility 
+</h4>
+
+<p><a name="997113"> </a>Double-tapping to select a word and triple-tapping to select a line are only supported if <a href="CompatibilityApdx.html#994671">3.5 New Feature Set</a> is present. </p>
+
+<p><a name="997119"> </a><code>FldHandleEvent</code> only handles the <code>menuCmdBarOpenEvent</code> if <a href="CompatibilityApdx.html#994671">3.5 New Feature Set</a> is present. </p>
+
+<h3 class="hbH3">
+  <a name="997123"> </a>FldInsert Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997125"> </a>Purpose 
+</h4>
+
+<p><a name="997126"> </a>Replace the current selection if any with the specified string and redraw the field. </p>
+<h4>
+  <a name="997127"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997128"> </a></code><h4>
+  <a name="997129"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997130"></a>Boolean FldInsert (
+   FieldType *fldP,
+   const Char *insertChars,
+   UInt16 insertLen
+)
+</pre>
+<h4>
+  <a name="997131"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997132"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997136"> </a>Pointer to the field object (<a href="Field.html#996018"><code>FieldType</code></a> structure) to insert to.</dd>
+
+<dt><a name="997137"> </a><code>&rarr;  <i>insertChars</i></code></dt>
+<dd><a name="997138"> </a>Text string to be inserted.</dd>
+
+<dt><a name="997139"> </a><code>&rarr;  <i>insertLen</i></code></dt>
+<dd><a name="997140"> </a>Length in bytes of the text string to be inserted, not counting the trailing null character.</dd>
+
+</dl>
+<h4>
+  <a name="997141"> </a>Returns 
+</h4>
+
+<p><a name="997142"> </a>Returns <code>true</code> if string was successfully inserted. Returns <code>false</code> if:</p>
+<ul type="disc">
+  <li><a name="997143"> </a>The <code>insertLen</code> parameter is 0. 
+  <li><a name="997144"> </a>The field is not editable.
+  <li><a name="997145"> </a>Adding the text would exceed the field's size limit (the <code>maxChars</code> value).
+  <li><a name="997146"> </a>More memory must be allocated for the field, and the allocation fails.
+</ul>
+<h4>
+  <a name="997147"> </a>Comments 
+</h4>
+
+<p><a name="997148"> </a>If there is no current selection, the string passed is inserted at the position of the insertion point.</p>
+
+<p><a name="997149"> </a>This function sets the field's dirty attribute and posts a <a href="EventRef.html#996458"><code>fldChangedEvent</code></a> to the event queue. If you call this function repeatedly, you may overflow the event queue with <code>fldChangedEvents</code>. An alternative is to remove the text handle from the field, change the text, and then set the field's handle again. See <a href="Field.html#996869"><code>FldGetTextHandle()</code></a> for a code example. </p>
+<h4>
+  <a name="997156"> </a>See Also 
+</h4>
+
+<p><a name="997169"> </a><a href="Field.html#997275"><code>FldPaste()</code></a>, <a href="Field.html#996416"><code>FldDelete()</code></a>, <a href="Field.html#996382"><code>FldCut()</code></a>, <a href="Field.html#996352"><code>FldCopy()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997172"> </a>FldMakeFullyVisible Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997174"> </a>Purpose 
+</h4>
+
+<p><a name="997175"> </a>Generates an event to cause a dynamically resizable field to expand its height to make its text fully visible.</p>
+<h4>
+  <a name="997176"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997177"> </a></code><h4>
+  <a name="997178"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997179"></a>Boolean FldMakeFullyVisible (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="997180"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997181"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997185"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="997186"> </a>Returns 
+</h4>
+
+<p><a name="997187"> </a>Returns <code>true</code> if the field is dynamically resizable and was not fully visible; <span style="color: #000000;  font-family: Courier; font-style: normal; font-weight: normal; text-decoration: none; text-transform: none; vertical-align: baseline">false</span> otherwise.</p>
+<h4>
+  <a name="997188"> </a>Comments 
+</h4>
+
+<p><a name="997189"> </a>Use this function on a field whose <code>dynamicSize</code> attribute is <code>true</code> (see <a href="Field.html#995863"><code>FieldAttrType</code></a>). </p>
+
+<p><a name="997193"> </a>This function does not actually resize the field. Instead, it computes how big the field should be to be fully visible and then posts this information to the event queue in a <a href="EventRef.html#996521"><code>fldHeightChangedEvent</code></a>.</p>
+
+<div><hr>
+  <a name="997198"> </a> <b>NOTE: </b> The event does not get generated if the number of lines in the field is equal to or greater than the value of the maximum lines attribute for the field.
+<hr>
+</div>
+
+<p><a name="997199"> </a>If the field is contained in a table, the table's code handles the <code>fldHeightChangedEvent</code>. If the field is directly on a form, your application code should handle the <code>fldHeightChangedEvent</code> itself. The form code does not handle the event for you. Note that the constant <code>maxFieldLines</code> defines the maximum number of lines a field can expand to if the field is using the standard font. </p>
+<h4>
+  <a name="997201"> </a>See Also 
+</h4>
+
+<p><a name="997205"> </a><a href="Table.html#997334"><code>TblHandleEvent()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997208"> </a>FldNewField Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997210"> </a>Purpose 
+</h4>
+
+<p><a name="997211"> </a>Create a new field object dynamically and install it in the specified form. </p>
+<h4>
+  <a name="997212"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997213"> </a></code><h4>
+  <a name="997214"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997215"></a>FieldType *FldNewField (
+   void **formPP,
+   UInt16 id,
+   Coord x,
+   Coord y,
+   Coord width,
+   Coord height,
+   FontID font,
+   UInt32 maxChars,
+   Boolean editable,
+   Boolean underlined,
+   Boolean singleLine,
+   Boolean dynamicSize,
+   JustificationType justification,
+   Boolean autoShift,
+   Boolean hasScrollBar,
+   Boolean numeric
+)
+</pre>
+<h4>
+  <a name="997216"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997217"> </a><code>&harr;  <i>formPP</i></code></dt>
+<dd><a name="997218"> </a>Pointer to the pointer to the form in which the new field is installed. This value is not a handle; that is, the old form pointer value is not necessarily valid after this function returns. In subsequent calls, always use the new form pointer value returned by this function.</dd>
+
+<dt><a name="997219"> </a><code>&rarr;  <i>id</i></code></dt>
+<dd><a name="997220"> </a>Symbolic ID of the field, specified by the developer. By convention, this ID should match the resource ID (not mandatory).</dd>
+
+<dt><a name="997221"> </a><code>&rarr;  <i>x</i></code></dt>
+<dd><a name="997222"> </a>Horizontal coordinate of the upper-left corner of the field's boundaries, relative to the window in which it appears. </dd>
+
+<dt><a name="997223"> </a><code>&rarr;  <i>y</i></code></dt>
+<dd><a name="997224"> </a>Vertical coordinate of the upper-left corner of the field's boundaries, relative to the window in which it appears.</dd>
+
+<dt><a name="997225"> </a><code>&rarr;  <i>width</i></code></dt>
+<dd><a name="997226"> </a>Width of the field, expressed in pixels.</dd>
+
+<dt><a name="997227"> </a><code>&rarr;  <i>height</i></code></dt>
+<dd><a name="997228"> </a>Height of the field, expressed in pixels.</dd>
+
+<dt><a name="997229"> </a><code>&rarr;  <i><code>font</code></i></code></dt>
+<dd><a name="997230"> </a>Font to use to draw the field's text.</dd>
+
+<dt><a name="997231"> </a><code>&rarr;  <i><code>maxChars</code></i></code></dt>
+<dd><a name="997232"> </a>Maximum number of bytes held by the field this function creates. </dd>
+
+<dt><a name="997233"> </a><code>&rarr;  <i>editable</i></code></dt>
+<dd><a name="997234"> </a>Pass <code>true</code> to create a field in which the user can edit text. Pass <code>false</code> to create a field that cannot be edited. </dd>
+
+<dt><a name="997235"> </a><code>&rarr;  <i>underlined</i></code></dt>
+<dd><a name="997236"> </a>Pass <code>noUnderline</code> for no underline, or <code>grayUnderline</code> to have the field underline the text it displays. On Palm OS<sup>&#174;</sup> version 3.1 and higher, pass <code>solidUnderline</code> to use a solid underline instead of a dotted underline. </dd>
+
+<dt><a name="997237"> </a><code>&rarr;  <i>singleLine</i></code></dt>
+<dd><a name="997238"> </a>Pass <code>true</code> to create a field that can display only a single line of text. </dd>
+
+<dt><a name="997239"> </a><code>&rarr;  <i>dynamicSize</i></code></dt>
+<dd><a name="997240"> </a>Pass <code>true</code> to create a field that resizes dynamically according to the amount of text it displays.</dd>
+
+<dt><a name="997241"> </a><code>&rarr;  <i>justification</i></code></dt>
+<dd><a name="997242"> </a>Pass either of the values <code>leftAlign</code> or <code>rightAlign</code> to specify left justification or right justification, respectively. The <code>centerAlign</code> value is not supported.</dd>
+
+<dt><a name="997243"> </a><code>&rarr;  <i>autoShift</i></code></dt>
+<dd><a name="997247"> </a>Pass <code>true</code> to specify the use of Palm OS 2.0 (and later) auto-shift rules. </dd>
+
+<dt><a name="997248"> </a><code>&rarr;  <i>hasScrollBar</i></code></dt>
+<dd><a name="997249"> </a>Pass <code>true</code> to attach a scroll bar control to the field this function creates.</dd>
+
+<dt><a name="997250"> </a><code>&rarr;  <i>numeric</i></code></dt>
+<dd><a name="997251"> </a>Pass <code>true</code> to specify that only characters in the range of 0 through 9 are allowed in the field.</dd>
+
+</dl>
+<h4>
+  <a name="997252"> </a>Returns 
+</h4>
+
+<p><a name="997253"> </a>Returns a pointer to the new field object or <code>NULL</code> if there wasn't enough memory to create the field. Out of memory situations could be caused by memory fragmentation.</p>
+<h4>
+  <a name="997254"> </a>Compatibility 
+</h4>
+
+<p><a name="997258"> </a>Implemented only if <a href="CompatibilityApdx.html#993158">3.0 New Feature Set</a> is present.</p>
+<h4>
+  <a name="997259"> </a>See Also 
+</h4>
+
+<p><a name="997266"> </a><a href="Form.html#999311"><code>FrmValidatePtr()</code></a>, <a href="Window.html#1017055"><code>WinValidateHandle()</code></a>, <a href="Control.html#997065"><code>CtlValidatePointer()</code></a>, <a href="Form.html#998633"><code>FrmRemoveObject()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997275"> </a>FldPaste Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997277"> </a>Purpose 
+</h4>
+
+<p><a name="997278"> </a>Replace the current selection in the field, if any, with the contents of the text clipboard. </p>
+<h4>
+  <a name="997280"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997281"> </a></code><h4>
+  <a name="997282"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997283"></a>void FldPaste (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="997284"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997285"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997289"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="997290"> </a>Returns 
+</h4>
+
+<p><a name="997291"> </a>Returns nothing</p>
+<h4>
+  <a name="997292"> </a>Comments 
+</h4>
+
+<p><a name="997293"> </a>The function performs these actions:</p>
+<ul type="disc">
+  <li><a name="997294"> </a>Scrolls the field, if necessary, so the insertion point is visible. 
+  <li><a name="997295"> </a>Inserts the clipboard text at the position of the insertion point if there is no current selection.
+  <li><a name="997296"> </a>Positions the insertion point after the last character inserted.
+  <li><a name="997297"> </a>Doesn't delete the current selection if there is no text in the clipboard.
+</ul>
+<h4>
+  <a name="997298"> </a>See Also 
+</h4>
+
+<p><a name="997311"> </a><a href="Field.html#997123"><code>FldInsert()</code></a>, <a href="Field.html#996416"><code>FldDelete()</code></a>, <a href="Field.html#996382"><code>FldCut()</code></a>, <a href="Field.html#996352"><code>FldCopy()</code></a> <a href="Field.html#998079"><code>FldUndo()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997317"> </a>FldRecalculateField Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997319"> </a>Purpose 
+</h4>
+
+<p><a name="997320"> </a>Update the structure that contains the word-wrapping information for each visible line.</p>
+<h4>
+  <a name="997321"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997322"> </a></code><h4>
+  <a name="997323"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997324"></a>void FldRecalculateField (
+   FieldType *fldP,
+   Boolean redraw
+)
+</pre>
+<h4>
+  <a name="997325"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997326"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997330"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997331"> </a><code>&rarr;  <i>redraw</i></code></dt>
+<dd><a name="997332"> </a>If <code>true</code>, redraws the field.</dd>
+
+</dl>
+<h4>
+  <a name="997333"> </a>Returns 
+</h4>
+
+<p><a name="997334"> </a>Returns nothing.</p>
+<h4>
+  <a name="997335"> </a>Comments 
+</h4>
+
+<p><a name="997336"> </a>This function will allocate the memory block that contains the displayed lines information if, and only if, the block does not yet exist.</p>
+
+<p><a name="997337"> </a>You should call this function when you change the field width or text length of the field. Do not call this function after changing the font or field height.</p>
+
+<p><a name="997338"> </a>Note that many of the field functions, including <a href="Field.html#997937"><code>FldSetTextHandle()</code></a>, <a href="Field.html#997123"><code>FldInsert()</code></a>, and <a href="Field.html#996416"><code>FldDelete()</code></a>, recalculate the word-wrapping information for you.</p>
+<h4>
+  <a name="997348"> </a>Compatibility 
+</h4>
+
+<p><a name="997349"> </a>In releases prior to Palm OS 4.0, the word-wrapping information is only updated if the <code>redraw</code> parameter is set to <code>true</code>. As of Palm OS 4.0 it is updated whenever <code>FldRecalculateField</code> is called, regardless of the value of the <code>redraw</code> parameter.</p>
+
+<h3 class="hbH3">
+  <a name="997370"> </a>FldReleaseFocus Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997372"> </a>Purpose 
+</h4>
+
+<p><a name="997373"> </a>Turn the blinking insertion point off if the field is visible and has the current focus, reset the Graffiti<sup>&#174;</sup> or Graffiti 2 state, and reset the undo state.</p>
+<h4>
+  <a name="997374"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997375"> </a></code><h4>
+  <a name="997376"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997377"></a>void FldReleaseFocus (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="997378"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997379"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997383"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+</dl>
+<h4>
+  <a name="997384"> </a>Returns 
+</h4>
+
+<p><a name="997385"> </a>Returns nothing.</p>
+<h4>
+  <a name="997386"> </a>Comments 
+</h4>
+
+<p><a name="997387"> </a>This function sets the field attribute <code>hasFocus</code><span style="color: #000000;  font-style: normal; font-weight: bold; text-decoration: none; text-transform: none; vertical-align: baseline"> </span>to <span style="color: #000000;  font-family: Courier; font-style: normal; font-weight: normal; text-decoration: none; text-transform: none; vertical-align: baseline">false</span>. (See <a href="Field.html#995863"><code>FieldAttrType</code></a>.)</p>
+
+<p><a name="997391"> </a>Usually, you don't need to call this function. If the field is in a form or in a table that doesn't use custom drawing functions, the field code releases the focus for you when the focus changes to some other control. If your field is in any other type of object, such as a table that uses custom drawing functions or a gadget, you must call <code>FldReleaseFocus</code> when the focus moves away from the field. </p>
+<h4>
+  <a name="997392"> </a>See Also 
+</h4>
+
+<p><a name="997396"> </a><a href="Field.html#997022"><code>FldGrabFocus()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997399"> </a>FldScrollable Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997401"> </a>Purpose 
+</h4>
+
+<p><a name="997402"> </a>Return <code>true</code> if the field is scrollable in the specified direction.</p>
+<h4>
+  <a name="997403"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997404"> </a></code><h4>
+  <a name="997405"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997406"></a>Boolean FldScrollable (
+   const FieldType *fldP,
+   WinDirectionType direction
+)
+</pre>
+<h4>
+  <a name="997407"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997408"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997412"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997413"> </a><code>&rarr;  <i>direction</i></code></dt>
+<dd><a name="997415"> </a>The direction to test. <code>DirectionType</code> is defined in <code>Window.h</code>. It is an enum defining the constants <code>up</code> and <code>down</code>. </dd>
+
+</dl>
+<h4>
+  <a name="997416"> </a>Returns 
+</h4>
+
+<p><a name="997417"> </a>Returns <code>true</code> if the field is scrollable in the specified direction; <span style="color: #000000;  font-family: Courier; font-style: normal; font-weight: normal; text-decoration: none; text-transform: none; vertical-align: baseline">false</span> otherwise.</p>
+<h4>
+  <a name="997418"> </a>See Also 
+</h4>
+
+<p><a name="997422"> </a><a href="Field.html#997425"><code>FldScrollField()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997425"> </a>FldScrollField Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997427"> </a>Purpose 
+</h4>
+
+<p><a name="997428"> </a>Scroll a field up or down by the number of lines specified.</p>
+<h4>
+  <a name="997429"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997430"> </a></code><h4>
+  <a name="997431"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997432"></a>void FldScrollField (
+   FieldType *fldP,
+   UInt16 linesToScroll,
+   WinDirectionType direction
+)
+</pre>
+<h4>
+  <a name="997433"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997434"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997438"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997439"> </a><code>&rarr;  <i>linesToScroll</i></code></dt>
+<dd><a name="997440"> </a>Number of lines to scroll.</dd>
+
+<dt><a name="997441"> </a><code>&rarr;  <i>direction</i></code></dt>
+<dd><a name="997443"> </a>The direction to scroll. <code>DirectionType</code> is defined in <code>Window.h</code>. It is an enum defining, among others, the constants <code>winUp</code> and <code>winDown</code>.</dd>
+
+</dl>
+<h4>
+  <a name="997444"> </a>Returns 
+</h4>
+
+<p><a name="997445"> </a>Returns nothing.</p>
+<h4>
+  <a name="997446"> </a>Comments 
+</h4>
+
+<p><a name="997447"> </a>This function can't scroll horizontally, that is, right or left.</p>
+
+<p><a name="997448"> </a>The field object is redrawn if it's scrolled; however, the scrollbar is not updated. Use <a href="Scrollbar.html#996133"><code>SclSetScrollBar()</code></a> to update the scrollbar. For example: </p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+FldScrollField (fldP, linesToScroll,
+direction);<a name="997452"> </a>
+ <a name="997453"> </a>
+// Update the scroll bar.<a name="997454"> </a>
+SclGetScrollBar (bar, &amp;value, &amp;min, &amp;max, <a name="997455"> </a>
+  &amp;pageSize);<a name="997456"> </a>
+ <a name="997457"> </a>
+if (direction == winUp)<a name="997458"> </a>
+  value -= linesToScroll;<a name="997459"> </a>
+else<a name="997460"> </a>
+  value += linesToScroll;<a name="997461"> </a>
+ <a name="997462"> </a>
+SclSetScrollBar (bar, value, min, max, <a name="997463"> </a>
+  pageSize);<a name="997464"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+
+<p><a name="997465"> </a>If the field is not scrollable in the direction indicated, this function returns without performing any work. You can use <a href="Field.html#997399"><code>FldScrollable()</code></a> before calling this function to see if the field can be scrolled. </p>
+<h4>
+  <a name="997469"> </a>See Also 
+</h4>
+
+<p><a name="997476"> </a><a href="Field.html#997399"><code>FldScrollable()</code></a>, <a href="Field.html#997784"><code>FldSetScrollPosition()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997479"> </a>FldSendChangeNotification Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997481"> </a>Purpose 
+</h4>
+
+<p><a name="997486"> </a>Send a <a href="EventRef.html#996458"><code>fldChangedEvent</code></a> to the event queue.</p>
+<h4>
+  <a name="997487"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997488"> </a></code><h4>
+  <a name="997489"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997490"></a>void FldSendChangeNotification(
+   const FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="997491"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997492"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997493"> </a>Pointer to a field object.</dd>
+
+</dl>
+<h4>
+  <a name="997494"> </a>Returns 
+</h4>
+
+<p><a name="997495"> </a>Returns nothing.</p>
+<h4>
+  <a name="997496"> </a>Comments 
+</h4>
+
+<p><a name="997497"> </a>This function is used internally by the field code. You normally never call it in application code. </p>
+
+<h3 class="hbH3">
+  <a name="997500"> </a>FldSendHeightChangeNotification Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997502"> </a>Purpose 
+</h4>
+
+<p><a name="997507"> </a>Send a <a href="EventRef.html#996521"><code>fldHeightChangedEvent</code></a> to the event queue.</p>
+<h4>
+  <a name="997508"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997509"> </a></code><h4>
+  <a name="997510"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997511"></a>void FldSendHeightChangeNotification(
+   const FieldType *fldP,
+   UInt16 pos,
+   Int16 numLines
+)
+</pre>
+<h4>
+  <a name="997512"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997513"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997514"> </a>Pointer to a field object.</dd>
+
+<dt><a name="997515"> </a><code>&rarr;  <i>pos</i></code></dt>
+<dd><a name="997516"> </a>Character position of the insertion point.</dd>
+
+<dt><a name="997517"> </a><code>&rarr;  <i>numLines</i></code></dt>
+<dd><a name="997518"> </a>New number of lines in the field.</dd>
+
+</dl>
+<h4>
+  <a name="997519"> </a>Returns 
+</h4>
+
+<p><a name="997520"> </a>Returns nothing.</p>
+<h4>
+  <a name="997521"> </a>Comments 
+</h4>
+
+<p><a name="997522"> </a>This function is used internally by the field code. You normally never call it in application code. </p>
+
+<h3 class="hbH3">
+  <a name="997525"> </a>FldSetAttributes Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997527"> </a>Purpose 
+</h4>
+
+<p><a name="997528"> </a>Set the attributes of a field.</p>
+<h4>
+  <a name="997529"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997530"> </a></code><h4>
+  <a name="997531"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997532"></a>void FldSetAttributes (
+   FieldType *fldP,
+   const FieldAttrType *attrP
+)
+</pre>
+<h4>
+  <a name="997533"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997534"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997538"> </a>Pointer to a <a href="Field.html#996018"><code>FieldType</code></a> structure.</dd>
+
+<dt><a name="997539"> </a><code>&rarr;  <i>attrP</i></code></dt>
+<dd><a name="997540"> </a>Pointer to the attributes.</dd>
+
+</dl>
+<h4>
+  <a name="997541"> </a>Returns 
+</h4>
+
+<p><a name="997542"> </a>Returns nothing.</p>
+<h4>
+  <a name="997543"> </a>Comments 
+</h4>
+
+<p><a name="997544"> </a>This function does not do anything to make the new attribute values take effect. For example, if you use this function to change the value of the underline attribute, you won't see its effect until you call <a href="Field.html#996492"><code>FldDrawField()</code></a>. </p>
+
+<p><a name="997548"> </a>You usually do not have to modify field attributes at runtime, so you rarely need to call this function. </p>
+
+<div><hr>
+  <a name="997549"> </a> <span class="warning">WARNING! </span> You must not call this function to change any attributes that are noted as "for internal use only."
+<hr>
+</div>
+
+<p><a name="997550"> </a>The proper way to use <code>FldSetAttributes</code> is to:</p>
+<ol type="1">
+  <li value="1"><a name="997551"> </a>Call <code>FldGetAttributes</code> to retrieve the attributes.
+  <li value="2"><a name="997552"> </a>Set the specific flags that you want to modify.
+  <li value="3"><a name="997553"> </a>Call <code>FldSetAttributes</code> to make the modifications.
+</ol>
+
+<div><hr>
+  <a name="997554"> </a> <span class="warning">WARNING! </span> You must not call any field routines between calling <code>FldGetAttributes</code> and <code>FldSetAttributes</code>; this can cause the attributes to be out of sync, with unpredictable results.
+<hr>
+</div>
+<h4>
+  <a name="997555"> </a>See Also 
+</h4>
+
+<p><a name="997562"> </a><a href="Field.html#996579"><code>FldGetAttributes()</code></a>, <a href="Field.html#995863"><code>FieldAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997565"> </a>FldSetBounds Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997567"> </a>Purpose 
+</h4>
+
+<p><a name="997568"> </a>Change the position or size of a field.</p>
+<h4>
+  <a name="997569"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997570"> </a></code><h4>
+  <a name="997571"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997572"></a>void FldSetBounds (
+   FieldType *fldP,
+   const RectangleType *rP
+)
+</pre>
+<h4>
+  <a name="997573"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997574"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997578"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997579"> </a><code>&rarr;  <i>rP</i></code></dt>
+<dd><a name="997580"> </a>Pointer to a RectangleType structure that contains the new bounds of the display.</dd>
+
+</dl>
+<h4>
+  <a name="997581"> </a>Returns 
+</h4>
+
+<p><a name="997582"> </a>Returns nothing. May raise a fatal error message if the memory block that contains the word-wrapping information needs to be resized and there is not enough space to do so. </p>
+<h4>
+  <a name="997583"> </a>Comments 
+</h4>
+
+<p><a name="997584"> </a>If the field is visible, the field is redrawn within its new bounds.</p>
+
+<div><hr>
+  <a name="997585"> </a> <b>NOTE: </b> You can change the height or location of the field while it's visible, but do not change the width. 
+<hr>
+</div>
+
+<p><a name="997586"> </a>The memory block that contains the word-wrapping information (see <a href="Field.html#996232"><code>LineInfoType</code></a>) will be resized if the number of visible lines is changed. The insertion point is assumed to be off when this routine is called.</p>
+
+<p><a name="997590"> </a>Make sure that <code>rect</code> is at least as tall as a single line in the current font. (You can determine this value by calling <a href="Font.html#1000722"><code>FntLineHeight()</code></a>.) If it's not, results are unpredictable.</p>
+<h4>
+  <a name="997594"> </a>See Also 
+</h4>
+
+<p><a name="997601"> </a><a href="Field.html#996607"><code>FldGetBounds()</code></a>, <a href="Form.html#999108"><code>FrmSetObjectBounds()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997604"> </a>FldSetDirty Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997606"> </a>Purpose 
+</h4>
+
+<p><a name="997607"> </a>Set whether the field has been modified.</p>
+<h4>
+  <a name="997608"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997609"> </a></code><h4>
+  <a name="997610"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997611"></a>void FldSetDirty (
+   FieldType *fldP,
+   Boolean dirty
+)
+</pre>
+<h4>
+  <a name="997612"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997613"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997617"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997618"> </a><code>&rarr;  <i>dirty</i></code></dt>
+<dd><a name="997619"> </a><code>true</code> if the text is modified.</dd>
+
+</dl>
+<h4>
+  <a name="997620"> </a>Returns 
+</h4>
+
+<p><a name="997621"> </a>Returns nothing.</p>
+<h4>
+  <a name="997622"> </a>Comments 
+</h4>
+
+<p><a name="997623"> </a>You typically call this function when you want to clear the dirty attribute. The dirty attribute is set when the user enters or deletes text in the field. It is also set by certain field functions, such as <a href="Field.html#997123"><code>FldInsert()</code></a> and <a href="Field.html#996416"><code>FldDelete()</code></a>. </p>
+<h4>
+  <a name="997630"> </a>See Also 
+</h4>
+
+<p><a name="997634"> </a><a href="Field.html#996459"><code>FldDirty()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997637"> </a>FldSetFont Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997639"> </a>Purpose 
+</h4>
+
+<p><a name="997640"> </a>Set the font used by the field, update the word-wrapping information, and draw the field if the field is visible.</p>
+<h4>
+  <a name="997641"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997642"> </a></code><h4>
+  <a name="997643"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997644"></a>void FldSetFont (
+   FieldType *fldP,
+   FontID fontID
+)
+</pre>
+<h4>
+  <a name="997645"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997646"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="997650"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997651"> </a><code>&rarr;  <i><code>fontID</code></i></code></dt>
+<dd><a name="997652"> </a>ID of new font.</dd>
+
+</dl>
+<h4>
+  <a name="997653"> </a>Returns 
+</h4>
+
+<p><a name="997654"> </a>Returns nothing.</p>
+<h4>
+  <a name="997655"> </a>See Also 
+</h4>
+
+<p><a name="997662"> </a><a href="Field.html#996637"><code>FldGetFont()</code></a>, <a href="Field.html#995863"><code>FieldAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997666"> </a>FldSetInsertionPoint Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997668"> </a>Purpose 
+</h4>
+
+<p><a name="997669"> </a>Set the location of the insertion point based on a specified string position. </p>
+<h4>
+  <a name="997670"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997671"> </a></code><h4>
+  <a name="997672"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997673"></a>void FldSetInsertionPoint (
+   FieldType *fldP,
+   UInt16 pos
+)
+</pre>
+<h4>
+  <a name="997674"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997675"> </a><code>&rarr;  <i><code>fldP</code></i></code></dt>
+<dd><a name="997679"> </a>Pointer to a <a href="Field.html#996018"><code>FieldType</code></a> structure.</dd>
+
+<dt><a name="997680"> </a><code>&rarr;  <i><code>pos</code></i></code></dt>
+<dd><a name="997681"> </a>New location of the insertion point, given as a valid offset in bytes into the field's text. On systems that support multi-byte characters, you must make sure that this specifies an inter-character boundary (does not specify the middle or end bytes of a multi-byte character). </dd>
+
+</dl>
+<h4>
+  <a name="997682"> </a>Returns 
+</h4>
+
+<p><a name="997683"> </a>Nothing.</p>
+<h4>
+  <a name="997684"> </a>Comments 
+</h4>
+
+<p><a name="997688"> </a>This routine differs from <a href="Field.html#997702"><code>FldSetInsPtPosition()</code></a> in that it doesn't make the character position visible. <code>FldSetInsertionPoint</code> also doesn't make the field the current focus of input if it was not already. </p>
+
+<p><a name="997689"> </a>If <code>pos</code> indicates a position beyond the end of the text in the field, the insertion point is set to the end of the field's text.</p>
+<h4>
+  <a name="997690"> </a>Compatibility 
+</h4>
+
+<p><a name="997694"> </a>Implemented only if <a href="CompatibilityApdx.html#992789">2.0 New Feature Set</a> is present.</p>
+<h4>
+  <a name="997695"> </a>See Also 
+</h4>
+
+<p><a name="997699"> </a><a href="TextMgr.html#1121040"><code>TxtCharBounds()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997702"> </a>FldSetInsPtPosition Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997704"> </a>Purpose 
+</h4>
+
+<p><a name="997705"> </a>Set the location of the insertion point for a given string position.</p>
+<h4>
+  <a name="997706"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997707"> </a></code><h4>
+  <a name="997708"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997709"></a>void FldSetInsPtPosition (
+   FieldType *fldP,
+   UInt16 pos
+)
+</pre>
+<h4>
+  <a name="997710"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997711"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997715"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997716"> </a><code>&rarr;  <i>pos</i></code></dt>
+<dd><a name="997717"> </a>New location of the insertion point, given as a valid offset in bytes into the field's text. On systems that support multi-byte characters, you must make sure that this specifies an inter-character boundary (does not specify the middle or end bytes of a multi-byte character). </dd>
+
+</dl>
+<h4>
+  <a name="997718"> </a>Returns 
+</h4>
+
+<p><a name="997719"> </a>Returns nothing.</p>
+<h4>
+  <a name="997720"> </a>Comments 
+</h4>
+
+<p><a name="997721"> </a>If the position is beyond the visible text, the field is scrolled until the position is visible.</p>
+<h4>
+  <a name="997722"> </a>See Also 
+</h4>
+
+<p><a name="997729"> </a><a href="Field.html#996662"><code>FldGetInsPtPosition()</code></a>, <a href="TextMgr.html#1121040"><code>TxtCharBounds()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997732"> </a>FldSetMaxChars Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997734"> </a>Purpose 
+</h4>
+
+<p><a name="997735"> </a>Set the maximum number of bytes the field accepts (the <code>maxChars</code> value). </p>
+<h4>
+  <a name="997736"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997737"> </a></code><h4>
+  <a name="997738"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997739"></a>void FldSetMaxChars (
+   FieldType *fldP,
+   UInt16 maxChars
+)
+</pre>
+<h4>
+  <a name="997740"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997741"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997745"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997746"> </a><code>&rarr;  <i>maxChars</i></code></dt>
+<dd><a name="997747"> </a>Maximum size in bytes of the characters the user may enter. You may specify any value up to <code>maxFieldTextLen</code>. </dd>
+
+</dl>
+<h4>
+  <a name="997749"> </a>Returns 
+</h4>
+
+<p><a name="997750"> </a>Returns nothing.</p>
+<h4>
+  <a name="997751"> </a>Comments 
+</h4>
+
+<p><a name="997752"> </a>Line feed characters are counted when the length of characters is determined.</p>
+<h4>
+  <a name="997753"> </a>See Also 
+</h4>
+
+<p><a name="997757"> </a><a href="Field.html#996687"><code>FldGetMaxChars()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997760"> </a>FldSetMaxVisibleLines Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997762"> </a>Purpose 
+</h4>
+
+<p><a name="997763"> </a>Allows the creation of tables and fields smaller than 121 pixels tall that still drag-select when there are more lines of text than will fit in the space provided.</p>
+<h4>
+  <a name="997764"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997765"> </a></code><h4>
+  <a name="997766"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997767"></a>void FldSetMaxVisibleLines (
+   FieldType *fldP,
+   UInt8 maxLines
+)
+</pre>
+<h4>
+  <a name="997768"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997769"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997773"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997774"> </a><code>&rarr;  <i>maxLines</i></code></dt>
+<dd><a name="997775"> </a>Maximum number of lines to which the field will visually grow. </dd>
+
+</dl>
+<h4>
+  <a name="997776"> </a>Returns 
+</h4>
+
+<p><a name="997777"> </a>Returns nothing.</p>
+<h4>
+  <a name="997778"> </a>Comments 
+</h4>
+
+<p><a name="997779"> </a>A field can be dynamically expandable. When it is, the field package needs to know the maximum number of lines that should be visible so it can prevent the field from being expanded further. Since field expansion is actually handled by enclosing objects&#8212;tables or forms&#8212;this function's primary purpose is to allow the enclosing object to tell the field how big it can get.</p>
+
+<p><a name="997780"> </a>By default, tables assume that the field can get as big as the table.</p>
+
+<p><a name="997781"> </a>If you don't call this function, fields expect to be at least 121 pixels tall and try to grow repeatedly until they are.</p>
+
+<h3 class="hbH3">
+  <a name="997784"> </a>FldSetScrollPosition Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997786"> </a>Purpose 
+</h4>
+
+<p><a name="997787"> </a>Scroll the field such that the character at the indicated offset is the first character on the first visible line. Redraw the field if necessary.</p>
+<h4>
+  <a name="997788"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997789"> </a></code><h4>
+  <a name="997790"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997791"></a>void FldSetScrollPosition (
+   FieldType *fldP,
+   UInt16 pos
+)
+</pre>
+<h4>
+  <a name="997792"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997793"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997797"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997798"> </a><code>&rarr;  <i>pos</i></code></dt>
+<dd><a name="997799"> </a>Byte offset into the field's text string of first character to be made visible. On systems that support multi-byte characters, you must make sure that this specifies an inter-character boundary (does not specify the middle or end bytes of a multi-byte character). </dd>
+
+</dl>
+<h4>
+  <a name="997800"> </a>Returns 
+</h4>
+
+<p><a name="997801"> </a>Returns nothing.</p>
+<h4>
+  <a name="997802"> </a>Comments 
+</h4>
+
+<p><a name="997803"> </a>This function scrolls the field but does not update the field's scrollbar. You should update the scrollbar after calling this function. To do so, first call <a href="Field.html#996763"><code>FldGetScrollValues()</code></a> to determine the values to use, and then call <a href="Scrollbar.html#996133"><code>SclSetScrollBar()</code></a>. </p>
+<h4>
+  <a name="997810"> </a>See Also 
+</h4>
+
+<p><a name="997817"> </a><a href="Field.html#996737"><code>FldGetScrollPosition()</code></a>, <a href="Field.html#997425"><code>FldScrollField()</code></a>, <a href="TextMgr.html#1121040"><code>TxtCharBounds()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997823"> </a>FldSetSelection Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997825"> </a>Purpose 
+</h4>
+
+<p><a name="997826"> </a>Set the current selection in a field and highlight the selection if the field is visible.</p>
+<h4>
+  <a name="997827"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997828"> </a></code><h4>
+  <a name="997829"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997830"></a>void FldSetSelection (
+   FieldType *fldP,
+   UInt16 startPosition,
+   UInt16 endPosition
+)
+</pre>
+<h4>
+  <a name="997831"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997832"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997836"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997837"> </a><code>&rarr;  <i>startPosition</i></code></dt>
+<dd><a name="997838"> </a>Starting offset of the character range to highlight, given as a byte offset into the field's text.</dd>
+
+<dt><a name="997839"> </a><code>&rarr;  <i>endPosition</i></code></dt>
+<dd><a name="997840"> </a>Ending offset of the character range to highlight. The ending offset should be greater than or equal to the starting offset. On systems that support multi-byte characters, this position must be an inter-character boundary. That is, it must not point to a middle byte of a multi-byte character. </dd>
+
+</dl>
+<h4>
+  <a name="997841"> </a>Returns 
+</h4>
+
+<p><a name="997842"> </a>Returns nothing.</p>
+<h4>
+  <a name="997843"> </a>Comments 
+</h4>
+
+<p><a name="997844"> </a>To cancel a selection, set both <code>startPosition</code> and <code>endPosition</code> to the same value. If <span style="color: #000000;  font-family: Courier; font-style: normal; font-weight: normal; text-decoration: none; text-transform: none; vertical-align: baseline">startPosition</span> equals <span style="color: #000000;  font-family: Courier; font-style: normal; font-weight: normal; text-decoration: none; text-transform: none; vertical-align: baseline">endPosition</span>, then the current selection is unhighlighted.</p>
+
+<p><a name="997845"> </a>If either <code>startPosition</code> or <code>endPosition</code> point to an intra-character boundary, <code>FldSetSelection</code> attempts to move that offset backward, toward the beginning of the string, until the offset points to an inter-character boundary (i.e., the start of a character). </p>
+<h4>
+  <a name="997846"> </a>See Also 
+</h4>
+
+<p><a name="997850"> </a><a href="TextMgr.html#1121040"><code>TxtCharBounds()</code></a></p>
+
+<h3 class="hbH3">
+  <a name="997853"> </a>FldSetText Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997855"> </a>Purpose 
+</h4>
+
+<p><a name="997856"> </a>Set the text value of the field without updating the display.</p>
+<h4>
+  <a name="997857"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997858"> </a></code><h4>
+  <a name="997859"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997860"></a>void FldSetText (
+   FieldType *fldP,
+   MemHandle textHandle,
+   UInt16 offset,
+   UInt16 size
+)
+</pre>
+<h4>
+  <a name="997861"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997862"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997866"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997867"> </a><code>&rarr;  <i>textHandle</i></code></dt>
+<dd><a name="997868"> </a>Unlocked handle of a block containing a null-terminated text string. Pass <code>NULL</code> for this parameter to remove the association between the field and the string it is currently displaying so that the string is not freed with the field when the form is deleted. </dd>
+
+<dt><a name="997869"> </a><code>&rarr;  <i>offset</i></code></dt>
+<dd><a name="997870"> </a>Offset from start of block to start of the text string.</dd>
+
+<dt><a name="997871"> </a><code>&rarr;  <i>size</i></code></dt>
+<dd><a name="997872"> </a>The allocated size of the text string. This is not the string length, and should not be set to <code>0</code>, unless you are setting the text to the empty string.</dd>
+
+</dl>
+<h4>
+  <a name="997873"> </a>Returns 
+</h4>
+
+<p><a name="997874"> </a>Returns nothing.</p>
+<h4>
+  <a name="997875"> </a>Comments 
+</h4>
+
+<p><a name="997876"> </a>This function allows applications to perform editing in place in memory. You can use it to point the field to a string in a database record so that you can edit that string directly using field routines. </p>
+
+<p><a name="997877"> </a>As characters are added to the field's text, the block that contains the text is grown. So that the block doesn't have to be expanded for each character, it is expanded several bytes at a time; this expansion may result in some unused space in the text block. As characters are removed from the field's text, the space is not automatically reclaimed. Because adding or removing characters when editing a data record in place may result in unused space at the end of the field's text block, applications should call <a href="Field.html#996322"><code>FldCompactText()</code></a> on before the field is unlocked to release any unused space.</p>
+
+<p><a name="997881"> </a>The handle that you pass to this function is assumed to contain a null-terminated string starting at <code>offset</code> bytes in the memory chunk. The string should be between 0 and <code>size</code> - 1 bytes in length. The field does not make a copy of the memory chunk or the string data; instead, it stores the handle to the record in its structure. </p>
+
+<div><hr>
+  <a name="997882"> </a> <span class="warning">WARNING! </span> You cannot use this function to set two fields on a form so that they share a single string value. Thus, for instance, if you have a single string containing a person's name you cannot call <code>FldSetText</code> twice with the same string (but a different offset) to set up a first name field and a last name field.
+<hr>
+</div>
+
+<p><a name="997883"> </a><code>FldSetText</code> updates the word-wrapping information and places the insertion point after the last visible character, but it does not update the display. You must call <a href="Field.html#996492"><code>FldDrawField()</code></a> after calling this function to update the display. </p>
+
+<p><a name="997887"> </a><code>FldSetText</code> increments the lock count for <code>textHandle</code> and decrements the lock count of its previous text handle (if any). </p>
+
+<p><a name="997888"> </a>Because <code>FldSetText</code> (and <code>FldSetTextHandle</code>) may be used to edit database records, they do not free the memory associated with the previous text handle. If the previous text handle points to a string on the dynamic heap and you want to free it, use <a href="Field.html#996869"><code>FldGetTextHandle()</code></a> to obtain the handle before using <code>FldSetText</code> and then free that handle after using <code>FldSetText</code>. (See <a href="Field.html#997937"><code>FldSetTextHandle()</code></a> for a code example.) </p>
+
+<p><a name="997896"> </a>If the field points to a database record, you want the memory associated with the text handle to persist; however, this memory and all other memory associated with the field is freed when the field itself is freed, which happens when the form is closed. If you don't want the memory associated with the text handle freed when the field is freed, use <code>FldSetText</code> and pass <code>NULL</code> for the text handle immediately before the form is closed. Passing <code>NULL</code> removes the association between the field and the text handle that you want retained. That text handle is unlocked as a result of the <code>FldSetText</code> call, and when the field is freed, there is no text handle to free with it. </p>
+<h4>
+  <a name="997897"> </a>See Also 
+</h4>
+
+<p><a name="997904"> </a><a href="Field.html#997995"><code>FldSetTextPtr()</code></a>, <a href="Field.html#997937"><code>FldSetTextHandle()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997907"> </a>FldSetTextAllocatedSize Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997909"> </a>Purpose 
+</h4>
+
+<p><a name="997910"> </a>Set the number of bytes allocated to hold the field's text string. Don't confuse this with the actual length of the text string displayed in the field. </p>
+<h4>
+  <a name="997911"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997912"> </a></code><h4>
+  <a name="997913"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997914"></a>void FldSetTextAllocatedSize (
+   FieldType *fldP,
+   UInt16 allocatedSize
+)
+</pre>
+<h4>
+  <a name="997915"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997916"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997920"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997921"> </a><code>&rarr;  <i>allocatedSize</i></code></dt>
+<dd><a name="997922"> </a>Number of bytes to allocate for the text.</dd>
+
+</dl>
+<h4>
+  <a name="997923"> </a>Returns 
+</h4>
+
+<p><a name="997924"> </a>Returns nothing.</p>
+<h4>
+  <a name="997925"> </a>Comments 
+</h4>
+
+<p><a name="997926"> </a>This function generally is not used. It does not resize the field's allocated memory for the text string; it merely sets the <code>textBlockSize</code> field of the <code>FieldType</code> structure. The value of this field is computed and maintained internally by the field, so you should not have to call <code>FldSetTextAllocatedSize</code> directly. </p>
+<h4>
+  <a name="997927"> </a>See Also 
+</h4>
+
+<p><a name="997934"> </a><a href="Field.html#996846"><code>FldGetTextAllocatedSize()</code></a>, <a href="Field.html#996322"><code>FldCompactText()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997937"> </a>FldSetTextHandle Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997939"> </a>Purpose 
+</h4>
+
+<p><a name="997940"> </a>Set the text value of a field to the string associated with the specified handle. Does not update the display. </p>
+<h4>
+  <a name="997941"> </a>Declared In 
+</h4>
+<code>Field.h<a name="997942"> </a></code><h4>
+  <a name="997943"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="997944"></a>void FldSetTextHandle (
+   FieldType *fldP,
+   MemHandle textHandle
+)
+</pre>
+<h4>
+  <a name="997945"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="997946"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="997950"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="997951"> </a><code>&rarr;  <i>textHandle</i></code></dt>
+<dd><a name="997952"> </a>Unlocked handle of a field's text string. Pass <code>NULL</code> for this parameter to remove the association between the field and the string it is currently displaying so that the string is not freed with the field when the form is deleted. </dd>
+
+</dl>
+<h4>
+  <a name="997953"> </a>Returns 
+</h4>
+
+<p><a name="997954"> </a>Returns nothing.</p>
+<h4>
+  <a name="997955"> </a>Comments 
+</h4>
+
+<p><a name="997959"> </a>This function differs from <a href="Field.html#997853"><code>FldSetText()</code></a> in that it uses the entire memory chunk pointed to by <code>textHandle</code> for the string. In fact, this function simply calls <code>FldSetText</code> with an offset of 0 and a size equal to the entire length of the memory chunk. Use it to have the field edit a string in a database record if the entire record consists of that string, or use it to have the field edit a string in the dynamic heap. </p>
+
+<p><a name="997960"> </a>As characters are added to the field's text, the block that contains the text is grown. So that the block doesn't have to be expanded for each character, it is expanded several bytes at a time; this expansion may result in some unused space in the text block. As characters are removed from the field's text, the space is not automatically reclaimed. Because adding or removing characters when editing a data record in place may result in unused space at the end of the field's text block, applications should call <a href="Field.html#996322"><code>FldCompactText()</code></a> on before the field is unlocked to release any unused space.</p>
+
+<p><a name="997964"> </a><code>FldSetTextHandle</code> updates the word-wrapping information and places the insertion point after the last visible character, but it does not update the display. You must call <a href="Field.html#996492"><code>FldDrawField()</code></a> after calling this function to update the display. </p>
+
+<p><a name="997968"> </a><code>FldSetTextHandle</code> increments the lock count for <code>textHandle</code> and decrements the lock count of its previous text handle (if any). </p>
+
+<p><a name="997969"> </a>Because <code>FldSetTextHandle</code> (and <code>FldSetText</code>) may be used to edit database records, they do not free the memory associated with the previous text handle. If the previous text handle points to a string on the dynamic heap and you want to free it, use <a href="Field.html#996869"><code>FldGetTextHandle()</code></a> to obtain the handle before using <code>FldSetText</code> and then free that handle after using <code>FldSetText</code>. For example:</p>
+
+<div class="CodeRule"><hr></div><pre class="CodeBlock">
+/* get the old text handle */<a name="997973"> </a>
+oldTxtH = FldGetTextHandle(fldP);<a name="997974"> </a>
+ <a name="997975"> </a>
+/* change the text and update the display */<a name="997976"> </a>
+FldSetTextHandle(fldP, txtH);<a name="997977"> </a>
+FldDrawField(fldP);<a name="997978"> </a>
+ <a name="997979"> </a>
+/* free the old text handle */<a name="997980"> </a>
+if (oldTxtH != NULL) <a name="997981"> </a>
+  MemHandleFree(oldTxtH);<a name="997982"> </a>
+</pre><div class="CodeRule"><hr></div>
+
+
+<p><a name="997984"> </a>If the field points to a database record, you want the memory associated with the text handle to persist; however, this memory and all other memory associated with the field is freed when the field itself is freed, which happens when the form is closed. If you don't want the memory associated with the text handle freed when the field is freed, use <code>FldSetTextHandle</code> and pass <code>NULL</code> for the text handle immediately before the form is closed. Passing <code>NULL</code> removes the association between the field and the text handle that you want retained. That text handle is unlocked as a result of the <code>FldSetTextHandle</code> call, and when the field is freed, there is no text handle to free with it. </p>
+<h4>
+  <a name="997985"> </a>See Also 
+</h4>
+
+<p><a name="997992"> </a><a href="Field.html#997995"><code>FldSetTextPtr()</code></a>, <a href="Field.html#997853"><code>FldSetText()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="997995"> </a>FldSetTextPtr Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="997997"> </a>Purpose 
+</h4>
+
+<p><a name="997998"> </a>Set a noneditable field's text to point to the specified text string.</p>
+<h4>
+  <a name="997999"> </a>Declared In 
+</h4>
+<code>Field.h<a name="998000"> </a></code><h4>
+  <a name="998001"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998002"></a>void FldSetTextPtr (
+   FieldType *fldP,
+   Char *textP
+)
+</pre>
+<h4>
+  <a name="998003"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998004"> </a><code>&rarr;  <i>fldP</i></code></dt>
+<dd><a name="998008"> </a>Pointer to a field object (<a href="Field.html#996018"><code>FieldType</code></a> structure).</dd>
+
+<dt><a name="998009"> </a><code>&rarr;  <i>textP</i></code></dt>
+<dd><a name="998010"> </a>Pointer to a null-terminated string.</dd>
+
+</dl>
+<h4>
+  <a name="998011"> </a>Returns 
+</h4>
+
+<p><a name="998012"> </a>Returns nothing. May display an error message if passed an editable text field.</p>
+<h4>
+  <a name="998013"> </a>Comments 
+</h4>
+
+<p><a name="998014"> </a>Do not call <code>FldSetTextPtr</code> with an editable text field. Instead, call <a href="Field.html#997937"><code>FldSetTextHandle()</code></a> for editable text fields. <code>FldSetTextPtr</code> is intended for displaying noneditable text in the user interface. </p>
+
+<p><a name="998021"> </a>If the field has more than one line, use <a href="Field.html#997317"><code>FldRecalculateField()</code></a> to recalculate the word wrapping.</p>
+
+<p><a name="998022"> </a>This function does <i>not</i> visually update the field. Use <a href="Field.html#996492"><code>FldDrawField()</code></a> to do so. </p>
+
+<p><a name="998026"> </a>The field never frees the string that you pass to this function, even when the field itself is freed. You must free the string yourself. Before you free the string, make sure the field is not still displaying it. Set the field's string pointer to some other string or call <code>FldSetTextPtr(fldP, NULL)</code> before freeing a string you have passed using this function. </p>
+<h4>
+  <a name="998027"> </a>Compatibility 
+</h4>
+
+<p><a name="998028"> </a>On versions of Palm OS prior to Palm OS 4.0 you cannot supply <code>NULL</code> for the <code class="par">textP</code> parameter: the function calls <code>StrLen() </code>on the <code>NULL</code> pointer which results in a crash.</p>
+<h4>
+  <a name="998029"> </a>See Also 
+</h4>
+
+<p><a name="998036"> </a><a href="Field.html#997937"><code>FldSetTextHandle()</code></a>, <a href="Field.html#996963"><code>FldGetTextPtr()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998039"> </a>FldSetUsable Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998041"> </a>Purpose 
+</h4>
+
+<p><a name="998042"> </a>Set a field to usable or nonusable. </p>
+<h4>
+  <a name="998043"> </a>Declared In 
+</h4>
+<code>Field.h<a name="998044"> </a></code><h4>
+  <a name="998045"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998046"></a>void FldSetUsable (
+   FieldType *fldP,
+   Boolean usable
+)
+</pre>
+<h4>
+  <a name="998047"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998048"> </a><code>fldP</code></dt>
+<dd><a name="998052"> </a>Pointer to a <a href="Field.html#996018"><code>FieldType</code></a> structure.</dd>
+
+<dt><a name="998053"> </a><code>usable</code></dt>
+<dd><a name="998054"> </a><code>true</code> to set usable; false to set nonusable.</dd>
+
+</dl>
+<h4>
+  <a name="998055"> </a>Returns 
+</h4>
+
+<p><a name="998056"> </a>Returns nothing.</p>
+<h4>
+  <a name="998057"> </a>Comments 
+</h4>
+
+<p><a name="998058"> </a>A nonusable field doesn't display or accept input.</p>
+
+<p><a name="998065"> </a>Use <a href="Form.html#998311"><code>FrmHideObject()</code></a> and <a href="Form.html#999211"><code>FrmShowObject()</code></a> instead of using this function. </p>
+<h4>
+  <a name="998066"> </a>See Also 
+</h4>
+
+<p><a name="998076"> </a><a href="Field.html#996520"><code>FldEraseField()</code></a>, <a href="Field.html#996492"><code>FldDrawField()</code></a>, <a href="Field.html#995863"><code>FieldAttrType</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998079"> </a>FldUndo Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998081"> </a>Purpose 
+</h4>
+
+<p><a name="998082"> </a>Undo the last change made to the field object, if any. Changes include typing, backspaces, delete, paste, and cut.</p>
+<h4>
+  <a name="998083"> </a>Declared In 
+</h4>
+<code>Field.h<a name="998084"> </a></code><h4>
+  <a name="998085"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998086"></a>void FldUndo (
+   FieldType *fldP
+)
+</pre>
+<h4>
+  <a name="998087"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998088"> </a><code>fldP</code></dt>
+<dd><a name="998092"> </a>Pointer to the field (<a href="Field.html#996018"><code>FieldType</code></a> structure) that has the focus.</dd>
+
+</dl>
+<h4>
+  <a name="998093"> </a>Returns 
+</h4>
+
+<p><a name="998094"> </a>Returns nothing.</p>
+<h4>
+  <a name="998095"> </a>See Also 
+</h4>
+
+<p><a name="998108"> </a><a href="Field.html#997275"><code>FldPaste()</code></a>, <a href="Field.html#996382"><code>FldCut()</code></a>, <a href="Field.html#996416"><code>FldDelete()</code></a>, <a href="Field.html#997123"><code>FldInsert()</code></a> </p>
+
+<h3 class="hbH3">
+  <a name="998111"> </a>FldWordWrap Function <a href="Field.html#995796"><span class="nav">^TOP^</span></a>
+</h3>
+
+<h4>
+  <a name="998113"> </a>Purpose 
+</h4>
+
+<p><a name="998114"> </a>Given a string and a width, return the number of bytes of characters that can be displayed using the current font.</p>
+<h4>
+  <a name="998115"> </a>Declared In 
+</h4>
+<code>Field.h<a name="998116"> </a></code><h4>
+  <a name="998117"> </a>Prototype 
+</h4>
+<pre class="proto"><a name="998118"></a>UInt16 FldWordWrap (
+   const Char *chars,
+   Int16 maxWidth
+)
+</pre>
+<h4>
+  <a name="998119"> </a>Parameters 
+</h4>
+
+<dl>
+<dt><a name="998120"> </a><code>&rarr;  <i>chars</i></code></dt>
+<dd><a name="998121"> </a>Pointer to a null-terminated string.</dd>
+
+<dt><a name="998122"> </a><code>&rarr;  <i><code>maxWidth</code></i></code></dt>
+<dd><a name="998123"> </a>Maximum line width in pixels. </dd>
+
+</dl>
+<h4>
+  <a name="998124"> </a>Returns 
+</h4>
+
+<p><a name="998125"> </a>Returns the length in bytes of the characters that can be displayed. </p>
+<h4>
+  <a name="998126"> </a>See Also 
+</h4>
+
+<p><a name="998130"> </a><a href="Font.html#1000839"><code>FntWordWrap()</code></a> </p>
+
+<p><a name="998131"> </a></p>
+&nbsp;<br>
+</div>
+<!--END CONTENT-->
+
+</td>
+<td width="5">&nbsp;&nbsp;</td>
+</tr>
+
+</table>
+
+<!-- BEGIN FOOTER -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="7" rowspan="2"><img name="index_x" src="images/shim.gif" width="7" height="33" border="0" alt=""></td>
+<td align="left"><img name="dashes" src="images/dashes.gif" width="744" height="3" border="0" alt=""></td>
+<td width="10" rowspan="2"><img name="index_x" src="images/shim.gif" width="10" height="33" border="0" alt=""></td>
+</tr>
+<tr>
+<td align="center">
+<p class="footer">
+Copyright © 1996-2004, PalmSource, Inc. and its affiliates.  All rights reserved. <br>
+<a href="http://www.palmsource.com/contact/">Write Us</a> | <a href="http://www.palmos.com/dev/training/">Training</a> | <a href="http://www.palmos.com/dev/support/kb/">Knowledge Base</a> | <a href="Reference_Front.html" target="_blank">Legal</a></p>
+<br>
+<!--BEGIN BOOK NAVIGATION-->
+<p class="nav">
+<A href="http://www.palmos.com/dev/support/docs/">Documentation</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+<a href="ReferenceTOC.html">Table of Contents</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="DateAndTimeSelector.html">&lt;&nbsp;Previous</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="Find.html">Next&nbsp;&gt;</a>&nbsp;&nbsp;
+             |&nbsp;&nbsp;<a href="ReferenceIX.html">Index</a>
+</p>
+</td>
+</tr>
+</table>
+<!-- END FOOTER -->
+
+</body>
+</html>

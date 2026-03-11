@@ -3,6 +3,7 @@ extern crate alloc;
 use alloc::{vec, vec::Vec};
 
 use crate::prc_app::prc::parse_prc;
+use crate::prc_app::runtime;
 
 #[derive(Clone, Debug)]
 pub struct PrcBitmap {
@@ -173,6 +174,19 @@ pub fn parse_prc_bitmaps(raw: &[u8]) -> Vec<PrcBitmap> {
             continue;
         };
         if let Some(parsed) = parse_bitmap_blob(res.id, blob) {
+            out.push(parsed);
+        }
+    }
+    out
+}
+
+pub fn parse_prc_bitmaps_from_resource_blobs(resources: &[runtime::ResourceBlob]) -> Vec<PrcBitmap> {
+    let mut out = Vec::new();
+    for res in resources {
+        if res.kind != u32::from_be_bytes(*b"Tbmp") && res.kind != u32::from_be_bytes(*b"tAIB") {
+            continue;
+        }
+        if let Some(parsed) = parse_bitmap_blob(res.id, &res.data) {
             out.push(parsed);
         }
     }

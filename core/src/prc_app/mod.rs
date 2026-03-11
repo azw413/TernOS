@@ -18,3 +18,4 @@ pub use prc::{
     PrcCodeScan, PrcDbKind, PrcInfo, PrcResourceEntry, PrcSectionStat, PrcTrapHit,
     format_info_lines, parse_prc,
 };
+pub use bootstrap::parse_prc_resource_blobs;

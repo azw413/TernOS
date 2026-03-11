@@ -4,8 +4,13 @@ use crate::prc_app::prc::PrcInfo;
 use crate::prc_app::traps::{TrapGroup, table};
 
 pub const SYS_APP_LAUNCH_CMD_NORMAL_LAUNCH: u16 = 0;
+pub const SYS_APP_LAUNCH_CMD_PANEL_CALLED_FROM_APP: u16 = 13;
 pub const EVT_NIL: u16 = 0;
+pub const EVT_PEN_DOWN: u16 = 1;
+pub const EVT_KEY_DOWN: u16 = 4;
 pub const EVT_CTL_SELECT: u16 = 9;
+pub const EVT_FLD_ENTER: u16 = 15;
+pub const EVT_FLD_CHANGED: u16 = 17;
 pub const EVT_MENU: u16 = 21;
 pub const EVT_FRM_LOAD: u16 = 23;
 pub const EVT_FRM_OPEN: u16 = 24;
@@ -18,6 +23,7 @@ pub struct PrcRuntimeContext {
     pub active_form_id: Option<u16>,
     pub active_form_handle: u32,
     pub active_form_handler: u32,
+    pub focused_field_index: Option<u16>,
     pub form_return_stack: alloc::vec::Vec<u16>,
     pub sys_app_info_ptr: u32,
     pub shutting_down: bool,
@@ -200,6 +206,10 @@ pub struct RuntimeFormObject {
     pub kind: RuntimeFormObjectKind,
     pub ptr: u32,
     pub text_handle: u32,
+    pub sel_start: u16,
+    pub sel_end: u16,
+    pub ins_pt: u16,
+    pub dirty: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -283,6 +293,7 @@ impl Default for PrcRuntimeContext {
             active_form_id: None,
             active_form_handle: 0x3000_0000,
             active_form_handler: 0,
+            focused_field_index: None,
             form_return_stack: alloc::vec::Vec::new(),
             sys_app_info_ptr: 0,
             shutting_down: false,

@@ -125,7 +125,10 @@ pub fn derive_prc_entry_in_code1(code: &[u8]) -> u32 {
         let head = u32::from_be_bytes([code[0], code[1], code[2], code[3]]);
         let w4 = u16::from_be_bytes([code[4], code[5]]);
         // Common Palm code#1 layout has a 4-byte header before function prologue.
-        if (head == 0 || head == 1) && matches!(w4, 0x4E56 | 0x48E7 | 0x2F0E | 0x4E71) {
+        // ROM apps also use a small entry veneer starting with `PEA 4(PC)` (0x487A)
+        // before the regular prologue.
+        if (head == 0 || head == 1) && matches!(w4, 0x4E56 | 0x48E7 | 0x2F0E | 0x4E71 | 0x487A)
+        {
             return 4;
         }
     }
