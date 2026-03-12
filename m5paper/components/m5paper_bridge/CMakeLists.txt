@@ -12,6 +12,8 @@ idf_component_register(
     REQUIRES
         arduino-esp32
         driver
+        esp_timer
+        esp_netif
 )
 
 target_compile_features(${COMPONENT_LIB} PRIVATE cxx_std_17)

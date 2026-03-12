@@ -1,11 +1,12 @@
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::ffi::CString;
 
 use tern_core::display::RefreshMode;
 use tern_core::platform::{
-    BatteryStatus, ClockDevice, DisplayCaps, DisplayDensity, DisplayDevice, DisplayRotation,
-    Platform, PlatformCaps, PlatformError, PlatformInputEvent, PowerDevice, SleepMode,
-    StorageDevice,
+    BatteryStatus, ButtonId, ClockDevice, DisplayCaps, DisplayDensity, DisplayDevice,
+    DisplayRotation, Platform, PlatformCaps, PlatformError, PlatformInputEvent, PowerDevice, SleepMode,
+    StorageDevice, StorageEntry,
 };
 
 use crate::ffi;
@@ -135,20 +136,75 @@ impl ClockDevice for M5PaperIdfClock {
 pub struct M5PaperIdfStorage;
 
 impl StorageDevice for M5PaperIdfStorage {
-    fn read(&self, _path: &str) -> Result<Vec<u8>, PlatformError> {
-        Err(PlatformError::Unsupported)
+    fn read(&self, path: &str) -> Result<Vec<u8>, PlatformError> {
+        let c_path = CString::new(path).map_err(|_| PlatformError::Invalid)?;
+        let size = ffi::storage_file_size(&c_path).map_err(|err| match err {
+            ffi::Status::NotFound => PlatformError::NotFound,
+            ffi::Status::Unsupported => PlatformError::Unsupported,
+            _ => PlatformError::Io,
+        })?;
+
+        let mut data = vec![0u8; size as usize];
+        let mut offset = 0u32;
+        while offset < size {
+            let read = ffi::storage_read_chunk(&c_path, offset, &mut data[offset as usize..])
+                .map_err(|err| match err {
+                    ffi::Status::NotFound => PlatformError::NotFound,
+                    ffi::Status::Unsupported => PlatformError::Unsupported,
+                    _ => PlatformError::Io,
+                })?;
+            if read == 0 {
+                return Err(PlatformError::Io);
+            }
+            offset += read;
+        }
+        Ok(data)
     }
 
     fn write(&mut self, _path: &str, _data: &[u8]) -> Result<(), PlatformError> {
         Err(PlatformError::Unsupported)
     }
 
-    fn list(&self, _path: &str) -> Result<Vec<tern_core::platform::StorageEntry>, PlatformError> {
-        Err(PlatformError::Unsupported)
+    fn list(&self, path: &str) -> Result<Vec<StorageEntry>, PlatformError> {
+        let c_path = CString::new(path).map_err(|_| PlatformError::Invalid)?;
+        ffi::storage_list_begin(&c_path).map_err(|err| match err {
+            ffi::Status::NotFound => PlatformError::NotFound,
+            ffi::Status::Unsupported => PlatformError::Unsupported,
+            _ => PlatformError::Io,
+        })?;
+
+        let mut entries = Vec::new();
+        loop {
+            match ffi::storage_list_next() {
+                Ok(Some(entry)) => {
+                    let nul_pos = entry.name.iter().position(|&b| b == 0).unwrap_or(entry.name.len());
+                    let name = String::from_utf8_lossy(&entry.name[..nul_pos]).into_owned();
+                    entries.push(StorageEntry {
+                        name,
+                        is_dir: entry.is_dir,
+                        size: u64::from(entry.size),
+                    });
+                }
+                Ok(None) => break,
+                Err(err) => {
+                    ffi::storage_list_end();
+                    return Err(match err {
+                        ffi::Status::NotFound => PlatformError::NotFound,
+                        ffi::Status::Unsupported => PlatformError::Unsupported,
+                        _ => PlatformError::Io,
+                    });
+                }
+            }
+        }
+        ffi::storage_list_end();
+        Ok(entries)
     }
 
-    fn exists(&self, _path: &str) -> bool {
-        false
+    fn exists(&self, path: &str) -> bool {
+        match CString::new(path) {
+            Ok(c_path) => ffi::storage_exists(&c_path),
+            Err(_) => false,
+        }
     }
 }
 
@@ -172,7 +228,6 @@ pub struct M5PaperIdfPlatform {
     clock: M5PaperIdfClock,
     storage: M5PaperIdfStorage,
     power: M5PaperIdfPower,
-    last_touch_down: bool,
 }
 
 impl M5PaperIdfPlatform {
@@ -182,7 +237,6 @@ impl M5PaperIdfPlatform {
             clock: M5PaperIdfClock,
             storage: M5PaperIdfStorage,
             power: M5PaperIdfPower,
-            last_touch_down: false,
         }
     }
 
@@ -194,6 +248,7 @@ impl M5PaperIdfPlatform {
         let info = ffi::epd_init()?;
         ffi::touch_init()?;
         ffi::rtc_init()?;
+        ffi::storage_init()?;
         Ok(info)
     }
 
@@ -203,18 +258,18 @@ impl M5PaperIdfPlatform {
     }
 
     pub fn run_demo_loop(&mut self) -> ! {
+        let mut last_touch_down = false;
         let mut last_logged = None;
         loop {
             if let Ok(state) = ffi::touch_read() {
-                if state.touched != self.last_touch_down
-                    || state.touched
-                        && last_logged != Some((state.x, state.y, state.count))
+                if state.touched != last_touch_down
+                    || state.touched && last_logged != Some((state.x, state.y, state.count))
                 {
                     println!(
                         "rust m5paper: touch touched={} x={} y={} count={}",
                         state.touched, state.x, state.y, state.count
                     );
-                    self.last_touch_down = state.touched;
+                    last_touch_down = state.touched;
                     last_logged = Some((state.x, state.y, state.count));
                 }
             }
@@ -238,7 +293,7 @@ impl Platform for M5PaperIdfPlatform {
     fn caps(&self) -> PlatformCaps {
         PlatformCaps {
             has_touch: true,
-            has_buttons: false,
+            has_buttons: true,
             has_keyboard: false,
             has_wifi: true,
             has_bluetooth: true,
@@ -266,16 +321,49 @@ impl Platform for M5PaperIdfPlatform {
     }
 
     fn poll_input(&mut self, sink: &mut dyn FnMut(PlatformInputEvent)) {
-        if let Ok(state) = ffi::touch_read() {
-            let x = state.x as i32;
-            let y = state.y as i32;
-            match (self.last_touch_down, state.touched) {
-                (false, true) => sink(PlatformInputEvent::TouchDown { x, y }),
-                (true, true) => sink(PlatformInputEvent::TouchMove { x, y }),
-                (true, false) => sink(PlatformInputEvent::TouchUp { x, y }),
-                (false, false) => {}
+        while let Ok(Some(event)) = ffi::input_next() {
+            match event.event_type {
+                x if x == ffi::InputEventType::ButtonDown as u8 => {
+                    let Some(button) = map_button_id(event.button_id) else {
+                        continue;
+                    };
+                    sink(PlatformInputEvent::ButtonDown(button));
+                }
+                x if x == ffi::InputEventType::ButtonUp as u8 => {
+                    let Some(button) = map_button_id(event.button_id) else {
+                        continue;
+                    };
+                    sink(PlatformInputEvent::ButtonUp(button));
+                }
+                x if x == ffi::InputEventType::TouchDown as u8 => {
+                    sink(PlatformInputEvent::TouchDown {
+                        x: event.x as i32,
+                        y: event.y as i32,
+                    });
+                }
+                x if x == ffi::InputEventType::TouchMove as u8 => {
+                    sink(PlatformInputEvent::TouchMove {
+                        x: event.x as i32,
+                        y: event.y as i32,
+                    });
+                }
+                x if x == ffi::InputEventType::TouchUp as u8 => {
+                    sink(PlatformInputEvent::TouchUp {
+                        x: event.x as i32,
+                        y: event.y as i32,
+                    });
+                }
+                _ => {}
             }
-            self.last_touch_down = state.touched;
         }
+    }
+}
+
+fn map_button_id(button_id: u8) -> Option<ButtonId> {
+    match button_id {
+        x if x == ffi::ButtonId::Up as u8 => Some(ButtonId::Up),
+        x if x == ffi::ButtonId::Down as u8 => Some(ButtonId::Down),
+        x if x == ffi::ButtonId::Power as u8 => Some(ButtonId::Power),
+        _ => None,
     }
 }

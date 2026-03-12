@@ -4,10 +4,18 @@ set -euo pipefail
 cd "$(dirname "$0")/m5paper"
 
 source /Users/andrew/export-esp.sh
+export IDF_TOOLS_PATH="$(pwd)/../.embuild/espressif"
+export ESP_IDF_COMPONENT_MANAGER=false
 
 rm -rf ../target/xtensa-esp32-espidf ../target/release/build/esp-idf-sys-*
 
-cargo +esp build --release --features cshim
+build_log="../target/run-m5-build.log"
+mkdir -p ../target
+if ! cargo +esp build --release --features cshim >"${build_log}" 2>&1; then
+  echo "M5Paper build failed. Last 200 lines from ${build_log}:" >&2
+  tail -n 200 "${build_log}" >&2 || true
+  exit 1
+fi
 
 elf_path="$(ls -td ../target/xtensa-esp32-espidf/release/build/esp-idf-sys-*/out/build/libespidf.elf | head -n1)"
 

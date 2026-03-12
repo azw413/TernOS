@@ -1,8 +1,16 @@
 #include "m5paper_bridge.h"
 
+#include <algorithm>
+#include <array>
 #include <cinttypes>
+#include <cstdio>
+#include <cstring>
+#include <dirent.h>
+#include <string>
+#include <sys/stat.h>
 
 #include <Arduino.h>
+#include <SD.h>
 #include <SPI.h>
 #include <Wire.h>
 #include "esp_log.h"
@@ -26,6 +34,9 @@ constexpr int kEpdBusyPin = 27;
 constexpr int kTouchIntPin = 36;
 constexpr int kTouchSdaPin = 21;
 constexpr int kTouchSclPin = 22;
+constexpr int kButtonUpPin = 37;
+constexpr int kButtonPowerPin = 38;
+constexpr int kButtonDownPin = 39;
 
 constexpr uint16_t kPanelWidth = 540;
 constexpr uint16_t kPanelHeight = 960;
@@ -34,16 +45,48 @@ constexpr uint16_t kVcomMv = 2300;
 constexpr const char* kLogTag = "m5paper_bridge";
 constexpr uint32_t kBridgeTaskStackWords = 12 * 1024;
 constexpr UBaseType_t kBridgeTaskPriority = 5;
+constexpr size_t kInputQueueCapacity = 64;
 
 bool g_arduino_ready = false;
 bool g_board_ready = false;
 bool g_epd_ready = false;
 bool g_touch_ready = false;
 bool g_rtc_ready = false;
+bool g_storage_ready = false;
 M5EPD_Driver g_epd(VSPI);
 BM8563 g_rtc;
 GT911 g_touch;
-static uint8_t g_test_rect[(64 * 64) / 2];
+DIR* g_storage_list_dir = nullptr;
+char g_storage_list_path[384] = {};
+std::array<tern_m5paper_input_event_t, kInputQueueCapacity> g_input_queue = {};
+size_t g_input_queue_head = 0;
+size_t g_input_queue_tail = 0;
+
+constexpr const char* kStorageMountPoint = "/sd";
+
+bool normalize_storage_path(const char* path, char* out_path, size_t out_len) {
+    if (out_path == nullptr || out_len == 0) {
+        return false;
+    }
+    if (path == nullptr || path[0] == '\0' || std::strcmp(path, "/") == 0) {
+        return std::snprintf(out_path, out_len, "%s", kStorageMountPoint) < static_cast<int>(out_len);
+    }
+    if (path[0] == '/') {
+        return std::snprintf(out_path, out_len, "%s%s", kStorageMountPoint, path) < static_cast<int>(out_len);
+    }
+    return std::snprintf(out_path, out_len, "%s/%s", kStorageMountPoint, path) < static_cast<int>(out_len);
+}
+
+tern_m5paper_status_t stat_storage_path(const char* path, struct stat* st) {
+    char full_path[384];
+    if (!normalize_storage_path(path, full_path, sizeof(full_path))) {
+        return TERN_M5PAPER_IO_ERROR;
+    }
+    if (stat(full_path, st) != 0) {
+        return TERN_M5PAPER_NOT_FOUND;
+    }
+    return TERN_M5PAPER_OK;
+}
 
 tern_m5paper_status_t map_epd_status(m5epd_err_t status) {
     switch (status) {
@@ -63,9 +106,17 @@ void ensure_arduino() {
     }
 }
 
+void push_input_event(const tern_m5paper_input_event_t& event) {
+    const size_t next_tail = (g_input_queue_tail + 1) % kInputQueueCapacity;
+    if (next_tail == g_input_queue_head) {
+        g_input_queue_head = (g_input_queue_head + 1) % kInputQueueCapacity;
+    }
+    g_input_queue[g_input_queue_tail] = event;
+    g_input_queue_tail = next_tail;
+}
+
 void bridge_task(void*) {
     tern_m5paper_epd_info_t info = {};
-    tern_m5paper_touch_state_t touch = {};
 
     auto board_status = tern_m5paper_board_init();
     ESP_LOGI(kLogTag, "board_init=%d", static_cast<int>(board_status));
@@ -84,34 +135,10 @@ void bridge_task(void*) {
     if (epd_status == TERN_M5PAPER_OK) {
         auto clear_status = tern_m5paper_epd_clear(true);
         ESP_LOGI(kLogTag, "epd_clear=%d", static_cast<int>(clear_status));
-
-        constexpr uint16_t rect_w = 64;
-        constexpr uint16_t rect_h = 64;
-        memset(g_test_rect, 0xFF, sizeof(g_test_rect));
-        auto rect_status =
-            tern_m5paper_epd_update_region(0, 0, rect_w, rect_h, g_test_rect, sizeof(g_test_rect));
-        ESP_LOGI(
-            kLogTag,
-            "epd_test_rect=%d x=0 y=0 w=%u h=%u bytes=%u",
-            static_cast<int>(rect_status),
-            rect_w,
-            rect_h,
-            static_cast<unsigned>(sizeof(g_test_rect))
-        );
     }
 
     auto touch_status = tern_m5paper_touch_init();
     ESP_LOGI(kLogTag, "touch_init=%d", static_cast<int>(touch_status));
-    auto read_status = tern_m5paper_touch_read(&touch);
-    ESP_LOGI(
-        kLogTag,
-        "touch_read=%d touched=%d x=%" PRIu16 " y=%" PRIu16 " count=%" PRIu8,
-        static_cast<int>(read_status),
-        static_cast<int>(touch.touched),
-        touch.x,
-        touch.y,
-        touch.count
-    );
 
     tern_m5paper_rtc_datetime_t rtc = {};
     auto rtc_status = tern_m5paper_rtc_read(&rtc);
@@ -128,28 +155,99 @@ void bridge_task(void*) {
         rtc.week
     );
 
-    bool last_touched = touch.touched;
-    uint16_t last_x = touch.x;
-    uint16_t last_y = touch.y;
-    uint8_t last_count = touch.count;
-    while (true) {
-        auto status = tern_m5paper_touch_read(&touch);
-        if (status == TERN_M5PAPER_OK &&
-            (touch.touched != last_touched || touch.x != last_x || touch.y != last_y || touch.count != last_count)) {
-            ESP_LOGI(
-                kLogTag,
-                "touch_poll touched=%d x=%" PRIu16 " y=%" PRIu16 " count=%" PRIu8,
-                static_cast<int>(touch.touched),
-                touch.x,
-                touch.y,
-                touch.count
-            );
-            last_touched = touch.touched;
-            last_x = touch.x;
-            last_y = touch.y;
-            last_count = touch.count;
+    auto storage_status = tern_m5paper_storage_init();
+    ESP_LOGI(kLogTag, "storage_init=%d", static_cast<int>(storage_status));
+    if (storage_status == TERN_M5PAPER_OK) {
+        if (tern_m5paper_storage_list_begin("/") == TERN_M5PAPER_OK) {
+            ESP_LOGI(kLogTag, "sd_root_list begin");
+            uint8_t count = 0;
+            while (count < 32) {
+                tern_m5paper_storage_entry_t entry = {};
+                auto next_status = tern_m5paper_storage_list_next(&entry);
+                if (next_status != TERN_M5PAPER_OK) {
+                    break;
+                }
+                ESP_LOGI(
+                    kLogTag,
+                    "sd_entry type=%s name=%s size=%u",
+                    entry.is_dir ? "dir" : "file",
+                    entry.name,
+                    static_cast<unsigned>(entry.size)
+                );
+                ++count;
+            }
+            tern_m5paper_storage_list_end();
+            ESP_LOGI(kLogTag, "sd_root_list end count=%u", count);
+        } else {
+            ESP_LOGW(kLogTag, "sd_root_open failed");
         }
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    tern_m5paper_button_state_t last_buttons = {};
+    tern_m5paper_touch_state_t last_touch = {};
+    while (true) {
+        tern_m5paper_button_state_t buttons = {};
+        if (tern_m5paper_buttons_read(&buttons) == TERN_M5PAPER_OK) {
+            if (buttons.up_pressed != last_buttons.up_pressed) {
+                push_input_event({
+                    static_cast<uint8_t>(buttons.up_pressed ? TERN_M5PAPER_INPUT_BUTTON_DOWN
+                                                           : TERN_M5PAPER_INPUT_BUTTON_UP),
+                    TERN_M5PAPER_BUTTON_UP,
+                    0,
+                    0,
+                    0,
+                });
+            }
+            if (buttons.power_pressed != last_buttons.power_pressed) {
+                push_input_event({
+                    static_cast<uint8_t>(buttons.power_pressed ? TERN_M5PAPER_INPUT_BUTTON_DOWN
+                                                               : TERN_M5PAPER_INPUT_BUTTON_UP),
+                    TERN_M5PAPER_BUTTON_POWER,
+                    0,
+                    0,
+                    0,
+                });
+            }
+            if (buttons.down_pressed != last_buttons.down_pressed) {
+                push_input_event({
+                    static_cast<uint8_t>(buttons.down_pressed ? TERN_M5PAPER_INPUT_BUTTON_DOWN
+                                                              : TERN_M5PAPER_INPUT_BUTTON_UP),
+                    TERN_M5PAPER_BUTTON_DOWN,
+                    0,
+                    0,
+                    0,
+                });
+            }
+            last_buttons = buttons;
+        }
+
+        tern_m5paper_touch_state_t touch = {};
+        if (tern_m5paper_touch_read(&touch) == TERN_M5PAPER_OK) {
+            if (touch.touched != last_touch.touched) {
+                push_input_event({
+                    static_cast<uint8_t>(touch.touched ? TERN_M5PAPER_INPUT_TOUCH_DOWN
+                                                       : TERN_M5PAPER_INPUT_TOUCH_UP),
+                    0,
+                    touch.x,
+                    touch.y,
+                    touch.count,
+                });
+                last_touch = touch;
+            } else if (touch.touched &&
+                       (touch.x != last_touch.x || touch.y != last_touch.y || touch.count != last_touch.count)) {
+                push_input_event({
+                    TERN_M5PAPER_INPUT_TOUCH_MOVE,
+                    0,
+                    touch.x,
+                    touch.y,
+                    touch.count,
+                });
+                last_touch = touch;
+            }
+        }
+
+
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 
@@ -181,6 +279,9 @@ extern "C" tern_m5paper_status_t tern_m5paper_board_init(void) {
     pinMode(kExtPowerPin, OUTPUT);
     pinMode(kEpdPowerPin, OUTPUT);
     pinMode(kTouchIntPin, INPUT);
+    pinMode(kButtonUpPin, INPUT_PULLUP);
+    pinMode(kButtonPowerPin, INPUT_PULLUP);
+    pinMode(kButtonDownPin, INPUT_PULLUP);
 
     digitalWrite(kMainPowerPin, HIGH);
     delay(100);
@@ -304,6 +405,34 @@ extern "C" tern_m5paper_status_t tern_m5paper_touch_read(tern_m5paper_touch_stat
     return TERN_M5PAPER_OK;
 }
 
+extern "C" tern_m5paper_status_t tern_m5paper_buttons_read(tern_m5paper_button_state_t* out_state) {
+    if (out_state == nullptr) {
+        return TERN_M5PAPER_IO_ERROR;
+    }
+
+    auto status = tern_m5paper_board_init();
+    if (status != TERN_M5PAPER_OK) {
+        return status;
+    }
+
+    out_state->up_pressed = digitalRead(kButtonUpPin) == LOW;
+    out_state->power_pressed = digitalRead(kButtonPowerPin) == LOW;
+    out_state->down_pressed = digitalRead(kButtonDownPin) == LOW;
+    return TERN_M5PAPER_OK;
+}
+
+extern "C" tern_m5paper_status_t tern_m5paper_input_next(tern_m5paper_input_event_t* out_event) {
+    if (out_event == nullptr) {
+        return TERN_M5PAPER_IO_ERROR;
+    }
+    if (g_input_queue_head == g_input_queue_tail) {
+        return TERN_M5PAPER_NOT_FOUND;
+    }
+    *out_event = g_input_queue[g_input_queue_head];
+    g_input_queue_head = (g_input_queue_head + 1) % kInputQueueCapacity;
+    return TERN_M5PAPER_OK;
+}
+
 extern "C" tern_m5paper_status_t tern_m5paper_rtc_init(void) {
     auto board_status = tern_m5paper_board_init();
     if (board_status != TERN_M5PAPER_OK) {
@@ -368,5 +497,167 @@ extern "C" tern_m5paper_status_t tern_m5paper_rtc_set(const tern_m5paper_rtc_dat
         return TERN_M5PAPER_IO_ERROR;
     }
 
+    return TERN_M5PAPER_OK;
+}
+
+extern "C" tern_m5paper_status_t tern_m5paper_storage_init(void) {
+    auto board_status = tern_m5paper_board_init();
+    if (board_status != TERN_M5PAPER_OK) {
+        return board_status;
+    }
+
+    auto epd_status = tern_m5paper_epd_init(nullptr);
+    if (epd_status != TERN_M5PAPER_OK) {
+        return epd_status;
+    }
+
+    if (!g_storage_ready) {
+        if (!SD.begin(4, *g_epd.GetSPI(), 20000000, kStorageMountPoint, 8, false)) {
+            return TERN_M5PAPER_IO_ERROR;
+        }
+        g_storage_ready = true;
+    }
+
+    return TERN_M5PAPER_OK;
+}
+
+extern "C" bool tern_m5paper_storage_exists(const char* path) {
+    if (path == nullptr || tern_m5paper_storage_init() != TERN_M5PAPER_OK) {
+        return false;
+    }
+    struct stat st = {};
+    return stat_storage_path(path, &st) == TERN_M5PAPER_OK;
+}
+
+extern "C" tern_m5paper_status_t tern_m5paper_storage_list_begin(const char* path) {
+    if (path == nullptr) {
+        return TERN_M5PAPER_IO_ERROR;
+    }
+    auto status = tern_m5paper_storage_init();
+    if (status != TERN_M5PAPER_OK) {
+        return status;
+    }
+
+    if (g_storage_list_dir != nullptr) {
+        closedir(g_storage_list_dir);
+        g_storage_list_dir = nullptr;
+    }
+
+    char full_path[384];
+    if (!normalize_storage_path(path, full_path, sizeof(full_path))) {
+        return TERN_M5PAPER_IO_ERROR;
+    }
+
+    g_storage_list_dir = opendir(full_path);
+    if (g_storage_list_dir == nullptr) {
+        return TERN_M5PAPER_NOT_FOUND;
+    }
+    std::strncpy(g_storage_list_path, full_path, sizeof(g_storage_list_path) - 1);
+    g_storage_list_path[sizeof(g_storage_list_path) - 1] = '\0';
+    return TERN_M5PAPER_OK;
+}
+
+extern "C" tern_m5paper_status_t tern_m5paper_storage_list_next(tern_m5paper_storage_entry_t* out_entry) {
+    if (out_entry == nullptr) {
+        return TERN_M5PAPER_IO_ERROR;
+    }
+    if (g_storage_list_dir == nullptr) {
+        return TERN_M5PAPER_NOT_FOUND;
+    }
+
+    while (true) {
+        struct dirent* entry = readdir(g_storage_list_dir);
+        if (entry == nullptr) {
+            return TERN_M5PAPER_NOT_FOUND;
+        }
+        if (std::strcmp(entry->d_name, ".") == 0 || std::strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        memset(out_entry, 0, sizeof(*out_entry));
+        std::strncpy(out_entry->name, entry->d_name, sizeof(out_entry->name) - 1);
+        out_entry->name[sizeof(out_entry->name) - 1] = '\0';
+
+        char child_path[384];
+        std::strncpy(child_path, g_storage_list_path, sizeof(child_path) - 1);
+        child_path[sizeof(child_path) - 1] = '\0';
+        size_t base_len = std::strlen(child_path);
+        if (base_len + 1 + std::strlen(entry->d_name) + 1 > sizeof(child_path)) {
+            return TERN_M5PAPER_IO_ERROR;
+        }
+        if (base_len > 1 || child_path[base_len - 1] != '/') {
+            std::strcat(child_path, "/");
+        }
+        std::strcat(child_path, entry->d_name);
+
+        struct stat st = {};
+        if (stat(child_path, &st) != 0) {
+            out_entry->is_dir = false;
+            out_entry->size = 0;
+        } else {
+            out_entry->is_dir = S_ISDIR(st.st_mode);
+            out_entry->size = static_cast<uint32_t>(st.st_size);
+        }
+        return TERN_M5PAPER_OK;
+    }
+}
+
+extern "C" void tern_m5paper_storage_list_end(void) {
+    if (g_storage_list_dir != nullptr) {
+        closedir(g_storage_list_dir);
+        g_storage_list_dir = nullptr;
+    }
+    g_storage_list_path[0] = '\0';
+}
+
+extern "C" tern_m5paper_status_t tern_m5paper_storage_file_size(const char* path, uint32_t* out_size) {
+    if (path == nullptr || out_size == nullptr) {
+        return TERN_M5PAPER_IO_ERROR;
+    }
+    auto status = tern_m5paper_storage_init();
+    if (status != TERN_M5PAPER_OK) {
+        return status;
+    }
+
+    struct stat st = {};
+    auto stat_status = stat_storage_path(path, &st);
+    if (stat_status != TERN_M5PAPER_OK) {
+        return stat_status;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        return TERN_M5PAPER_NOT_FOUND;
+    }
+    *out_size = static_cast<uint32_t>(st.st_size);
+    return TERN_M5PAPER_OK;
+}
+
+extern "C" tern_m5paper_status_t tern_m5paper_storage_read_chunk(const char* path,
+                                                                  uint32_t offset,
+                                                                  uint8_t* out_buf,
+                                                                  uint32_t buf_len,
+                                                                  uint32_t* out_read) {
+    if (path == nullptr || out_buf == nullptr || out_read == nullptr) {
+        return TERN_M5PAPER_IO_ERROR;
+    }
+    auto status = tern_m5paper_storage_init();
+    if (status != TERN_M5PAPER_OK) {
+        return status;
+    }
+
+    char full_path[384];
+    if (!normalize_storage_path(path, full_path, sizeof(full_path))) {
+        return TERN_M5PAPER_IO_ERROR;
+    }
+
+    FILE* file = fopen(full_path, "rb");
+    if (file == nullptr) {
+        return TERN_M5PAPER_NOT_FOUND;
+    }
+    if (fseek(file, static_cast<long>(offset), SEEK_SET) != 0) {
+        fclose(file);
+        return TERN_M5PAPER_IO_ERROR;
+    }
+    *out_read = static_cast<uint32_t>(fread(out_buf, 1, buf_len, file));
+    fclose(file);
     return TERN_M5PAPER_OK;
 }

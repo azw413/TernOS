@@ -3,7 +3,7 @@ fn main() {
 
     if std::env::var_os("CARGO_FEATURE_CSHIM").is_some() {
         println!("cargo:rerun-if-changed=components/m5paper_bridge/CMakeLists.txt");
-        println!("cargo:rerun-if-changed=components/m5paper_bridge/idf_component.yml");
+        println!("cargo:rerun-if-changed=components/m5paper_bridge/idf_component.yml.disabled");
         println!("cargo:rerun-if-changed=components/m5paper_bridge/m5paper_bridge.cpp");
         println!("cargo:rerun-if-changed=cshim/m5paper_bridge.h");
         println!("cargo:rerun-if-changed=../../M5EPD/src/M5EPD_Driver.cpp");

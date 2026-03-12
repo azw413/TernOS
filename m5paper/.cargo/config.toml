@@ -8,7 +8,8 @@ rustflags = ["--cfg", "espidf_time64"]
 
 [env]
 ESP_IDF_SYS_ROOT_CRATE = "tern-m5paper"
-IDF_TOOLS_PATH = { value = "/Users/andrew/embedded/TernReader/.espressif", force = true }
+IDF_TOOLS_PATH = { value = "/Users/andrew/embedded/TernReader/.embuild/espressif", force = true }
+ESP_IDF_COMPONENT_MANAGER = { value = "false", force = true }
 
 [unstable]
 build-std = ["std", "panic_abort"]

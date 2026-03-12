@@ -1,12 +1,86 @@
-# TernReader Xteink X4 Rust Firmware with Book and Image viewer
+# TernOS - a PalmOS compatible operating system for modern microcontroller devices
 
-> **Easy flashing + file conversion:** Use the web app at [https://ternreader.org](https://ternreader.org) to flash the latest firmware and convert images/EPUBs.
+> **Easy flashing + file conversion:** Use the web app at [https://ternreader.org](https://ternreader.org) to flash the latest firmware and convert images/EPUBs for XTEink X4.
 
 <img src="ternreader_logo_4color.svg" alt="TernReader logo" width="320" />
 
-This is an alternative firmware for the hugely popular XTEink X4 eReader device. The device is ESP32-C3 based and therefore completely open for hacking and development.
+## Current devices supported
 
-Every other firmware out there for this device is based on PlatformIO and C++, this one is based on embedded Rust and hopefully serves as an example of just how powerful rust is for embedded programming.
+* XTEink X4 (ESP-C3 RiscV core, ~512kb RAM, 480x800 epd, no touch)
+* M5Stack M5Paper (ESP32 xtensa core, 8MB RAM, 540 x 960 epd, touchscreen)
+* Native desktop simulator 
+
+All of the existing firmwares for these devices are single application firmwares e.g. Crosspoint, i.e. one app delivered as a firmware which means that you can't do anything else on the device. 
+
+TernOS aims to be a more general purpose OS, taking it's inspiration from the defunct PalmOS, it provides system / hardware services, a rich UI library, database services and apps and databases as loadable resources. It also emulates the original Palm 68k hardware so you can run most of the original Palm apps.    
+
+## Status
+
+- Desktop and XTEink X4: reader/image-viewer path is working, and simple PalmOS apps run.
+- M5Paper: hardware backend is working (EPD, touch, RTC, SD/FAT with long filenames). It is not yet hosting the full Tern runtime.
+
+## Building
+
+### Toolchains
+
+- Common:
+  - Rust nightly with `rust-src`
+  - `cargo`
+- Desktop:
+  - no extra toolchain beyond Rust
+- XTEink X4:
+  - `cargo-espflash` / `espflash`
+  - RISC-V ESP target support (`riscv32imc-unknown-none-elf`)
+- M5Paper:
+  - Espressif Rust toolchain installed via `espup`
+  - ESP-IDF environment script available, e.g. `source /Users/Me/export-esp.sh`
+  - `espflash`
+
+`m5paper` uses a vendored `arduino-esp32` component under `third_party/arduino-esp32`, and the build runs with the ESP-IDF component manager disabled for repeatable builds.
+
+### Desktop
+
+```sh
+cargo run --package tern-desktop
+```
+
+### XTEink X4
+
+Build, flash, and monitor:
+
+```sh
+./run-x4.sh
+```
+
+Manual build only:
+
+```sh
+cargo espflash save-image --release --chip=esp32c3 --target=riscv32imc-unknown-none-elf --package=tern-x4 firmware.bin
+```
+
+### M5Paper
+
+In each new shell, load the ESP environment first:
+
+```sh
+source /Users/andrew/export-esp.sh
+```
+
+Build, flash, and monitor:
+
+```sh
+./run-m5.sh
+```
+
+Manual build only:
+
+```sh
+cd m5paper
+cargo +esp build --release --features cshim
+```
+
+The script cleans the ESP-IDF build products, rebuilds `m5paper`, locates the generated `libespidf.elf`, and flashes it with `espflash`.
+
 
 ## Features
 
@@ -97,20 +171,6 @@ Make sure you have some suitable content on the sdcard.
 ___
 
 This repo was originally cloned from: https://github.com/HookedBehemoth/TrustyReader be sure to check back there. Since then book and image viewing have been added here.
-
-## Build
-- Rust & cargo
-- Espressif toolchain + build deps (required for FatFs C build):
-  - https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32/get-started/linux-macos-setup.html
-  - After install, run `. ./export.sh` from the ESP-IDF install dir in each new shell
-- riscv32 toolchain https://docs.espressif.com/projects/rust/book/getting-started/toolchain.html
-- [espflash](https://github.com/esp-rs/espflash/tree/main/espflash/)
-
-Since I want to keep the original partition layout but still use the espflash utils, there is `run.sh` which builds and runs a firmware image.
-
-Can be ran on desktop with `cargo run --package tern-desktop`
-
-To build, flash and run on device use `./run.sh`
 
 ## Flashing
 
