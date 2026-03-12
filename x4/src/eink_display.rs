@@ -13,7 +13,7 @@ use log::{error, info, warn};
 use tern_core::{
     display::{Display, GrayscaleMode, RefreshMode},
     framebuffer::{BUFFER_SIZE, DisplayBuffers},
-    platform::{DisplayCaps, DisplayDensity, DisplayDevice, DisplayRotation},
+    platform::{DisplayCaps, DisplayDensity, DisplayDevice, DisplayRotation, LogicalStyle},
 };
 
 // SSD1677 Command Definitions
@@ -594,8 +594,10 @@ where
     fn caps(&self) -> DisplayCaps {
         DisplayCaps {
             partial_refresh: true,
-            grayscale: true,
+            gray_levels: 4,
+            bits_per_pixel: 2,
             rotation: DisplayRotation::Rotate0,
+            logical_style: LogicalStyle::TernPortrait,
         }
     }
 

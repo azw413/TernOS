@@ -1,0 +1,28 @@
+CMake Warning at /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/build.cmake:577 (message):
+  "idf_component.yml" file was found for components:
+
+  	/Users/andrew/embedded/TernReader/third_party/arduino-esp32
+
+  However, the component manager is not enabled.
+Call Stack (most recent call first):
+  /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/project.cmake:710 (idf_build_process)
+  CMakeLists.txt:11 (project)
+
+
+CMake Error at /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/tool_version_check.cmake:36 (message):
+  
+
+  Tool doesn't match supported version from list ['esp-13.2.0_20240530']:
+  /Users/andrew/.rustup/toolchains/esp/xtensa-esp-elf/esp-15.2.0_20250920/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc
+
+
+  Please try to run 'idf.py fullclean' to solve it.
+
+Call Stack (most recent call first):
+  /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_common/project_include.cmake:10 (check_expected_tool_version)
+  /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/build.cmake:400 (include)
+  /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/build.cmake:632 (__build_process_project_includes)
+  /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/project.cmake:710 (idf_build_process)
+  CMakeLists.txt:11 (project)
+
+

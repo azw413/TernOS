@@ -1,4 +1,5 @@
 use crate::framebuffer::{BUFFER_SIZE, DisplayBuffers};
+use crate::ui::Rect;
 
 pub const WIDTH: usize = 800;
 pub const HEIGHT: usize = 480;
@@ -23,6 +24,10 @@ pub enum GrayscaleMode {
 
 pub trait Display {
     fn display(&mut self, buffers: &mut DisplayBuffers, mode: RefreshMode);
+    fn display_region(&mut self, buffers: &mut DisplayBuffers, rect: Rect, mode: RefreshMode) {
+        let _ = rect;
+        self.display(buffers, mode);
+    }
     fn copy_to_lsb(&mut self, buffers: &[u8; BUFFER_SIZE]);
     fn copy_to_msb(&mut self, buffers: &[u8; BUFFER_SIZE]);
     fn copy_grayscale_buffers(&mut self, lsb: &[u8; BUFFER_SIZE], msb: &[u8; BUFFER_SIZE]);

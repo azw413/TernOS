@@ -86,6 +86,42 @@ No widget should assume:
 - a fixed physical framebuffer size
 - a fixed 1:1 mapping from logical Palm pixels to device pixels
 
+### Runtime Root Can Be Platform-Specific
+
+The higher Tern layers should remain shared, but the lowest runtime root is allowed to differ by platform.
+
+Current practical split:
+
+- `desktop`
+  - Rust owns the process root and runtime loop
+- `x4`
+  - Rust owns the process root and runtime loop
+- `m5paper`
+  - ESP-IDF/Arduino bridge owns `app_main()`
+  - Rust is not currently the startup root
+
+This is a build-system constraint, not a design goal.
+
+The architectural rule is:
+
+- startup ownership may differ
+- policy, app state, rendering decisions, and shared UI concepts should still converge in shared layers
+- platform-specific root code must stay thin
+
+### One-Way Bridge Rule For M5Paper
+
+For `m5paper`, the only stable integration model proven so far is:
+
+- Rust may call the bridge/backend
+- the bridge/backend must not call upward into Rust runtime code
+
+Implications:
+
+- `m5paper_bridge` is a backend service host
+- it may own startup and hardware polling
+- it must not become the place where long-term application logic lives
+- temporary bridge-hosted screens are acceptable only as bootstrap/debug surfaces
+
 ## Target Module Layout
 
 ### Existing `tern_core`
@@ -98,6 +134,29 @@ The long-term split inside `core/src` should look like this:
   - new native OS/runtime layer
 - `ui/`
   - shared rendering primitives and Palm-like component painting
+
+### Current M5Paper Runtime Shape
+
+`m5paper` currently uses:
+
+- `m5paper/components/m5paper_bridge`
+  - ESP-IDF/Arduino-backed hardware services
+  - current runtime root
+- `m5paper/src/ffi.rs`
+  - Rust FFI wrapper
+- `m5paper/src/platform.rs`
+  - Rust platform wrapper aligned to the shared platform traits
+
+The stable service surface already includes:
+
+- EPD init / clear / region update
+- touch init / read
+- side button init / read
+- input event queue
+- RTC init / read / set
+- storage init / exists / list / read
+
+That is enough to keep the shared design moving even though Rust is not yet the on-device runtime root for this target.
 
 ### New `core/src/ternos/`
 
@@ -258,6 +317,7 @@ Renderer input should be:
 - logical viewport size
 - output surface size
 - theme and density
+- device display capabilities
 
 Suggested context:
 
@@ -273,6 +333,227 @@ pub struct UiRenderContext {
     pub theme: UiTheme,
 }
 ```
+
+### Device Display Capabilities
+
+The UI runtime must explicitly model the display characteristics of the target device.
+
+Suggested canonical type:
+
+```rust
+pub struct DisplayProfile {
+    pub surface_width: u32,
+    pub surface_height: u32,
+    pub native_rotation: DisplayRotation,
+    pub gray_levels: u8,
+    pub bits_per_pixel: u8,
+    pub has_partial_refresh: bool,
+    pub preferred_refresh: RefreshStrategy,
+    pub logical_style: LogicalStyle,
+}
+```
+
+Suggested related enums:
+
+```rust
+pub enum LogicalStyle {
+    Palm160,
+    Palm320,
+    TernPortrait,
+    TernLandscape,
+}
+
+pub enum RefreshStrategy {
+    FullOnly,
+    PartialPreferred,
+    Mixed,
+}
+```
+
+This lets the renderer distinguish between:
+
+- X4:
+  - `surface = 480x800`
+  - `gray_levels = 4`
+  - portrait-first UI
+  - more conservative grayscale rendering
+- M5Paper:
+  - `surface = 540x960`
+  - `gray_levels = 16`
+  - touch-first UI
+  - richer grayscale rendering and finer text
+
+Important rule:
+
+- device capabilities are not theme choices
+- theme controls look and spacing
+- display profile controls physical rendering limits
+
+### Logical Coordinates vs Physical Surface
+
+The shared UI must render in logical coordinates first, then map to the physical surface.
+
+There should be at least two logical coordinate spaces:
+
+- Palm-compatible logical space
+  - for emulated Palm forms and Palm-like native tools
+- Tern-native logical space
+  - for full-screen native apps and launchers
+
+Suggested canonical viewport type:
+
+```rust
+pub struct LogicalViewport {
+    pub width: i32,
+    pub height: i32,
+    pub style: LogicalStyle,
+}
+```
+
+Examples:
+
+- Palm app on M5Paper:
+  - logical viewport may still be `160x160` or `320x320`
+  - renderer centers/scales inside `540x960`
+- Native launcher on X4:
+  - logical viewport may be `480x800`
+  - no Palm scaling step required
+- Native app on M5Paper:
+  - logical viewport may be `540x960`
+  - higher-resolution layout and text allowed
+
+This is the key abstraction that lets us use higher resolution without breaking Palm compatibility.
+
+### Gray Depth and Color Policy
+
+The renderer must target a logical grayscale palette, then quantize to the device profile.
+
+Suggested model:
+
+```rust
+pub enum LogicalColor {
+    Bg0,
+    Bg1,
+    Bg2,
+    Bg3,
+    Fg0,
+    Fg1,
+    Fg2,
+    Fg3,
+    Accent0,
+    Accent1,
+}
+```
+
+Then theme + display profile map that logical palette to actual device output.
+
+Rules:
+
+- Palm compatibility widgets should render acceptably at 1-bit, 2-bit, and 4-bit grayscale.
+- Native Tern UI may use more tonal steps when available.
+- Rendering code should not directly assume:
+  - 4 shades
+  - 16 shades
+  - monochrome only
+
+Instead:
+
+1. paint into a logical grayscale buffer
+2. quantize using `DisplayProfile.gray_levels`
+3. apply device-specific dithering only as a presentation step
+
+That keeps widget logic consistent across X4 and M5Paper.
+
+### Typography Strategy
+
+Typography should scale by both logical style and display profile.
+
+Rules:
+
+- Palm-emulated forms:
+  - preserve Palm font ids and Palm metrics semantics as closely as possible
+- Native Tern UI:
+  - choose font sizes using physical surface and gray depth
+- Small text on 16-gray M5Paper can be materially finer than on 4-gray X4
+- Layout metrics should come from theme tables, not ad hoc per-screen code
+
+Suggested API extension:
+
+```rust
+pub trait UiThemeApi {
+    fn frame_metrics(&self, kind: FrameKind) -> FrameMetrics;
+    fn control_metrics(&self, kind: ControlKind) -> ControlMetrics;
+    fn font_for_id(
+        &self,
+        font_id: u8,
+        density: UiDensity,
+        display: &DisplayProfile,
+    ) -> FontHandle;
+}
+```
+
+### Asset Policy
+
+Static assets should exist in logical form, not just device-specific bitmaps.
+
+Recommended rules:
+
+- icons and glyphs:
+  - prefer vector-ish draw routines or multi-resolution generated assets
+- UI chrome:
+  - prefer procedural drawing from theme metrics
+- app bitmaps:
+  - allow multiple resource variants where needed
+
+Suggested resource selection scheme:
+
+- same logical asset id
+- optional variants by:
+  - density
+  - grayscale depth
+  - orientation
+
+For example:
+
+- Palm launcher icon variant for `Palm160`
+- native launcher icon variant for `TernPortrait`
+
+### Layout Policy Across Devices
+
+There are two layout modes the system must support:
+
+1. Compatibility layout
+   - exact or near-exact Palm geometry
+   - used for Palm apps and Palm-style dialogs
+
+2. Adaptive Tern layout
+   - responsive to `DisplayProfile`
+   - used for launcher, browser, reader, settings, and native apps
+
+The mistake to avoid is trying to stretch Palm layouts into full-screen native layouts automatically.
+
+Instead:
+
+- Palm UI keeps Palm logical geometry
+- native Tern UI gets its own adaptive layout system
+
+### Rendering Pipeline
+
+Recommended pipeline:
+
+1. choose `LogicalViewport`
+2. construct `UiRenderContext`
+3. paint to a logical grayscale scene buffer
+4. scale/composite into the physical surface buffer
+5. quantize to device gray depth
+6. submit with device refresh policy
+
+This is important because X4 and M5Paper differ in both:
+
+- physical resolution
+- usable grayscale depth
+
+The pipeline should make those differences explicit, not incidental.
 
 ### Density and Scaling
 
@@ -298,6 +579,8 @@ Rules:
 - renderer applies scale and density transforms
 - stroke widths and font choices come from theme metrics, not hardcoded per widget
 - hit testing should work in logical units
+- density is not a substitute for display profile
+- density selects a logical UI family; display profile selects physical presentation limits
 
 ### Theme
 
@@ -316,6 +599,30 @@ pub trait UiThemeApi {
     fn font_for_id(&self, font_id: u8, density: UiDensity) -> FontHandle;
 }
 ```
+
+### Device Adaptation Rules
+
+Concrete rules for current targets:
+
+#### X4
+
+- preferred native Tern layout: portrait `480x800`
+- target gray depth: 4 levels
+- avoid over-light intermediate tones for small text
+- prefer stronger contrast and simpler fills
+
+#### M5Paper
+
+- preferred native Tern layout: portrait `540x960`
+- target gray depth: 16 levels
+- permit finer borders, softer fills, and smaller antialiased text
+- touch hit targets should still be sized in logical UI units, not raw pixels
+
+#### Desktop
+
+- may emulate Palm logical displays
+- may also render native Tern layouts at arbitrary window sizes
+- should expose scaling/debug modes so layout assumptions are visible early
 
 ## Palm Compatibility Layer
 

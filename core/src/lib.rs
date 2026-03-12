@@ -11,6 +11,8 @@ pub mod input;
 pub mod palm_db;
 pub mod platform;
 pub mod prc_app;
+pub mod render_policy;
+pub mod runtime_host;
 pub mod ui;
 pub mod trbk;
 pub mod test_image;

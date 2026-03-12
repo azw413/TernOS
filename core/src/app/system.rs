@@ -18,9 +18,10 @@ use crate::{
         home::draw_icon_gray2,
         image_viewer::ImageViewerState,
     },
-    display::{GrayscaleMode, RefreshMode},
+    display::RefreshMode,
     framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH},
     image_viewer::{AppSource, EntryKind, ImageData, ImageEntry},
+    render_policy::RenderPolicy,
     ui::{flush_queue, ReaderView, Rect, RenderQueue, UiContext, View},
 };
 
@@ -40,6 +41,7 @@ pub struct SystemRenderContext<'a, S: AppSource> {
     pub display_buffers: &'a mut DisplayBuffers,
     pub gray2_lsb: &'a mut [u8],
     pub gray2_msb: &'a mut [u8],
+    pub render_policy: RenderPolicy,
     pub source: &'a mut S,
     pub image_viewer: &'a mut ImageViewerState,
     pub book_reader: &'a mut BookReaderState,
@@ -435,7 +437,7 @@ impl SystemState {
             let lsb: &[u8; BUFFER_SIZE] = (&*ctx.gray2_lsb).try_into().unwrap();
             let msb: &[u8; BUFFER_SIZE] = (&*ctx.gray2_msb).try_into().unwrap();
             display.copy_grayscale_buffers(lsb, msb);
-            display.display_absolute_grayscale(GrayscaleMode::Fast);
+            display.display_absolute_grayscale(ctx.render_policy.absolute_grayscale_mode);
             ctx.display_buffers.copy_active_to_inactive();
         }
     }
@@ -642,6 +644,7 @@ impl SystemState {
         let mut rq = RenderQueue::default();
         let mut ui = UiContext {
             buffers: ctx.display_buffers,
+            render_policy: ctx.render_policy,
         };
         let mut reader = ReaderView::new(image);
         reader.refresh = RefreshMode::Full;

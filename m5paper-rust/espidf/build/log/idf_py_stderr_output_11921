@@ -1,0 +1,34 @@
+CMake Error at /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/build.cmake:552 (message):
+  Traceback (most recent call last):
+
+    File "/opt/homebrew/Caskroom/miniforge/base/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+      return _run_code(code, main_globals, None,
+    File "/opt/homebrew/Caskroom/miniforge/base/lib/python3.10/runpy.py", line 86, in _run_code
+      exec(code, run_globals)
+    File "/Users/andrew/embedded/TernReader/.embuild/espressif/python_env/idf5.3_py3.10_env/lib/python3.10/site-packages/idf_component_manager/prepare_components/__main__.py", line 6, in <module>
+      main()
+    File "/Users/andrew/embedded/TernReader/.embuild/espressif/python_env/idf5.3_py3.10_env/lib/python3.10/site-packages/idf_component_manager/prepare_components/prepare.py", line 337, in main
+      args.func(args)
+    File "/Users/andrew/embedded/TernReader/.embuild/espressif/python_env/idf5.3_py3.10_env/lib/python3.10/site-packages/idf_component_manager/prepare_components/prepare.py", line 146, in prepare_dep_dirs
+      local_components_list_file = _get_component_list_file(args.local_components_list_file)
+    File "/Users/andrew/embedded/TernReader/.embuild/espressif/python_env/idf5.3_py3.10_env/lib/python3.10/site-packages/idf_component_manager/prepare_components/prepare.py", line 102, in _get_component_list_file
+      component_list_parent_pid = _get_ppid_file_path(local_components_list_file)
+    File "/Users/andrew/embedded/TernReader/.embuild/espressif/python_env/idf5.3_py3.10_env/lib/python3.10/site-packages/idf_component_manager/prepare_components/prepare.py", line 70, in _get_ppid_file_path
+      return Path(f'{local_component_list_file}.{get_cmake_pid()}')
+    File "/Users/andrew/embedded/TernReader/.embuild/espressif/python_env/idf5.3_py3.10_env/lib/python3.10/site-packages/idf_component_manager/prepare_components/cmake_pid.py", line 33, in get_cmake_pid
+      parent = current.parent()
+    File "/Users/andrew/embedded/TernReader/.embuild/espressif/python_env/idf5.3_py3.10_env/lib/python3.10/site-packages/psutil/__init__.py", line 597, in parent
+      lowest_pid = _LOWEST_PID if _LOWEST_PID is not None else pids()[0]
+    File "/Users/andrew/embedded/TernReader/.embuild/espressif/python_env/idf5.3_py3.10_env/lib/python3.10/site-packages/psutil/__init__.py", line 1485, in pids
+      ret = sorted(_psplatform.pids())
+    File "/Users/andrew/embedded/TernReader/.embuild/espressif/python_env/idf5.3_py3.10_env/lib/python3.10/site-packages/psutil/_psosx.py", line 320, in pids
+      ls = cext.pids()
+
+  PermissionError: [Errno 1] Operation not permitted (originated from
+  sysctl() malloc 1/3)
+
+Call Stack (most recent call first):
+  /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/project.cmake:710 (idf_build_process)
+  CMakeLists.txt:9 (project)
+
+

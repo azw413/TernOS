@@ -12,8 +12,9 @@ use embedded_graphics::{
 
 use crate::{
     app::home::{draw_icon_gray2, merge_bw_into_gray2},
-    display::{Display, GrayscaleMode, RefreshMode},
+    display::{Display, RefreshMode},
     framebuffer::{DisplayBuffers, BUFFER_SIZE},
+    render_policy::RenderPolicy,
     ui::{flush_queue, Rect, RenderQueue},
 };
 
@@ -24,6 +25,7 @@ pub struct SettingsContext<'a> {
     pub display_buffers: &'a mut DisplayBuffers,
     pub gray2_lsb: &'a mut [u8],
     pub gray2_msb: &'a mut [u8],
+    pub render_policy: RenderPolicy,
     pub logo_w: i32,
     pub logo_h: i32,
     pub logo_dark: &'a [u8],
@@ -88,7 +90,7 @@ pub fn draw_settings(ctx: &mut SettingsContext<'_>, display: &mut impl Display) 
         let lsb_buf: &[u8; BUFFER_SIZE] = (&*ctx.gray2_lsb).try_into().unwrap();
         let msb_buf: &[u8; BUFFER_SIZE] = (&*ctx.gray2_msb).try_into().unwrap();
         display.copy_grayscale_buffers(lsb_buf, msb_buf);
-        display.display_absolute_grayscale(GrayscaleMode::Fast);
+        display.display_absolute_grayscale(ctx.render_policy.absolute_grayscale_mode);
         ctx.display_buffers.copy_active_to_inactive();
     } else {
         let mut rq = RenderQueue::default();

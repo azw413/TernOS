@@ -1,5 +1,8 @@
 use log::info;
-use tern_core::platform::{ButtonId, DisplayCaps, DisplayDensity, DisplayDevice, DisplayRotation, PlatformInputEvent};
+use tern_core::platform::{
+    ButtonId, DisplayCaps, DisplayDensity, DisplayDevice, DisplayRotation, LogicalStyle,
+    PlatformInputEvent,
+};
 use tern_core::{
     display::{GrayscaleMode, HEIGHT, RefreshMode, WIDTH},
     framebuffer::DisplayBuffers,
@@ -381,8 +384,10 @@ impl DisplayDevice for MinifbDisplay {
     fn caps(&self) -> DisplayCaps {
         DisplayCaps {
             partial_refresh: true,
-            grayscale: true,
+            gray_levels: 16,
+            bits_per_pixel: 32,
             rotation: DisplayRotation::Rotate90,
+            logical_style: LogicalStyle::TernPortrait,
         }
     }
 

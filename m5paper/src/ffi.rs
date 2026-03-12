@@ -109,6 +109,7 @@ impl fmt::Display for Status {
 
 #[cfg(feature = "cshim")]
 unsafe extern "C" {
+    pub fn tern_m5paper_bridge_start() -> Status;
     pub fn tern_m5paper_board_init() -> Status;
     pub fn tern_m5paper_epd_init(out_info: *mut EpdInfo) -> Status;
     pub fn tern_m5paper_epd_clear(init: bool) -> Status;
@@ -143,6 +144,11 @@ unsafe extern "C" {
         buf_len: u32,
         out_read: *mut u32,
     ) -> Status;
+}
+
+#[cfg(feature = "cshim")]
+pub fn bridge_start() -> Status {
+    unsafe { tern_m5paper_bridge_start() }
 }
 
 #[cfg(feature = "cshim")]

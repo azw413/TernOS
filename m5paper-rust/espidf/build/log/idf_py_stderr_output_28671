@@ -1,0 +1,11 @@
+CMake Warning at /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/build.cmake:577 (message):
+  "idf_component.yml" file was found for components:
+
+  	/Users/andrew/embedded/TernReader/third_party/arduino-esp32
+
+  However, the component manager is not enabled.
+Call Stack (most recent call first):
+  /Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/tools/cmake/project.cmake:710 (idf_build_process)
+  CMakeLists.txt:11 (project)
+
+

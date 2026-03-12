@@ -1,0 +1,2 @@
+chip = "esp32"
+serial = "/dev/cu.usbserial-0214212B"

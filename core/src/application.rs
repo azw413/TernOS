@@ -50,12 +50,13 @@ use crate::{
         system::{ApplyResumeOutcome, ResumeContext, SleepWallpaperIcons, SystemRenderContext, SystemState},
     },
     build_info,
-    display::{GrayscaleMode, RefreshMode},
+    display::RefreshMode,
     framebuffer::{DisplayBuffers, Rotation},
     image_viewer::{AppSource, EntryKind, ImageEntry, ImageError},
     input,
     platform::PlatformInputEvent,
     prc_app,
+    render_policy::RenderPolicy,
     ui::{flush_queue, Rect, RenderQueue},
 };
 
@@ -103,6 +104,7 @@ pub struct Application<'a, S: AppSource> {
     install_last_summary: Option<(u32, u32, u32, u32, u32)>,
     gray2_lsb: Vec<u8>,
     gray2_msb: Vec<u8>,
+    render_policy: RenderPolicy,
     exit_from: ExitFrom,
     exit_overlay_drawn: bool,
 }
@@ -210,8 +212,13 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
     }
 
-    pub fn new(display_buffers: &'a mut DisplayBuffers, source: &'a mut S) -> Self {
+    pub fn new(
+        display_buffers: &'a mut DisplayBuffers,
+        source: &'a mut S,
+        display_caps: crate::platform::DisplayCaps,
+    ) -> Self {
         display_buffers.set_rotation(Rotation::Rotate90);
+        let render_policy = RenderPolicy::from_display_caps(display_caps);
         let resume_name = source.load_resume();
         let book_positions = source
             .load_book_positions()
@@ -257,14 +264,24 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_reserved_gray_initialized: false,
             install_scan_elapsed_ms: 0,
             install_last_summary: None,
-            gray2_lsb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
-            gray2_msb: vec![0u8; crate::framebuffer::BUFFER_SIZE],
+            gray2_lsb: Vec::new(),
+            gray2_msb: Vec::new(),
+            render_policy,
             exit_from: ExitFrom::Image,
             exit_overlay_drawn: false,
         };
         app.refresh_entries();
         app.try_resume();
         app
+    }
+
+    fn ensure_gray2_buffers(&mut self) {
+        if self.gray2_lsb.len() != crate::framebuffer::BUFFER_SIZE {
+            self.gray2_lsb.resize(crate::framebuffer::BUFFER_SIZE, 0);
+        }
+        if self.gray2_msb.len() != crate::framebuffer::BUFFER_SIZE {
+            self.gray2_msb.resize(crate::framebuffer::BUFFER_SIZE, 0);
+        }
     }
 
     fn scan_palm_install_inbox(&mut self) {
@@ -1590,6 +1607,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             source: self.source,
             full_refresh: self.system.full_refresh,
             battery_percent: self.system.battery_percent,
+            render_policy: self.render_policy,
             palm_fonts: self.home_system_fonts.as_slice(),
             icons,
             draw_trbk_image,
@@ -1616,6 +1634,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             source: self.source,
             full_refresh: self.system.full_refresh,
             battery_percent: self.system.battery_percent,
+            render_policy: self.render_policy,
             palm_fonts: self.prc_system_fonts.as_slice(),
             icons,
             draw_trbk_image,
@@ -1830,17 +1849,13 @@ impl<'a, S: AppSource> Application<'a, S> {
             let msb: &[u8; crate::framebuffer::BUFFER_SIZE] =
                 self.gray2_msb.as_slice().try_into().unwrap();
             display.copy_grayscale_buffers(lsb, msb);
-            display.display_absolute_grayscale(GrayscaleMode::Fast);
+            display.display_absolute_grayscale(self.render_policy.absolute_grayscale_mode);
             self.display_buffers.copy_active_to_inactive();
             self.prc_reserved_gray_initialized = true;
             return;
         }
 
-        let mode = if self.system.full_refresh {
-            RefreshMode::Full
-        } else {
-            RefreshMode::Fast
-        };
+        let mode = self.render_policy.refresh_mode(self.system.full_refresh);
         let mut rq = RenderQueue::default();
         let update_h = if strip_h > 0 {
             strip_top
@@ -1855,10 +1870,12 @@ impl<'a, S: AppSource> Application<'a, S> {
     }
 
     fn draw_settings(&mut self, display: &mut impl crate::display::Display) {
+        self.ensure_gray2_buffers();
         let mut ctx = SettingsContext {
             display_buffers: self.display_buffers,
             gray2_lsb: self.gray2_lsb.as_mut_slice(),
             gray2_msb: self.gray2_msb.as_mut_slice(),
+            render_policy: self.render_policy,
             logo_w: generated_icons::LOGO_WIDTH as i32,
             logo_h: generated_icons::LOGO_HEIGHT as i32,
             logo_dark: generated_icons::LOGO_DARK_MASK,
@@ -1901,12 +1918,14 @@ impl<'a, S: AppSource> Application<'a, S> {
 
 
     fn draw_image_viewer(&mut self, display: &mut impl crate::display::Display) {
+        self.ensure_gray2_buffers();
         let mut ctx = ImageViewerContext {
             display_buffers: self.display_buffers,
             gray2_lsb: self.gray2_lsb.as_mut_slice(),
             gray2_msb: self.gray2_msb.as_mut_slice(),
             source: self.source,
             wake_restore_only: &mut self.system.wake_restore_only,
+            render_policy: self.render_policy,
         };
         if let Err(err) = self.image_viewer.draw(&mut ctx, display) {
             self.set_error(err);
@@ -1916,12 +1935,14 @@ impl<'a, S: AppSource> Application<'a, S> {
 
 
     fn draw_book_reader(&mut self, display: &mut impl crate::display::Display) {
+        self.ensure_gray2_buffers();
         let mut ctx = BookReaderContext {
             display_buffers: self.display_buffers,
             gray2_lsb: self.gray2_lsb.as_mut_slice(),
             gray2_msb: self.gray2_msb.as_mut_slice(),
             source: self.source,
             full_refresh: &mut self.system.full_refresh,
+            render_policy: self.render_policy,
         };
         if let Err(err) = self.book_reader.draw_book(&mut ctx, display) {
             self.set_error(err);
@@ -1929,12 +1950,14 @@ impl<'a, S: AppSource> Application<'a, S> {
     }
 
     fn draw_toc_view(&mut self, display: &mut impl crate::display::Display) {
+        self.ensure_gray2_buffers();
         let mut ctx = BookReaderContext {
             display_buffers: self.display_buffers,
             gray2_lsb: self.gray2_lsb.as_mut_slice(),
             gray2_msb: self.gray2_msb.as_mut_slice(),
             source: self.source,
             full_refresh: &mut self.system.full_refresh,
+            render_policy: self.render_policy,
         };
         if let Err(err) = self.book_reader.draw_toc(&mut ctx, display) {
             self.set_error(err);
@@ -2046,6 +2069,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             display_buffers: self.display_buffers,
             gray2_lsb: self.gray2_lsb.as_mut_slice(),
             gray2_msb: self.gray2_msb.as_mut_slice(),
+            render_policy: self.render_policy,
             source: self.source,
             image_viewer: &mut self.image_viewer,
             book_reader: &mut self.book_reader,

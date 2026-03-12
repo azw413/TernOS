@@ -2,6 +2,7 @@ use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::{DrawTarget, OriginDimensions};
 
 use crate::image_viewer::ImageData;
+use crate::render_policy::RenderPolicy;
 
 use super::geom::Rect;
 use super::view::{RenderQueue, UiContext, View};
@@ -39,7 +40,7 @@ fn render_image(ctx: &mut UiContext<'_>, image: &ImageData) {
             width,
             height,
             pixels,
-        } => render_gray8(ctx, *width, *height, pixels),
+        } => render_gray8(ctx, *width, *height, pixels, ctx.render_policy),
         ImageData::Gray2 {
             width,
             height,
@@ -81,7 +82,13 @@ fn render_mono1(ctx: &mut UiContext<'_>, width: u32, height: u32, bits: &[u8]) {
     }
 }
 
-fn render_gray8(ctx: &mut UiContext<'_>, width: u32, height: u32, pixels: &[u8]) {
+fn render_gray8(
+    ctx: &mut UiContext<'_>,
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+    render_policy: RenderPolicy,
+) {
     let target = ctx.buffers.size();
     let target_w = target.width.max(1);
     let target_h = target.height.max(1);
@@ -99,13 +106,6 @@ fn render_gray8(ctx: &mut UiContext<'_>, width: u32, height: u32, pixels: &[u8])
     let offset_x = ((target_w - scaled_w) / 2) as i32;
     let offset_y = ((target_h - scaled_h) / 2) as i32;
 
-    let bayer: [[u8; 4]; 4] = [
-        [0, 8, 2, 10],
-        [12, 4, 14, 6],
-        [3, 11, 1, 9],
-        [15, 7, 13, 5],
-    ];
-
     for y in 0..scaled_h {
         let src_y = (y as u64 * img_h as u64 / scaled_h as u64) as usize;
         for x in 0..scaled_w {
@@ -115,11 +115,10 @@ fn render_gray8(ctx: &mut UiContext<'_>, width: u32, height: u32, pixels: &[u8])
                 continue;
             }
             let lum = pixels[idx];
-            let threshold = (bayer[(y as usize) & 3][(x as usize) & 3] * 16 + 8) as u8;
-            let color = if lum < threshold {
-                BinaryColor::Off
-            } else {
+            let color = if render_policy.binary_color_for_luma(x as i32, y as i32, lum) {
                 BinaryColor::On
+            } else {
+                BinaryColor::Off
             };
             ctx.buffers
                 .set_pixel(offset_x + x as i32, offset_y + y as i32, color);

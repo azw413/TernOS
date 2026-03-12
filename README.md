@@ -17,7 +17,7 @@ TernOS aims to be a more general purpose OS, taking it's inspiration from the de
 ## Status
 
 - Desktop and XTEink X4: reader/image-viewer path is working, and simple PalmOS apps run.
-- M5Paper: hardware backend is working (EPD, touch, RTC, SD/FAT with long filenames). It is not yet hosting the full Tern runtime.
+- M5Paper: hardware backend is working (EPD, touch, RTC, SD/FAT with long filenames). Runtime startup is currently bridge-owned; it is not yet hosting the full Rust-owned Tern runtime.
 
 ## Building
 

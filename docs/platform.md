@@ -75,6 +75,30 @@ Inside the current repository:
 - `x4/` implements the platform traits
 - `m5paper/` new binary crate implementing the platform traits
 
+## M5Paper Constraint
+
+`m5paper` is currently the one target where the runtime root differs from the cleaner Rust-owned model.
+
+Working arrangement:
+
+- `m5paper_bridge` owns `app_main()`
+- the bridge starts and hosts backend services
+- Rust consumes those services through FFI and platform wrappers
+
+Non-working arrangement so far:
+
+- C/C++ bridge code calling upward into Rust runtime entrypoints
+- Rust directly owning the ESP-IDF `app_main()` root under the current `esp-idf-sys` + local-component build arrangement
+
+So the current rule is:
+
+- keep the bridge backend-only
+- keep the service API shaped for Rust consumption
+- avoid C++ -> Rust callbacks
+- preserve the same higher-level concepts as `x4`, even if the root entry differs
+
+This is a temporary platform-specific compromise, not a separate platform architecture.
+
 ## Core Principle
 
 The platform layer should expose **capabilities and normalized events**, not board identities.

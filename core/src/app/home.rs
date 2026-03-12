@@ -11,9 +11,10 @@ use embedded_graphics::{
     Drawable,
 };
 
-use crate::display::{Display, GrayscaleMode, RefreshMode};
+use crate::display::{Display, RefreshMode};
 use crate::framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
 use crate::image_viewer::{AppSource, ImageData, ImageEntry, ImageError, InstalledAppEntry};
+use crate::render_policy::RenderPolicy;
 use crate::ui::{flush_queue, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_pull_down_box, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, ListItem, ListView, Rect, RenderQueue, UiContext, View};
 
 const START_MENU_MARGIN: i32 = 16;
@@ -121,6 +122,7 @@ pub type DrawTrbkImageFn = fn(
     &mut DisplayBuffers,
     &ImageData,
     &mut Option<(&mut [u8], &mut [u8], &mut bool)>,
+    RenderPolicy,
     i32,
     i32,
     i32,
@@ -134,6 +136,7 @@ pub struct HomeRenderContext<'a, S: AppSource> {
     pub source: &'a mut S,
     pub full_refresh: bool,
     pub battery_percent: Option<u8>,
+    pub render_policy: RenderPolicy,
     pub palm_fonts: &'a [crate::prc_app::runtime::PalmFont],
     pub icons: HomeIcons<'a>,
     pub draw_trbk_image: DrawTrbkImageFn,
@@ -514,17 +517,13 @@ impl HomeState {
                 let lsb: &[u8; BUFFER_SIZE] = ctx.gray2_lsb.as_ref().try_into().unwrap();
                 let msb: &[u8; BUFFER_SIZE] = ctx.gray2_msb.as_ref().try_into().unwrap();
                 display.copy_grayscale_buffers(lsb, msb);
-                display.display_absolute_grayscale(GrayscaleMode::Fast);
+                display.display_absolute_grayscale(ctx.render_policy.absolute_grayscale_mode);
                 ctx.display_buffers.copy_active_to_inactive();
             } else {
                 let mut rq = RenderQueue::default();
                 rq.push(
                     Rect::new(0, 0, width, height),
-                    if ctx.full_refresh {
-                        RefreshMode::Full
-                    } else {
-                        RefreshMode::Fast
-                    },
+                    ctx.render_policy.refresh_mode(ctx.full_refresh),
                 );
                 flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Full);
             }
@@ -546,12 +545,17 @@ impl HomeState {
                 if self.start_menu_index < max_items {
                     let y = list_top + (self.start_menu_index as i32 * item_height);
                     if y + item_height <= mid_y {
-                        let mut rq = RenderQueue::default();
-                        rq.push(
-                            Rect::new(START_MENU_MARGIN - 4, y - 4, list_width + 8, item_height - 4),
-                            RefreshMode::Fast,
+                            let mut rq = RenderQueue::default();
+                            rq.push(
+                                Rect::new(START_MENU_MARGIN - 4, y - 4, list_width + 8, item_height - 4),
+                                ctx.render_policy.partial_refresh_mode(),
+                            );
+                        flush_queue(
+                            display,
+                            ctx.display_buffers,
+                            &mut rq,
+                            ctx.render_policy.partial_refresh_mode(),
                         );
-                        flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Fast);
                     }
                 }
             }
@@ -581,7 +585,10 @@ impl HomeState {
                     || self.start_menu_section == StartMenuSection::Actions
                     || self.launcher_category != LauncherCategory::Recents
                 {
-                    rq.push(Rect::new(0, 0, width, height), RefreshMode::Fast);
+                    rq.push(
+                        Rect::new(0, 0, width, height),
+                        ctx.render_policy.partial_refresh_mode(),
+                    );
                 } else if self.launcher_category == LauncherCategory::Recents {
                     for idx in [self.start_menu_prev_index, self.start_menu_index] {
                         if idx < max_items {
@@ -594,28 +601,37 @@ impl HomeState {
                                         list_width + 8,
                                         item_height - 4,
                                     ),
-                                    RefreshMode::Fast,
+                                    ctx.render_policy.partial_refresh_mode(),
                                 );
                             }
                         }
                     }
                 }
-                flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Fast);
+                flush_queue(
+                    display,
+                    ctx.display_buffers,
+                    &mut rq,
+                    ctx.render_policy.partial_refresh_mode(),
+                );
                 self.start_menu_nav_pending = false;
             } else {
                 let mut rq = RenderQueue::default();
-                rq.push(Rect::new(0, 0, width, height), RefreshMode::Fast);
-                flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Fast);
+                rq.push(
+                    Rect::new(0, 0, width, height),
+                    ctx.render_policy.partial_refresh_mode(),
+                );
+                flush_queue(
+                    display,
+                    ctx.display_buffers,
+                    &mut rq,
+                    ctx.render_policy.partial_refresh_mode(),
+                );
             }
         } else {
             let mut rq = RenderQueue::default();
             rq.push(
                 Rect::new(0, 0, width, height),
-                if ctx.full_refresh {
-                    RefreshMode::Full
-                } else {
-                    RefreshMode::Fast
-                },
+                ctx.render_policy.refresh_mode(ctx.full_refresh),
             );
             flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Full);
         }
@@ -657,14 +673,11 @@ impl HomeState {
         let mut rq = RenderQueue::default();
         let mut ui = UiContext {
             buffers: ctx.display_buffers,
+            render_policy: ctx.render_policy,
         };
         list.render(&mut ui, rect, &mut rq);
 
-        let fallback = if ctx.full_refresh {
-            RefreshMode::Full
-        } else {
-            RefreshMode::Fast
-        };
+        let fallback = ctx.render_policy.refresh_mode(ctx.full_refresh);
         flush_queue(display, ctx.display_buffers, &mut rq, fallback);
     }
 
@@ -1034,6 +1047,7 @@ impl HomeState {
                             ctx.display_buffers,
                             &mono,
                             &mut gray2_ctx,
+                            ctx.render_policy,
                             thumb_x + 2,
                             thumb_y + 2,
                             thumb_size - 4,
@@ -1047,6 +1061,7 @@ impl HomeState {
                             ctx.display_buffers,
                             image,
                             &mut gray2_ctx,
+                            ctx.render_policy,
                             thumb_x + 2,
                             thumb_y + 2,
                             thumb_size - 4,
@@ -1138,6 +1153,7 @@ impl HomeState {
                         ctx.display_buffers,
                         image,
                         &mut gray2_ctx,
+                        ctx.render_policy,
                         icon_x,
                         icon_y,
                         icon_size,

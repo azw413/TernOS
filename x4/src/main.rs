@@ -41,6 +41,8 @@ use tern_core::application::Application;
 use tern_core::display::{Display, RefreshMode};
 use tern_core::framebuffer::DisplayBuffers;
 use tern_core::input::Buttons;
+use tern_core::platform::DisplayDevice;
+use tern_core::runtime_host::{draw_application_frame, update_application_frame, RuntimeFrame};
 use usb_mode::{poll as usb_poll, UsbMode};
 
 extern crate alloc;
@@ -130,7 +132,8 @@ async fn main(_spawner: Spawner) {
     info!("SD Card initialized");
 
     let mut image_source = SdImageSource::new(sdcard);
-    let mut application = Application::new(&mut display_buffers, &mut image_source);
+    let display_caps = display.caps();
+    let mut application = Application::new(&mut display_buffers, &mut image_source, display_caps);
     let mut button_state = GpioButtonState::new(
         peripherals.GPIO1,
         peripherals.GPIO2,
@@ -233,14 +236,15 @@ async fn main(_spawner: Spawner) {
             usb_mode::UsbModeState::Idle => {}
         }
 
-        application.update_with_events(&buttons, &platform_events, 10);
+        let frame = RuntimeFrame::new(buttons, platform_events, 10);
+        update_application_frame(&mut application, &frame);
         battery_timer_ms = battery_timer_ms.saturating_add(10);
         if battery_timer_ms >= 30_000 {
             battery_timer_ms = 0;
             let percent = button_state.read_battery_percent();
             application.set_battery_percent(percent);
         }
-        application.draw(&mut display);
+        draw_application_frame(&mut application, &mut display);
         let _ = application.take_wake_transition();
         if application.take_sleep_transition() {
             display.deep_sleep().ok();

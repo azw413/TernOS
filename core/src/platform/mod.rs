@@ -44,10 +44,20 @@ pub enum DisplayDensity {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LogicalStyle {
+    Palm160,
+    Palm320,
+    TernPortrait,
+    TernLandscape,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DisplayCaps {
     pub partial_refresh: bool,
-    pub grayscale: bool,
+    pub gray_levels: u8,
+    pub bits_per_pixel: u8,
     pub rotation: DisplayRotation,
+    pub logical_style: LogicalStyle,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

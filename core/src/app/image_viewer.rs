@@ -6,9 +6,10 @@ use embedded_graphics::pixelcolor::BinaryColor;
 
 use alloc::string::String;
 
-use crate::display::{Display, GrayscaleMode, RefreshMode};
+use crate::display::{Display, RefreshMode};
 use crate::framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
 use crate::image_viewer::{AppSource, ImageData, ImageEntry, ImageError};
+use crate::render_policy::RenderPolicy;
 use crate::ui::{flush_queue, Rect, RenderQueue, UiContext, ReaderView, View};
 
 const DEBUG_GRAY2_MODE: u8 = 0; // 0=normal, 1=base, 2=lsb, 3=msb
@@ -23,6 +24,7 @@ pub struct ImageViewerContext<'a, S: AppSource> {
     pub gray2_msb: &'a mut [u8],
     pub source: &'a mut S,
     pub wake_restore_only: &'a mut bool,
+    pub render_policy: RenderPolicy,
 }
 
 impl ImageViewerState {
@@ -122,7 +124,7 @@ impl ImageViewerState {
                     let lsb_buf: &[u8; BUFFER_SIZE] = ctx.gray2_lsb.as_ref().try_into().unwrap();
                     let msb_buf: &[u8; BUFFER_SIZE] = ctx.gray2_msb.as_ref().try_into().unwrap();
                     display.copy_grayscale_buffers(lsb_buf, msb_buf);
-                    display.display_absolute_grayscale(GrayscaleMode::Fast);
+                    display.display_absolute_grayscale(ctx.render_policy.absolute_grayscale_mode);
                 }
             }
             ImageData::Gray2Stream { width, height, key } => {
@@ -171,7 +173,7 @@ impl ImageViewerState {
                     let lsb_buf: &[u8; BUFFER_SIZE] = ctx.gray2_lsb.as_ref().try_into().unwrap();
                     let msb_buf: &[u8; BUFFER_SIZE] = ctx.gray2_msb.as_ref().try_into().unwrap();
                     display.copy_grayscale_buffers(lsb_buf, msb_buf);
-                    display.display_absolute_grayscale(GrayscaleMode::Fast);
+                    display.display_absolute_grayscale(ctx.render_policy.absolute_grayscale_mode);
                 }
             }
             _ => {
@@ -180,6 +182,7 @@ impl ImageViewerState {
                 let mut rq = RenderQueue::default();
                 let mut ctx_ui = UiContext {
                     buffers: ctx.display_buffers,
+                    render_policy: ctx.render_policy,
                 };
                 let mut reader = ReaderView::new(&image);
                 reader.refresh = RefreshMode::Full;

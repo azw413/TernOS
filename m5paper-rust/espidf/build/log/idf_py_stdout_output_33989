@@ -1,0 +1,83 @@
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (17) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (30) boot.esp32: SPI Flash Size : 2MB[0m
+[0;32mI (34) boot: Enabling RNG early entropy source...[0m
+[0;32mI (40) boot: Partition Table:[0m
+[0;32mI (43) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (50) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (58) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (65) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (73) boot: End of partition table[0m
+[0;32mI (77) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (130) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (134) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (158) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65880h (415872) map[0m
+[0;32mI (301) esp_image: segment 4: paddr=000a58a8 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (311) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (311) boot: Disabling RNG early entropy source...[0m
+[0;32mI (324) cpu_start: Multicore app[0m
+[0;32mI (332) cpu_start: Pro cpu start user code[0m
+[0;32mI (332) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (332) app_init: Application information:[0m
+[0;32mI (335) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (341) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (348) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (354) app_init: ELF file SHA256:  2bef3ff1c...[0m
+[0;32mI (359) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (364) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (369) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (374) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (379) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (386) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (392) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (398) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (404) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (411) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (418) spi_flash: detected chip: generic[0m
+[0;32mI (422) spi_flash: flash io: dio[0m
+[0;33mW (425) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (439) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (450) main_task: Started on CPU0[0m
+[0;32mI (454) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (457) main_task: Returned from app_main()[0m
+[0;32mI (479) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (480) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (487) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (497) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (506) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (515) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1524) m5paper_backend: board_init ok[0m
+[0;32mI (1525) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1629) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1630) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1635) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1644) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1654) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1663) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2673) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3472) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3472) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3477) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4487) m5paper_backend: epd_init ok[0m
+[0;32mI (4488) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4511) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4520) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5529) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+m5paper-rust: alloc_error size=48000 align=1

@@ -75,6 +75,7 @@ typedef enum {
 } tern_m5paper_status_t;
 
 tern_m5paper_status_t tern_m5paper_board_init(void);
+tern_m5paper_status_t tern_m5paper_bridge_start(void);
 tern_m5paper_status_t tern_m5paper_epd_init(tern_m5paper_epd_info_t* out_info);
 tern_m5paper_status_t tern_m5paper_epd_clear(bool init);
 tern_m5paper_status_t tern_m5paper_epd_update_region(uint16_t x,

@@ -5,8 +5,8 @@ use std::ffi::CString;
 use tern_core::display::RefreshMode;
 use tern_core::platform::{
     BatteryStatus, ButtonId, ClockDevice, DisplayCaps, DisplayDensity, DisplayDevice,
-    DisplayRotation, Platform, PlatformCaps, PlatformError, PlatformInputEvent, PowerDevice, SleepMode,
-    StorageDevice, StorageEntry,
+    DisplayRotation, LogicalStyle, Platform, PlatformCaps, PlatformError, PlatformInputEvent,
+    PowerDevice, SleepMode, StorageDevice, StorageEntry,
 };
 
 use crate::ffi;
@@ -45,8 +45,10 @@ impl DisplayDevice for M5PaperIdfDisplay {
     fn caps(&self) -> DisplayCaps {
         DisplayCaps {
             partial_refresh: true,
-            grayscale: true,
+            gray_levels: 16,
+            bits_per_pixel: 4,
             rotation: DisplayRotation::Rotate0,
+            logical_style: LogicalStyle::TernPortrait,
         }
     }
 

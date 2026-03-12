@@ -11,10 +11,11 @@ use embedded_graphics::{
     Drawable,
 };
 
-use crate::display::{Display, GrayscaleMode, RefreshMode};
+use crate::display::Display;
 use crate::framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
 use crate::image_viewer::{AppSource, ImageData, ImageError};
 use crate::input;
+use crate::render_policy::RenderPolicy;
 use crate::ui::{flush_queue, ListItem, ListView, Rect, RenderQueue, UiContext, View};
 
 const LIST_TOP: i32 = 60;
@@ -49,6 +50,7 @@ pub struct BookReaderContext<'a, S: AppSource> {
     pub gray2_msb: &'a mut [u8],
     pub source: &'a mut S,
     pub full_refresh: &'a mut bool,
+    pub render_policy: RenderPolicy,
 }
 
 pub struct BookViewResult {
@@ -298,13 +300,10 @@ impl BookReaderState {
         let mut rq = RenderQueue::default();
         let mut ui = UiContext {
             buffers: ctx.display_buffers,
+            render_policy: ctx.render_policy,
         };
         list.render(&mut ui, rect, &mut rq);
-        let refresh = if *ctx.full_refresh {
-            RefreshMode::Full
-        } else {
-            RefreshMode::Fast
-        };
+        let refresh = ctx.render_policy.refresh_mode(*ctx.full_refresh);
         flush_queue(display, ctx.display_buffers, &mut rq, refresh);
         Ok(())
     }
@@ -344,18 +343,14 @@ impl BookReaderState {
             *ctx.full_refresh = true;
             self.book_turns_since_full = 0;
         }
-        let mode = if *ctx.full_refresh {
-            RefreshMode::Full
-        } else {
-            RefreshMode::Fast
-        };
+        let mode = ctx.render_policy.refresh_mode(*ctx.full_refresh);
         if gray2_used {
             display.display(ctx.display_buffers, mode);
             let lsb_buf: &[u8; BUFFER_SIZE] = ctx.gray2_lsb.as_ref().try_into().unwrap();
             let msb_buf: &[u8; BUFFER_SIZE] = ctx.gray2_msb.as_ref().try_into().unwrap();
             display.copy_grayscale_buffers(lsb_buf, msb_buf);
             if gray2_absolute {
-                display.display_absolute_grayscale(GrayscaleMode::Fast);
+                display.display_absolute_grayscale(ctx.render_policy.absolute_grayscale_mode);
             } else {
                 display.display_differential_grayscale(false);
             }
@@ -499,6 +494,7 @@ impl BookReaderState {
                                         ctx.display_buffers,
                                         &image,
                                         &mut gray2_ctx,
+                                        ctx.render_policy,
                                         *x,
                                         *y,
                                         *width as i32,
@@ -594,6 +590,7 @@ pub(crate) fn draw_trbk_image(
     buffers: &mut DisplayBuffers,
     image: &ImageData,
     gray2: &mut Option<(&mut [u8], &mut [u8], &mut bool)>,
+    render_policy: RenderPolicy,
     x: i32,
     y: i32,
     target_w: i32,
@@ -644,12 +641,6 @@ pub(crate) fn draw_trbk_image(
             let src_h = *height as i32;
             let dst_w = target_w.max(1);
             let dst_h = target_h.max(1);
-            let bayer: [[u8; 4]; 4] = [
-                [0, 8, 2, 10],
-                [12, 4, 14, 6],
-                [3, 11, 1, 9],
-                [15, 7, 13, 5],
-            ];
             for ty in 0..dst_h {
                 let src_y = (ty as i64 * src_h as i64 / dst_h as i64) as i32;
                 for tx in 0..dst_w {
@@ -659,12 +650,10 @@ pub(crate) fn draw_trbk_image(
                         continue;
                     }
                     let lum = pixels[idx];
-                    let threshold = (bayer[(ty as usize) & 3][(tx as usize) & 3] * 16 + 8)
-                        as u8;
-                    let color = if lum < threshold {
-                        BinaryColor::Off
-                    } else {
+                    let color = if render_policy.binary_color_for_luma(tx, ty, lum) {
                         BinaryColor::On
+                    } else {
+                        BinaryColor::Off
                     };
                     buffers.set_pixel(x + tx, y + ty, color);
                 }

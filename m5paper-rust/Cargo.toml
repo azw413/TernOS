@@ -1,0 +1,11 @@
+[package]
+name = "tern-m5paper-rust"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+tern_core = { path = "../core" }

@@ -1,0 +1,1955 @@
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (17) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (30) boot.esp32: SPI Flash Size : 2MB[0m
+[0;32mI (34) boot: Enabling RNG early entropy source...[0m
+[0;32mI (40) boot: Partition Table:[0m
+[0;32mI (43) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (50) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (58) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (65) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (73) boot: End of partition table[0m
+[0;32mI (77) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (130) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (134) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (158) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (301) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (311) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (311) boot: Disabling RNG early entropy source...[0m
+[0;32mI (324) cpu_start: Multicore app[0m
+[0;32mI (332) cpu_start: Pro cpu start user code[0m
+[0;32mI (332) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (332) app_init: Application information:[0m
+[0;32mI (335) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (341) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (348) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (354) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (359) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (364) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (369) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (374) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (379) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (386) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (392) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (398) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (404) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (411) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (418) spi_flash: detected chip: generic[0m
+[0;32mI (421) spi_flash: flash io: dio[0m
+[0;33mW (425) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (439) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (450) main_task: Started on CPU0[0m
+[0;32mI (454) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (457) main_task: Returned from app_main()[0m
+[0;32mI (479) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (480) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (487) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (497) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (506) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (515) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1524) m5paper_backend: board_init ok[0m
+[0;32mI (1525) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1630) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1631) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1636) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1646) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1655) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1664) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2674) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3473) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3473) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3478) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4488) m5paper_backend: epd_init ok[0m
+[0;32mI (4489) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4512) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4521) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5530) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5542) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5546) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6556) m5paper_backend: epd_init ok[0m
+[0;32mI (6870) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7327) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7779) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8231) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8682) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9134) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9586) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10038) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10490) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10942) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11394) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11555) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11555) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11555) task_wdt: Tasks currently running:[0m
+[0;31mE (11555) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11555) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11555) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x4008798F:0x3FFBD370 0x40113687:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11846) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12298) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12750) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13202) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13653) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14105) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14557) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15009) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15461) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15913) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16365) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16555) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16555) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16555) task_wdt: Tasks currently running:[0m
+[0;31mE (16555) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16555) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16555) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4011366B:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16817) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17269) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17721) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18173) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18624) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19076) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19528) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19980) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20432) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20884) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21336) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21555) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21555) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21555) task_wdt: Tasks currently running:[0m
+[0;31mE (21555) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21555) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21555) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x401135D5:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADE3:0x3FFBD3F0 0x4010B000:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21788) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22240) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22692) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23144) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23596) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24047) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24499) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24951) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25403) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25855) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26307) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26555) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26555) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26555) task_wdt: Tasks currently running:[0m
+[0;31mE (26555) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26555) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26555) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x4008798F:0x3FFBD370 0x401135ED:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AD93:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26759) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27211) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27663) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28115) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28567) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29018) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x4008ecb2[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (147) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (359) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (468) main_task: Started on CPU0[0m
+[0;32mI (472) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (475) main_task: Returned from app_main()[0m
+[0;32mI (497) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (498) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (505) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (515) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (524) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (533) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1542) m5paper_backend: board_init ok[0m
+[0;32mI (1543) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1648) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1649) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1654) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1664) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1673) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1682) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2692) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3491) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3491) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3496) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4506) m5paper_backend: epd_init ok[0m
+[0;32mI (4507) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4530) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4539) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5549) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5561) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5565) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6575) m5paper_backend: epd_init ok[0m
+[0;32mI (6889) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7346) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7798) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8249) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8701) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9153) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9605) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10057) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10509) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10961) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11413) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11574) task_wdt: Tasks currently running:[0m
+[0;31mE (11574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x40087D91:0x3FFBD370 0x4011358F:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AF90:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11865) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12317) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12769) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13220) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13672) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14124) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14576) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15028) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15480) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15932) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16384) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16574) task_wdt: Tasks currently running:[0m
+[0;31mE (16574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x40087E08:0x3FFBD370 0x4011361D:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16836) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17288) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17740) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18192) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18643) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19095) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19547) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19999) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20451) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20903) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21355) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21574) task_wdt: Tasks currently running:[0m
+[0;31mE (21574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x40087E08:0x3FFBD370 0x4011358F:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AD93:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21807) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22259) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22710) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23162) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23614) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24066) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24518) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24970) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25422) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25874) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26326) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26574) task_wdt: Tasks currently running:[0m
+[0;31mE (26574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26778) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27230) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27681) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28133) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28585) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29037) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x40080109[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (147) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (358) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (468) main_task: Started on CPU0[0m
+[0;32mI (472) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (475) main_task: Returned from app_main()[0m
+[0;32mI (497) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (498) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (505) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (515) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (524) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (533) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1542) m5paper_backend: board_init ok[0m
+[0;32mI (1543) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1648) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1649) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1654) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1664) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1673) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1682) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2692) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3491) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3491) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3496) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4506) m5paper_backend: epd_init ok[0m
+[0;32mI (4507) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4530) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4539) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5549) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5561) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5565) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6575) m5paper_backend: epd_init ok[0m
+[0;32mI (6889) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7346) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7798) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8249) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8701) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9153) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9605) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10057) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10509) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10961) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11413) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11574) task_wdt: Tasks currently running:[0m
+[0;31mE (11574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x4008798F:0x3FFBD370 0x401135ED:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADE3:0x3FFBD3F0 0x4010B000:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11865) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12317) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12769) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13221) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13672) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14124) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14576) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15028) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15480) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15932) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16384) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16574) task_wdt: Tasks currently running:[0m
+[0;31mE (16574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x401135FE:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFCD:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16836) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17288) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17740) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18192) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18643) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19095) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19547) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19999) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20451) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20903) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21355) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21574) task_wdt: Tasks currently running:[0m
+[0;31mE (21574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4010C2B5:0x3FFBD380 0x4010B9CC:0x3FFBD3B0 0x4010AD27:0x3FFBD3D0 0x4010AFB1:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21807) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22259) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22711) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23162) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23614) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24066) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24518) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24970) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25422) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25874) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26326) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26574) task_wdt: Tasks currently running:[0m
+[0;31mE (26574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4010C2B5:0x3FFBD380 0x4010B9CC:0x3FFBD3B0 0x4010AD27:0x3FFBD3D0 0x4010AFB1:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26778) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27230) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27682) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28133) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28585) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29037) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x40080083[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (147) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (358) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (468) main_task: Started on CPU0[0m
+[0;32mI (472) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (475) main_task: Returned from app_main()[0m
+[0;32mI (497) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (498) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (505) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (515) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (524) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (533) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1542) m5paper_backend: board_init ok[0m
+[0;32mI (1543) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1648) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1649) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1654) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1664) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1673) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1682) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2692) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3491) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3491) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3496) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4506) m5paper_backend: epd_init ok[0m
+[0;32mI (4507) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4530) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4539) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5549) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5561) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5565) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6575) m5paper_backend: epd_init ok[0m
+[0;32mI (6889) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7346) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7797) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8249) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8701) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9153) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9605) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10057) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10509) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10961) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11413) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11574) task_wdt: Tasks currently running:[0m
+[0;31mE (11574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x4008798F:0x3FFBD370 0x40113687:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11865) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12316) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12768) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13220) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13672) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14124) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14576) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15028) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15480) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15932) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16384) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16574) task_wdt: Tasks currently running:[0m
+[0;31mE (16574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x40087894:0x3FFBD370 0x40113687:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFCD:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16836) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17288) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17739) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18191) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18643) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19095) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19547) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19999) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20451) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20903) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21355) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21574) task_wdt: Tasks currently running:[0m
+[0;31mE (21574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4011366B:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21806) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22258) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22710) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23162) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23614) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24066) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24518) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24970) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25422) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25873) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26325) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26574) task_wdt: Tasks currently running:[0m
+[0;31mE (26574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x40082CE7:0x3FFBD390 0x4010BADA:0x3FFBD3B0 0x4010AD1F:0x3FFBD3D0 0x4010ADC9:0x3FFBD3F0 0x4010B000:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26777) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27229) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27681) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28133) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28585) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29037) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x40080100[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (147) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (358) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (467) main_task: Started on CPU0[0m
+[0;32mI (471) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (474) main_task: Returned from app_main()[0m
+[0;32mI (496) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (497) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (504) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (514) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (523) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (532) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1541) m5paper_backend: board_init ok[0m
+[0;32mI (1542) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1647) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1648) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1653) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1663) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1672) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1681) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2691) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3490) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3490) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3495) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4505) m5paper_backend: epd_init ok[0m
+[0;32mI (4506) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4529) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4538) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5548) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5560) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5564) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6574) m5paper_backend: epd_init ok[0m
+[0;32mI (6888) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7345) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7797) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8249) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8700) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9152) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9604) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10056) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10508) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10960) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11412) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11573) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11573) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11573) task_wdt: Tasks currently running:[0m
+[0;31mE (11573) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11573) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11573) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x40087DBD:0x3FFBD370 0x4011358F:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AF90:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11864) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12316) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12768) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13219) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13671) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14123) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14575) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15027) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15479) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15931) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16383) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16573) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16573) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16573) task_wdt: Tasks currently running:[0m
+[0;31mE (16573) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16573) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16573) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x40087E08:0x3FFBD370 0x4011358F:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADAD:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16835) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17287) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17739) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18191) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18642) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19094) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19546) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19998) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20450) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20902) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21354) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21573) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21573) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21573) task_wdt: Tasks currently running:[0m
+[0;31mE (21573) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21573) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21573) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x401135BB:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADE3:0x3FFBD3F0 0x4010B000:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21806) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22258) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22709) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23161) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23613) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24065) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24517) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24969) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25421) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25873) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26325) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26573) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26573) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26573) task_wdt: Tasks currently running:[0m
+[0;31mE (26573) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26573) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26573) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x401135D7:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADE3:0x3FFBD3F0 0x4010B000:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26777) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27229) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27681) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28132) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28584) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29036) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x400803c0[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (147) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (358) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (467) main_task: Started on CPU0[0m
+[0;32mI (471) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (474) main_task: Returned from app_main()[0m
+[0;32mI (496) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (497) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (504) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (514) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (523) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (532) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1541) m5paper_backend: board_init ok[0m
+[0;32mI (1542) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1647) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1648) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1653) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1663) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1672) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1681) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2691) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3490) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3490) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3495) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4505) m5paper_backend: epd_init ok[0m
+[0;32mI (4506) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4529) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4538) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5547) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5559) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5563) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6573) m5paper_backend: epd_init ok[0m
+[0;32mI (6887) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7344) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7796) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8247) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8699) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9151) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9603) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10055) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10507) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10959) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11411) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11572) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11572) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11572) task_wdt: Tasks currently running:[0m
+[0;31mE (11572) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11572) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11572) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x40113587:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADAD:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11863) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12315) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12767) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13219) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13670) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14122) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14574) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15026) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15478) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15930) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16382) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16572) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16572) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16572) task_wdt: Tasks currently running:[0m
+[0;31mE (16572) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16572) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16572) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x4008798F:0x3FFBD370 0x401135ED:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AF90:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16834) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17286) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17738) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18190) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18641) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19093) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19545) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19997) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20449) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20901) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21353) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21572) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21572) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21572) task_wdt: Tasks currently running:[0m
+[0;31mE (21572) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21572) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21572) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x40087E08:0x3FFBD370 0x4011358F:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADAD:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21805) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22256) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22708) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23160) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23612) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24064) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24516) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24968) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25420) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25872) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26324) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26572) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26572) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26572) task_wdt: Tasks currently running:[0m
+[0;31mE (26572) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26572) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26572) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x40087E08:0x3FFBD370 0x4011358F:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AD93:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26775) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27227) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27679) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28131) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28583) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29035) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x40080100[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (147) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (358) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (468) main_task: Started on CPU0[0m
+[0;32mI (472) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (475) main_task: Returned from app_main()[0m
+[0;32mI (497) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (498) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (505) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (515) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (524) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (533) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1542) m5paper_backend: board_init ok[0m
+[0;32mI (1543) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1648) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1649) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1654) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1664) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1673) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1682) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2692) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3491) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3491) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3496) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4506) m5paper_backend: epd_init ok[0m
+[0;32mI (4507) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4530) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4539) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5549) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5561) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5565) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6575) m5paper_backend: epd_init ok[0m
+[0;32mI (6889) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7346) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7798) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8249) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8701) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9153) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9605) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10057) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10509) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10961) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11413) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11574) task_wdt: Tasks currently running:[0m
+[0;31mE (11574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4011366B:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11865) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12317) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12768) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13220) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13672) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14124) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14576) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15028) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15480) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15932) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16384) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16574) task_wdt: Tasks currently running:[0m
+[0;31mE (16574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x401135DA:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADE3:0x3FFBD3F0 0x4010B000:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16836) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17287) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17739) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18191) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18643) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19095) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19547) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19999) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20451) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20902) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21354) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21574) task_wdt: Tasks currently running:[0m
+[0;31mE (21574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008995A:0x3FFBD350 0x400878E1:0x3FFBD370 0x401135ED:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADFD:0x3FFBD3F0 0x4010B000:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21806) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22258) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22710) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23162) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23614) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24066) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24518) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24970) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25422) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25874) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26326) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26574) task_wdt: Tasks currently running:[0m
+[0;31mE (26574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4011A0C6:0x3FFBD390 0x4010B985:0x3FFBD3C0 0x4010AF88:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26777) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27229) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27681) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28133) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28585) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29037) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x400803c0[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (147) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (358) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (468) main_task: Started on CPU0[0m
+[0;32mI (472) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (475) main_task: Returned from app_main()[0m
+[0;32mI (497) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (498) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (505) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (515) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (524) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (533) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1542) m5paper_backend: board_init ok[0m
+[0;32mI (1543) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1648) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1649) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1654) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1664) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1673) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1682) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2692) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3491) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3491) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3496) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4506) m5paper_backend: epd_init ok[0m
+[0;32mI (4507) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4530) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4539) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5549) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5561) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5565) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6575) m5paper_backend: epd_init ok[0m
+[0;32mI (6889) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7346) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7798) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8249) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8701) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9153) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9605) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10057) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10509) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10961) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11413) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11574) task_wdt: Tasks currently running:[0m
+[0;31mE (11574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008995A:0x3FFBD350 0x40087D91:0x3FFBD370 0x4011358F:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AF90:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11865) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12317) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12769) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13220) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13672) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14124) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14576) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15028) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15480) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15932) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16384) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16574) task_wdt: Tasks currently running:[0m
+[0;31mE (16574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4010C285:0x3FFBD3B0 0x4010AD27:0x3FFBD3D0 0x4010AD9C:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16836) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17288) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17740) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18192) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18643) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19095) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19547) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19999) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20451) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20903) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21355) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21574) task_wdt: Tasks currently running:[0m
+[0;31mE (21574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFF0:0x3FFBD340 0x4008995A:0x3FFBD350 0x40087D91:0x3FFBD370 0x4011361D:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21807) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22259) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22711) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23162) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23614) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24066) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24518) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24970) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25422) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25874) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26326) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26574) task_wdt: Tasks currently running:[0m
+[0;31mE (26574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x401135FE:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFCD:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26778) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27230) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27682) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28134) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28585) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29037) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x40080080[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (148) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (359) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (468) main_task: Started on CPU0[0m
+[0;32mI (472) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (475) main_task: Returned from app_main()[0m
+[0;32mI (497) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (498) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (505) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (515) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (524) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (533) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1542) m5paper_backend: board_init ok[0m
+[0;32mI (1543) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1648) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1649) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1654) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1664) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1673) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1682) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2692) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3491) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3491) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3496) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4506) m5paper_backend: epd_init ok[0m
+[0;32mI (4507) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4530) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4539) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5549) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5561) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5565) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6575) m5paper_backend: epd_init ok[0m
+[0;32mI (6889) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7346) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7798) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8249) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8701) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9153) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9605) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10057) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10509) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10961) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11413) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11574) task_wdt: Tasks currently running:[0m
+[0;31mE (11574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x401135C5:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADAD:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11865) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12317) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12768) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13220) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13672) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14124) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14576) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15028) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15480) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15932) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16384) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16574) task_wdt: Tasks currently running:[0m
+[0;31mE (16574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x4008798F:0x3FFBD370 0x401135ED:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AF90:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16836) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17288) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17740) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18191) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18643) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19095) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19547) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19999) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20451) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20903) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21355) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21574) task_wdt: Tasks currently running:[0m
+[0;31mE (21574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4011366D:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21807) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22258) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22710) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23162) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23614) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24066) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24518) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24970) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25422) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25874) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26326) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26574) task_wdt: Tasks currently running:[0m
+[0;31mE (26574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000CFF8:0x3FFBD390 0x4010BAE5:0x3FFBD3B0 0x4010AD1F:0x3FFBD3D0 0x4010ADC9:0x3FFBD3F0 0x4010B000:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26778) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27229) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27681) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28133) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28585) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29037) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x400803c0[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (147) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (359) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (468) main_task: Started on CPU0[0m
+[0;32mI (472) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (475) main_task: Returned from app_main()[0m
+[0;32mI (497) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (498) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (505) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (515) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (524) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (533) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1542) m5paper_backend: board_init ok[0m
+[0;32mI (1543) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1648) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1649) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1654) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1664) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1673) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1682) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2692) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3491) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3491) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3496) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4506) m5paper_backend: epd_init ok[0m
+[0;32mI (4507) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4530) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4539) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5549) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5561) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5565) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6575) m5paper_backend: epd_init ok[0m
+[0;32mI (6889) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7346) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7798) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8250) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8701) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9153) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9605) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10057) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10509) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10961) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11413) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11574) task_wdt: Tasks currently running:[0m
+[0;31mE (11574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x40087D91:0x3FFBD370 0x4011358F:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AF90:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11865) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12317) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12769) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13221) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13672) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14124) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14576) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15028) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15480) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15932) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16384) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16574) task_wdt: Tasks currently running:[0m
+[0;31mE (16574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x40087E08:0x3FFBD370 0x4011361D:0x3FFBD3B0 0x4010EAAC:0x3FFBD3D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16836) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17288) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17740) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18192) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18643) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19095) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19547) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19999) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20451) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20903) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21355) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21574) task_wdt: Tasks currently running:[0m
+[0;31mE (21574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x40087E08:0x3FFBD370 0x4011358F:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AD93:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21807) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22259) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22710) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23162) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23614) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24066) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24518) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24970) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25422) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25874) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26326) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26574) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26574) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26574) task_wdt: Tasks currently running:[0m
+[0;31mE (26574) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26574) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26574) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4010AFA9:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26778) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27230) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27681) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28133) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28585) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29037) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (13) boot: ESP-IDF v5.3.2 2nd stage bootloader[0m
+[0;32mI (13) boot: compile time Mar 12 2026 16:34:26[0m
+[0;32mI (13) boot: Multicore bootloader[0m
+[0;32mI (16) boot: chip revision: v3.0[0m
+[0;32mI (20) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (25) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (29) boot.esp32: SPI Flash Size : 2MB[0m
+[0;33mW (34) boot.esp32: PRO CPU has been reset by WDT.[0m
+[0;33mW (39) boot.esp32: WDT reset info: PRO CPU PC=0x40084e70[0m
+[0;33mW (45) boot.esp32: WDT reset info: APP CPU PC=0x40081add[0m
+[0;32mI (51) boot: Enabling RNG early entropy source...[0m
+[0;32mI (57) boot: Partition Table:[0m
+[0;32mI (60) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (67) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (75) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (82) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (90) boot: End of partition table[0m
+[0;32mI (94) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20040h (131136) map[0m
+[0;32mI (147) esp_image: segment 1: paddr=00030068 vaddr=3ffb0000 size=0263ch (  9788) load[0m
+[0;32mI (151) esp_image: segment 2: paddr=000326ac vaddr=40080000 size=0d96ch ( 55660) load[0m
+[0;32mI (175) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=65870h (415856) map[0m
+[0;32mI (318) esp_image: segment 4: paddr=000a5898 vaddr=4008d96c size=014b8h (  5304) load[0m
+[0;32mI (328) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (328) boot: Disabling RNG early entropy source...[0m
+[0;32mI (341) cpu_start: Multicore app[0m
+[0;32mI (349) cpu_start: Pro cpu start user code[0m
+[0;32mI (349) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (349) app_init: Application information:[0m
+[0;32mI (352) app_init: Project name:     tern_m5paper_rust_host[0m
+[0;32mI (358) app_init: App version:      v0.3.1-21-gf117044-dirty[0m
+[0;32mI (365) app_init: Compile time:     Mar 12 2026 16:34:18[0m
+[0;32mI (371) app_init: ELF file SHA256:  a4d2a9df9...[0m
+[0;32mI (376) app_init: ESP-IDF:          v5.3.2[0m
+[0;32mI (381) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (386) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (391) efuse_init: Chip rev:         v3.0[0m
+[0;32mI (396) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (403) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (409) heap_init: At 3FFB3B48 len 0002C4B8 (177 KiB): DRAM[0m
+[0;32mI (415) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (421) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (428) heap_init: At 4008EE24 len 000111DC (68 KiB): IRAM[0m
+[0;32mI (436) spi_flash: detected chip: generic[0m
+[0;32mI (439) spi_flash: flash io: dio[0m
+[0;33mW (442) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;33mW (456) i2c: This driver is an old driver, please migrate your application code to adapt `driver/i2c_master.h`[0m
+[0;32mI (467) main_task: Started on CPU0[0m
+[0;32mI (471) main_task: Calling app_main()[0m
+m5paper-rust: starting
+[0;32mI (474) main_task: Returned from app_main()[0m
+[0;32mI (496) gpio: GPIO[2]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (497) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (504) gpio: GPIO[23]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (514) gpio: GPIO[37]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (523) gpio: GPIO[38]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (532) gpio: GPIO[39]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (1541) m5paper_backend: board_init ok[0m
+[0;32mI (1542) gpio: GPIO[36]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1647) m5paper_backend: touch_init ok[0m
+m5paper-rust: backend started
+[0;32mI (1648) gpio: GPIO[14]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1653) gpio: GPIO[13]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1663) gpio: GPIO[12]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1672) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1681) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2691) m5paper_backend: epd_init ok[0m
+m5paper-rust: epd 540x960 buf=0x001236E0 vcom=2300mV
+[0;32mI (3490) m5paper_backend: epd_clear=0[0m
+m5paper-rust: epd_clear=0
+[0;32mI (3490) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (3495) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4505) m5paper_backend: epd_init ok[0m
+[0;32mI (4506) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+m5paper-rust: storage_init=0
+m5paper-rust: rtc_init=0
+m5paper-rust: alloc display buffers
+m5paper-rust: display buffers ready
+m5paper-rust: init source
+m5paper-rust: init application
+[0;32mI (4529) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (4538) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5548) m5paper_backend: epd_init ok[0m
+m5paper-rust: init display
+m5paper-rust: init host
+m5paper-rust: entering loop
+[0;32mI (5560) gpio: GPIO[15]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5564) gpio: GPIO[27]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (6574) m5paper_backend: epd_init ok[0m
+[0;32mI (6888) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (7345) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (7797) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (8249) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (8701) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (9153) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (9604) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (10056) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;32mI (10508) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (10960) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (11412) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;31mE (11573) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (11573) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (11573) task_wdt: Tasks currently running:[0m
+[0;31mE (11573) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (11573) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (11573) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008995A:0x3FFBD350 0x400878E1:0x3FFBD370 0x401135ED:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADAD:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (11864) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (12316) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (12768) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (13220) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (13672) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (14124) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (14576) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (15028) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;32mI (15480) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (15931) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (16383) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;31mE (16573) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (16573) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (16573) task_wdt: Tasks currently running:[0m
+[0;31mE (16573) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (16573) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (16573) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x4008798F:0x3FFBD370 0x401135ED:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010ADAD:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBDCB:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (16835) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (17287) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (17739) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m
+[0;32mI (18191) m5paper_backend: epd_update_region=0 x=30 y=80 w=480 h=32[0m
+[0;32mI (18643) m5paper_backend: epd_update_region=0 x=30 y=112 w=480 h=32[0m
+[0;32mI (19095) m5paper_backend: epd_update_region=0 x=30 y=144 w=480 h=32[0m
+[0;32mI (19547) m5paper_backend: epd_update_region=0 x=30 y=176 w=480 h=32[0m
+[0;32mI (19999) m5paper_backend: epd_update_region=0 x=30 y=208 w=480 h=32[0m
+[0;32mI (20451) m5paper_backend: epd_update_region=0 x=30 y=240 w=480 h=32[0m
+[0;32mI (20902) m5paper_backend: epd_update_region=0 x=30 y=272 w=480 h=32[0m
+[0;32mI (21354) m5paper_backend: epd_update_region=0 x=30 y=304 w=480 h=32[0m
+[0;31mE (21573) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (21573) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (21573) task_wdt: Tasks currently running:[0m
+[0;31mE (21573) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (21573) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (21573) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4000BFED:0x3FFBD340 0x4008835E:0x3FFBD350 0x4008798F:0x3FFBD370 0x401135ED:0x3FFBD3B0 0x4010EA8E:0x3FFBD3D0 0x4010AF90:0x3FFBD3F0 0x4010B011:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (21806) m5paper_backend: epd_update_region=0 x=30 y=336 w=480 h=32[0m
+[0;32mI (22258) m5paper_backend: epd_update_region=0 x=30 y=368 w=480 h=32[0m
+[0;32mI (22710) m5paper_backend: epd_update_region=0 x=30 y=400 w=480 h=32[0m
+[0;32mI (23162) m5paper_backend: epd_update_region=0 x=30 y=432 w=480 h=32[0m
+[0;32mI (23614) m5paper_backend: epd_update_region=0 x=30 y=464 w=480 h=32[0m
+[0;32mI (24066) m5paper_backend: epd_update_region=0 x=30 y=496 w=480 h=32[0m
+[0;32mI (24518) m5paper_backend: epd_update_region=0 x=30 y=528 w=480 h=32[0m
+[0;32mI (24970) m5paper_backend: epd_update_region=0 x=30 y=560 w=480 h=32[0m
+[0;32mI (25422) m5paper_backend: epd_update_region=0 x=30 y=592 w=480 h=32[0m
+[0;32mI (25874) m5paper_backend: epd_update_region=0 x=30 y=624 w=480 h=32[0m
+[0;32mI (26326) m5paper_backend: epd_update_region=0 x=30 y=656 w=480 h=32[0m
+[0;31mE (26573) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:[0m
+[0;31mE (26573) task_wdt:  - IDLE1 (CPU 1)[0m
+[0;31mE (26573) task_wdt: Tasks currently running:[0m
+[0;31mE (26573) task_wdt: CPU 0: IDLE0[0m
+[0;31mE (26573) task_wdt: CPU 1: tern_runtime[0m
+[0;31mE (26573) task_wdt: Print CPU 1 backtrace[0m
+
+
+Backtrace: 0x40084DD6:0x3FFB17B0 0x40083065:0x3FFB17D0 0x4010AD19:0x3FFBD3F0 0x4010AFF0:0x3FFBD410 0x4010B0E2:0x3FFBD440 0x4010A709:0x3FFBD480 0x400E4708:0x3FFBD4B0 0x400DE6D0:0x3FFBD530 0x400DBE4D:0x3FFBD580 0x400D98C5:0x3FFBD610 0x400D9E8E:0x3FFBD6B0 0x400E88BD:0x3FFBD760 0x400D8D73:0x3FFBDC20 0x40087FAA:0x3FFBDC40
+
+[0;32mI (26777) m5paper_backend: epd_update_region=0 x=30 y=688 w=480 h=32[0m
+[0;32mI (27229) m5paper_backend: epd_update_region=0 x=30 y=720 w=480 h=32[0m
+[0;32mI (27681) m5paper_backend: epd_update_region=0 x=30 y=752 w=480 h=32[0m
+[0;32mI (28133) m5paper_backend: epd_update_region=0 x=30 y=784 w=480 h=32[0m
+[0;32mI (28585) m5paper_backend: epd_update_region=0 x=30 y=816 w=480 h=32[0m
+[0;32mI (29037) m5paper_backend: epd_update_region=0 x=30 y=848 w=480 h=32[0m

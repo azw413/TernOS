@@ -1,0 +1,74 @@
+[0;33m--- esp-idf-monitor 1.9.0 on /dev/cu.usbserial-0214212B 115200[0m
+[0;33m--- Quit: Ctrl+] | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x40081a66: [0;33mpanic_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/panic.c[0m[0m:[1;31m463[0m
+[0m--- 0x400874cd: [0;33mesp_system_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/port/esp_system_chip.c[0m[0m:[1;31m92[0m
+[0m--- 0x4008d695: [0;33mabort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/newlib/abort.c[0m[0m:[1;31m38[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x400f295d: [0;33moperator new(unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_op.cc[0m[0m:[1;31m54[0m
+[0m--- 0x400f298d: [0;33moperator new[](unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_opv.cc[0m[0m:[1;31m32[0m
+[0m--- 0x400ddffc: [0;33mtern_m5paper_backend_epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/components/m5paper_backend/m5paper_backend.cpp[0m[0m:[1;31m209[0m
+[0m--- 0x400dbcc0: [0;33mtern_m5paper_rust::ffi::epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/ffi.rs[0m[0m:[1;31m125[0m
+[0m--- (inlined by) [0;33mtern_runtime_main[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/lib.rs[0m[0m:[1;31m96[0m
+[0m--- 0x400d805f: [0;33mtern_runtime_task[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/espidf/main/main.c[0m[0m:[1;31m9[0m
+[0m--- 0x40087faa: [0;33mvPortTaskWrapper[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/freertos/FreeRTOS-Kernel/portable/xtensa/port.c[0m[0m:[1;31m139[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x40081a66: [0;33mpanic_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/panic.c[0m[0m:[1;31m463[0m
+[0m--- 0x400874cd: [0;33mesp_system_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/port/esp_system_chip.c[0m[0m:[1;31m92[0m
+[0m--- 0x4008d695: [0;33mabort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/newlib/abort.c[0m[0m:[1;31m38[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x400f295d: [0;33moperator new(unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_op.cc[0m[0m:[1;31m54[0m
+[0m--- 0x400f298d: [0;33moperator new[](unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_opv.cc[0m[0m:[1;31m32[0m
+[0m--- 0x400ddffc: [0;33mtern_m5paper_backend_epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/components/m5paper_backend/m5paper_backend.cpp[0m[0m:[1;31m209[0m
+[0m--- 0x400dbcc0: [0;33mtern_m5paper_rust::ffi::epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/ffi.rs[0m[0m:[1;31m125[0m
+[0m--- (inlined by) [0;33mtern_runtime_main[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/lib.rs[0m[0m:[1;31m96[0m
+[0m--- 0x400d805f: [0;33mtern_runtime_task[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/espidf/main/main.c[0m[0m:[1;31m9[0m
+[0m--- 0x40087faa: [0;33mvPortTaskWrapper[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/freertos/FreeRTOS-Kernel/portable/xtensa/port.c[0m[0m:[1;31m139[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x40081a66: [0;33mpanic_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/panic.c[0m[0m:[1;31m463[0m
+[0m--- 0x400874cd: [0;33mesp_system_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/port/esp_system_chip.c[0m[0m:[1;31m92[0m
+[0m--- 0x4008d695: [0;33mabort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/newlib/abort.c[0m[0m:[1;31m38[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x400f295d: [0;33moperator new(unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_op.cc[0m[0m:[1;31m54[0m
+[0m--- 0x400f298d: [0;33moperator new[](unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_opv.cc[0m[0m:[1;31m32[0m
+[0m--- 0x400ddffc: [0;33mtern_m5paper_backend_epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/components/m5paper_backend/m5paper_backend.cpp[0m[0m:[1;31m209[0m
+[0m--- 0x400dbcc0: [0;33mtern_m5paper_rust::ffi::epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/ffi.rs[0m[0m:[1;31m125[0m
+[0m--- (inlined by) [0;33mtern_runtime_main[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/lib.rs[0m[0m:[1;31m96[0m
+[0m--- 0x400d805f: [0;33mtern_runtime_task[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/espidf/main/main.c[0m[0m:[1;31m9[0m
+[0m--- 0x40087faa: [0;33mvPortTaskWrapper[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/freertos/FreeRTOS-Kernel/portable/xtensa/port.c[0m[0m:[1;31m139[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x40081a66: [0;33mpanic_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/panic.c[0m[0m:[1;31m463[0m
+[0m--- 0x400874cd: [0;33mesp_system_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/port/esp_system_chip.c[0m[0m:[1;31m92[0m
+[0m--- 0x4008d695: [0;33mabort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/newlib/abort.c[0m[0m:[1;31m38[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x400f295d: [0;33moperator new(unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_op.cc[0m[0m:[1;31m54[0m
+[0m--- 0x400f298d: [0;33moperator new[](unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_opv.cc[0m[0m:[1;31m32[0m
+[0m--- 0x400ddffc: [0;33mtern_m5paper_backend_epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/components/m5paper_backend/m5paper_backend.cpp[0m[0m:[1;31m209[0m
+[0m--- 0x400dbcc0: [0;33mtern_m5paper_rust::ffi::epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/ffi.rs[0m[0m:[1;31m125[0m
+[0m--- (inlined by) [0;33mtern_runtime_main[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/lib.rs[0m[0m:[1;31m96[0m
+[0m--- 0x400d805f: [0;33mtern_runtime_task[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/espidf/main/main.c[0m[0m:[1;31m9[0m
+[0m--- 0x40087faa: [0;33mvPortTaskWrapper[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/freertos/FreeRTOS-Kernel/portable/xtensa/port.c[0m[0m:[1;31m139[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x40081a66: [0;33mpanic_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/panic.c[0m[0m:[1;31m463[0m
+[0m--- 0x400874cd: [0;33mesp_system_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/port/esp_system_chip.c[0m[0m:[1;31m92[0m
+[0m--- 0x4008d695: [0;33mabort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/newlib/abort.c[0m[0m:[1;31m38[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x400f295d: [0;33moperator new(unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_op.cc[0m[0m:[1;31m54[0m
+[0m--- 0x400f298d: [0;33moperator new[](unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_opv.cc[0m[0m:[1;31m32[0m
+[0m--- 0x400ddffc: [0;33mtern_m5paper_backend_epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/components/m5paper_backend/m5paper_backend.cpp[0m[0m:[1;31m209[0m
+[0m--- 0x400dbcc0: [0;33mtern_m5paper_rust::ffi::epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/ffi.rs[0m[0m:[1;31m125[0m
+[0m--- (inlined by) [0;33mtern_runtime_main[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/lib.rs[0m[0m:[1;31m96[0m
+[0m--- 0x400d805f: [0;33mtern_runtime_task[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/espidf/main/main.c[0m[0m:[1;31m9[0m
+[0m--- 0x40087faa: [0;33mvPortTaskWrapper[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/freertos/FreeRTOS-Kernel/portable/xtensa/port.c[0m[0m:[1;31m139[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x40081a66: [0;33mpanic_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/panic.c[0m[0m:[1;31m463[0m
+[0m--- 0x400874cd: [0;33mesp_system_abort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/port/esp_system_chip.c[0m[0m:[1;31m92[0m
+[0m--- 0x4008d695: [0;33mabort[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/newlib/abort.c[0m[0m:[1;31m38[0m
+[0m--- 0x400f3443: [0;33m__wrap___cxa_allocate_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/cxx/cxx_exception_stubs.cpp[0m[0m:[1;31m184[0m
+[0m--- 0x400f295d: [0;33moperator new(unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_op.cc[0m[0m:[1;31m54[0m
+[0m--- 0x400f298d: [0;33moperator new[](unsigned int)[0m[0m at [0;32m/Users/brnomac003/.gitlab-runner/builds/qR2TxTby/0/idf/crosstool-NG/.build/xtensa-esp-elf/src/gcc/libstdc++-v3/libsupc++/new_opv.cc[0m[0m:[1;31m32[0m
+[0m--- 0x400ddffc: [0;33mtern_m5paper_backend_epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/components/m5paper_backend/m5paper_backend.cpp[0m[0m:[1;31m209[0m
+[0m--- 0x400dbcc0: [0;33mtern_m5paper_rust::ffi::epd_test_pattern[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/ffi.rs[0m[0m:[1;31m125[0m
+[0m--- (inlined by) [0;33mtern_runtime_main[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/src/lib.rs[0m[0m:[1;31m96[0m
+[0m--- 0x400d805f: [0;33mtern_runtime_task[0m[0m at [0;32m/Users/andrew/embedded/TernReader/m5paper-rust/espidf/main/main.c[0m[0m:[1;31m9[0m
+[0m--- 0x40087faa: [0;33mvPortTaskWrapper[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/freertos/FreeRTOS-Kernel/portable/xtensa/port.c[0m[0m:[1;31m139[0m
