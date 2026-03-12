@@ -1,5 +1,0 @@
-source "/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/bootloader/Kconfig.projbuild"
-source "/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_app_format/Kconfig.projbuild"
-source "/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_rom/Kconfig.projbuild"
-source "/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esptool_py/Kconfig.projbuild"
-source "/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/partition_table/Kconfig.projbuild"

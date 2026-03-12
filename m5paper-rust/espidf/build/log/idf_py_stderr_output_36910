@@ -1,4 +1,0 @@
-[0;33m--- esp-idf-monitor 1.9.0 on /dev/cu.usbserial-0214212B 115200[0m
-[0;33m--- Quit: Ctrl+] | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H[0m
-[0m--- 0x4008ec76: [0;33m_xt_context_save[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/xtensa/xtensa_context.S[0m[0m:[1;31m116[0m
-[0m--- 0x40081add: [0;33mxt_unhandled_exception[0m[0m at [0;32m/Users/andrew/embedded/TernReader/.embuild/espressif/esp-idf/v5.3.2/components/esp_system/port/panic_handler.c[0m[0m:[1;31m253[0m
