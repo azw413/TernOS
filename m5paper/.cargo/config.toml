@@ -1,5 +1,14 @@
 [build]
-target = "xtensa-esp32-none-elf"
+target = "xtensa-esp32-espidf"
+
+[target.xtensa-esp32-espidf]
+runner = "espflash flash --monitor --chip esp32 --port /dev/cu.usbserial-0214212B"
+linker = "ldproxy"
+rustflags = ["--cfg", "espidf_time64"]
+
+[env]
+ESP_IDF_SYS_ROOT_CRATE = "tern-m5paper"
+IDF_TOOLS_PATH = { value = "/Users/andrew/embedded/TernReader/.espressif", force = true }
 
 [unstable]
-build-std = ["core", "alloc"]
+build-std = ["std", "panic_abort"]

@@ -1,14 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-source /Users/andrew/export-esp.sh
 cd "$(dirname "$0")/m5paper"
 
-cargo +esp espflash save-image --release --chip=esp32 --target=xtensa-esp32-none-elf firmware.bin
-if [[ $(stat -f%z firmware.bin) -gt 6553600 ]]; then
-    echo -e "\033[0;31m[ERROR] Firmware size exceeds OFW partition limit!"
-    exit 1
+source /Users/andrew/export-esp.sh
+
+rm -rf ../target/xtensa-esp32-espidf ../target/release/build/esp-idf-sys-*
+
+cargo +esp build --release --features cshim
+
+elf_path="$(ls -td ../target/xtensa-esp32-espidf/release/build/esp-idf-sys-*/out/build/libespidf.elf | head -n1)"
+
+if [[ -z "${elf_path}" || ! -f "${elf_path}" ]]; then
+  echo "Failed to locate libespidf.elf after build" >&2
+  exit 1
 fi
-cargo +esp espflash write-bin 0x10000 firmware.bin
-echo "Firmware written. Starting monitor; press CTRL+R or the device reset button to boot."
-cargo +esp espflash monitor --chip esp32 --port /dev/cu.usbserial-0214212B
+
+espflash flash --monitor --chip esp32 --port /dev/cu.usbserial-0214212B "${elf_path}"

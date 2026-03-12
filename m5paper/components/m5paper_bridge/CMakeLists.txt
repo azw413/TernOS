@@ -2,10 +2,11 @@ idf_component_register(
     SRCS
         "m5paper_bridge.cpp"
         "../../../../M5EPD/src/M5EPD_Driver.cpp"
+        "../../../../M5EPD/src/utility/BM8563.cpp"
         "../../../../M5EPD/src/utility/GT911.cpp"
     INCLUDE_DIRS
         "."
-        "../../../m5paper/cshim"
+        "../../cshim"
         "../../../../M5EPD/src"
         "../../../../M5EPD/src/utility"
     REQUIRES

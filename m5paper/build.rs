@@ -1,30 +1,17 @@
 fn main() {
-    linker_be_nice();
-    println!("cargo:rustc-link-arg=-Tlinkall.x");
+    embuild::espidf::sysenv::output();
 
     if std::env::var_os("CARGO_FEATURE_CSHIM").is_some() {
+        println!("cargo:rerun-if-changed=components/m5paper_bridge/CMakeLists.txt");
+        println!("cargo:rerun-if-changed=components/m5paper_bridge/idf_component.yml");
+        println!("cargo:rerun-if-changed=components/m5paper_bridge/m5paper_bridge.cpp");
         println!("cargo:rerun-if-changed=cshim/m5paper_bridge.h");
-        println!("cargo:rerun-if-changed=cshim/m5paper_bridge_stub.c");
-        cc::Build::new()
-            .file("cshim/m5paper_bridge_stub.c")
-            .include("cshim")
-            .compile("m5paper_bridge");
-    }
-}
-
-fn linker_be_nice() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() > 2 {
-        let kind = &args[1];
-        let what = &args[2];
-
-        match kind.as_str() {
-            "undefined-symbol" if what == "_stack_start" => {
-                eprintln!();
-                eprintln!("💡 Is the linker script `linkall.x` missing?");
-                eprintln!();
-            }
-            _ => {}
-        }
+        println!("cargo:rerun-if-changed=../../M5EPD/src/M5EPD_Driver.cpp");
+        println!("cargo:rerun-if-changed=../../M5EPD/src/M5EPD_Driver.h");
+        println!("cargo:rerun-if-changed=../../M5EPD/src/utility/BM8563.cpp");
+        println!("cargo:rerun-if-changed=../../M5EPD/src/utility/BM8563.h");
+        println!("cargo:rerun-if-changed=../../M5EPD/src/utility/GT911.cpp");
+        println!("cargo:rerun-if-changed=../../M5EPD/src/utility/GT911.h");
+        println!("cargo:rerun-if-changed=../../M5EPD/src/utility/IT8951_Defines.h");
     }
 }

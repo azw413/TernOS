@@ -21,6 +21,16 @@ typedef struct {
     uint16_t count;
 } tern_m5paper_touch_state_t;
 
+typedef struct {
+    uint16_t year;
+    uint8_t month;
+    uint8_t day;
+    uint8_t week;
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t second;
+} tern_m5paper_rtc_datetime_t;
+
 typedef enum {
     TERN_M5PAPER_OK = 0,
     TERN_M5PAPER_UNSUPPORTED = 1,
@@ -39,6 +49,9 @@ tern_m5paper_status_t tern_m5paper_epd_update_region(uint16_t x,
                                                      uint32_t data_len);
 tern_m5paper_status_t tern_m5paper_touch_init(void);
 tern_m5paper_status_t tern_m5paper_touch_read(tern_m5paper_touch_state_t* out_state);
+tern_m5paper_status_t tern_m5paper_rtc_init(void);
+tern_m5paper_status_t tern_m5paper_rtc_read(tern_m5paper_rtc_datetime_t* out_datetime);
+tern_m5paper_status_t tern_m5paper_rtc_set(const tern_m5paper_rtc_datetime_t* datetime);
 
 #ifdef __cplusplus
 }
