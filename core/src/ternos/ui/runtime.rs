@@ -12,6 +12,37 @@ pub type FormId = u16;
 pub type ObjectId = u16;
 pub type ObjectIndex = u16;
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UiTableColumn {
+    pub width: i16,
+    pub spacing: i16,
+    pub usable: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UiTableCell {
+    pub text: alloc::string::String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UiTableRow {
+    pub id: u16,
+    pub height: i16,
+    pub usable: bool,
+    pub selectable: bool,
+    pub data: u32,
+    pub cells: Vec<UiTableCell>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UiTableModel {
+    pub cols: u16,
+    pub columns: Vec<UiTableColumn>,
+    pub rows: Vec<UiTableRow>,
+    pub selected_row: Option<u16>,
+    pub selected_col: Option<u16>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct FocusState {
     pub form_id: Option<FormId>,
@@ -87,7 +118,7 @@ pub enum UiObject {
     Button { id: ObjectId, bounds: Rect },
     Field { id: ObjectId, bounds: Rect },
     List { id: ObjectId, bounds: Rect },
-    Table { id: ObjectId, bounds: Rect },
+    Table { id: ObjectId, bounds: Rect, model: UiTableModel },
     Bitmap { id: ObjectId, bounds: Rect },
     Title { id: ObjectId, bounds: Rect },
     Custom { id: ObjectId, bounds: Rect },
@@ -166,6 +197,30 @@ impl UiRuntime {
             self.forms.push(form);
         }
         self.invalidation.request_full(RefreshMode::Full);
+    }
+
+    pub fn set_focus(&mut self, form_id: FormId, object_id: Option<ObjectId>) {
+        self.focus.form_id = Some(form_id);
+        self.focus.object_id = object_id;
+        self.invalidation
+            .request_full(self.invalidation.preferred_refresh.unwrap_or(RefreshMode::Fast));
+    }
+
+    pub fn focused_object(&self) -> Option<&UiObject> {
+        let form_id = self.focus.form_id?;
+        let object_id = self.focus.object_id?;
+        self.forms
+            .iter()
+            .find(|form| form.form_id == form_id)
+            .and_then(|form| form.objects.iter().find(|object| object.id() == object_id))
+    }
+
+    pub fn has_object(&self, form_id: FormId, object_id: ObjectId) -> bool {
+        self.forms
+            .iter()
+            .find(|form| form.form_id == form_id)
+            .map(|form| form.objects.iter().any(|object| object.id() == object_id))
+            .unwrap_or(false)
     }
 }
 

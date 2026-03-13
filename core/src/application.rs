@@ -830,6 +830,12 @@ impl<'a, S: AppSource> Application<'a, S> {
                     ) {
                         self.dirty = true;
                     } else {
+                        if self.prc_menu_controller.menu_count() > 0 {
+                            self.prc_soft_menu_last_control = self.prc_ui_controller.focused_control_id();
+                            self.prc_soft_menu_focused = true;
+                            self.dirty = true;
+                            return;
+                        }
                         if let Some(session) = self.prc_session.as_mut() {
                             session.inject_event_now(
                                 palm::runtime::EVT_KEY_DOWN,
@@ -841,17 +847,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                             self.resume_prc_runtime_session();
                             return;
                         }
-                        self.prc_soft_menu_last_control = self.prc_ui_controller.focused_control_id();
-                        self.prc_soft_menu_focused = true;
-                        self.dirty = true;
                     }
                 } else if buttons.is_pressed(input::Buttons::Confirm) {
-                    log::info!(
-                        "PRC viewing confirm soft_menu_focused={} focused_control={:?} has_session={}",
-                        self.prc_soft_menu_focused,
-                        self.prc_ui_controller.focused_control_id(),
-                        self.prc_session.is_some()
-                    );
                     if self.prc_soft_menu_focused {
                         if self.prc_menu_controller.open() {
                             self.dirty = true;
@@ -874,11 +871,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                                     })
                                 })
                                 .unwrap_or(false);
-                            log::info!(
-                                "PRC viewing confirm inject control_id={} focused_is_field={}",
-                                control_id,
-                                focused_is_field
-                            );
                             if focused_is_field {
                                 session.inject_event_now(
                                     palm::runtime::EVT_FLD_ENTER,
@@ -893,9 +885,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                             self.resume_prc_runtime_session();
                         } else {
                             if let Some(session) = self.prc_session.as_mut() {
-                                log::info!(
-                                    "PRC viewing confirm fallback keyReturn"
-                                );
                                 session.inject_event_now(
                                     palm::runtime::EVT_KEY_DOWN,
                                     Self::PALM_KEY_RETURN,

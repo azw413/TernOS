@@ -165,18 +165,6 @@ where
             || name.ends_with(".tdb")
     }
 
-    fn resume_filename_legacy() -> &'static str {
-        ".trusty_resume"
-    }
-
-    fn book_positions_filename_legacy() -> &'static str {
-        ".trusty_books"
-    }
-
-    fn recent_entries_filename_legacy() -> &'static str {
-        ".trusty_recents"
-    }
-
     fn thumbnails_dirname() -> &'static str {
         "TRCACHE"
     }
@@ -217,69 +205,6 @@ where
 
     fn db_data_dirname() -> &'static str {
         "/db/v1/db"
-    }
-
-    fn read_resume(&self) -> Option<String> {
-        let mut file = self
-            .fs
-            .open_file(Self::resume_filename_legacy(), Mode::Read)
-            .ok()?;
-        let mut buf = [0u8; 128];
-        let read = file.read(&mut buf).ok()?;
-        if read == 0 {
-            return None;
-        }
-        let name = core::str::from_utf8(&buf[..read]).ok()?.trim();
-        if name.is_empty() {
-            None
-        } else {
-            Some(name.to_string())
-        }
-    }
-
-    fn read_book_positions(&self) -> Vec<(String, usize)> {
-        let mut file = match self
-            .fs
-            .open_file(Self::book_positions_filename_legacy(), Mode::Read)
-        {
-            Ok(file) => file,
-            Err(_) => return Vec::new(),
-        };
-        let mut data = Vec::new();
-        let mut buffer = [0u8; 256];
-        loop {
-            let read = match file.read(&mut buffer) {
-                Ok(read) => read,
-                Err(_) => return Vec::new(),
-            };
-            if read == 0 {
-                break;
-            }
-            if data.try_reserve(read).is_err() {
-                return Vec::new();
-            }
-            data.extend_from_slice(&buffer[..read]);
-        }
-        let text = match core::str::from_utf8(&data) {
-            Ok(text) => text,
-            Err(_) => return Vec::new(),
-        };
-        let mut entries = Vec::new();
-        for line in text.lines() {
-            let Some((name, page_str)) = line.split_once('\t') else {
-                continue;
-            };
-            let name = name.trim();
-            let page_str = page_str.trim();
-            if name.is_empty() {
-                continue;
-            }
-            let Ok(page) = page_str.parse::<usize>() else {
-                continue;
-            };
-            entries.push((name.to_string(), page));
-        }
-        entries
     }
 
     fn state_db_path(uid: u64) -> String {
@@ -487,7 +412,7 @@ where
         if target.is_empty() {
             return;
         }
-        if let Some(resume) = self.read_resume() {
+        if let Some(resume) = self.load_resume() {
             if Self::path_matches(&resume, &target) {
                 self.save_resume(None);
             }
@@ -500,7 +425,7 @@ where
             self.save_recent_entries(&recents);
         }
 
-        let mut positions = self.read_book_positions();
+        let mut positions = self.load_book_positions();
         let old_len = positions.len();
         positions.retain(|(entry, _)| !Self::path_matches(entry, &target));
         if positions.len() != old_len {
@@ -1315,9 +1240,6 @@ where
                 || name.starts_with('.')
                 || short_is_hidden
                 || (path.is_empty() && upper == "DB")
-                || upper == Self::resume_filename_legacy().to_ascii_uppercase()
-                || upper == Self::book_positions_filename_legacy().to_ascii_uppercase()
-                || upper == Self::recent_entries_filename_legacy().to_ascii_uppercase()
                 || upper == Self::thumbnails_dirname()
                 || upper == Self::thumbnails_dirname_legacy().to_ascii_uppercase()
                 || short_upper == Self::thumbnails_dirname()
@@ -2100,7 +2022,7 @@ where
 
     fn load_resume(&mut self) -> Option<String> {
         let state_db = self.load_state_db();
-        state_db.resume.or_else(|| self.read_resume())
+        state_db.resume
     }
 
     fn save_book_positions(&mut self, entries: &[(String, usize)]) {
@@ -2111,11 +2033,7 @@ where
 
     fn load_book_positions(&mut self) -> Vec<(String, usize)> {
         let state_db = self.load_state_db();
-        if !state_db.book_positions.is_empty() {
-            state_db.book_positions
-        } else {
-            self.read_book_positions()
-        }
+        state_db.book_positions
     }
 
     fn save_recent_entries(&mut self, entries: &[String]) {
@@ -2126,46 +2044,37 @@ where
 
     fn load_recent_entries(&mut self) -> Vec<String> {
         let state_db = self.load_state_db();
-        if !state_db.recent_entries.is_empty() {
-            return state_db.recent_entries;
-        }
-        let mut file = match self
-            .fs
-            .open_file(Self::recent_entries_filename_legacy(), Mode::Read)
-        {
-            Ok(file) => file,
-            Err(err) => {
-                log::info!("No recent entries file: {:?}", err);
-                return Vec::new();
-            }
-        };
-        let mut data = Vec::new();
-        let mut buffer = [0u8; 256];
-        loop {
-            let read = match file.read(&mut buffer) {
-                Ok(read) => read,
-                Err(_) => return Vec::new(),
-            };
-            if read == 0 {
-                break;
-            }
-            if data.try_reserve(read).is_err() {
-                return Vec::new();
-            }
-            data.extend_from_slice(&buffer[..read]);
-        }
-        let text = match core::str::from_utf8(&data) {
-            Ok(text) => text,
-            Err(_) => return Vec::new(),
-        };
-        let mut entries = Vec::new();
-        for line in text.lines() {
-            let value = line.trim();
-            if !value.is_empty() {
-                entries.push(value.to_string());
-            }
-        }
-        entries
+        state_db.recent_entries
+    }
+
+    fn save_book_catalog(&mut self, signature: &str, entries: &[(String, String)]) {
+        let mut state_db = self.load_state_db();
+        state_db.book_catalog_signature = Some(signature.to_string());
+        state_db.book_catalog_entries = entries.to_vec();
+        let _ = self.save_state_db(&state_db);
+    }
+
+    fn load_book_catalog(&mut self) -> Option<(String, Vec<(String, String)>)> {
+        let state_db = self.load_state_db();
+        Some((
+            state_db.book_catalog_signature?,
+            state_db.book_catalog_entries,
+        ))
+    }
+
+    fn save_image_catalog(&mut self, signature: &str, entries: &[(String, String)]) {
+        let mut state_db = self.load_state_db();
+        state_db.image_catalog_signature = Some(signature.to_string());
+        state_db.image_catalog_entries = entries.to_vec();
+        let _ = self.save_state_db(&state_db);
+    }
+
+    fn load_image_catalog(&mut self) -> Option<(String, Vec<(String, String)>)> {
+        let state_db = self.load_state_db();
+        Some((
+            state_db.image_catalog_signature?,
+            state_db.image_catalog_entries,
+        ))
     }
 
     fn load_thumbnail(&mut self, key: &str) -> Option<ImageData> {

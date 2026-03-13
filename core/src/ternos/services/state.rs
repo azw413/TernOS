@@ -15,12 +15,20 @@ const STATE_DB_VERSION: u16 = 1;
 const TAG_RESUME: [u8; 4] = *b"RSME";
 const TAG_BOOKS: [u8; 4] = *b"BOOK";
 const TAG_RECENTS: [u8; 4] = *b"RCNT";
+const TAG_BOOK_SIG: [u8; 4] = *b"BSIG";
+const TAG_BOOK_CAT: [u8; 4] = *b"BCAT";
+const TAG_IMAGE_SIG: [u8; 4] = *b"ISIG";
+const TAG_IMAGE_CAT: [u8; 4] = *b"ICAT";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LauncherStateDb {
     pub resume: Option<String>,
     pub book_positions: Vec<(String, usize)>,
     pub recent_entries: Vec<String>,
+    pub book_catalog_signature: Option<String>,
+    pub book_catalog_entries: Vec<(String, String)>,
+    pub image_catalog_signature: Option<String>,
+    pub image_catalog_entries: Vec<(String, String)>,
 }
 
 impl LauncherStateDb {
@@ -69,6 +77,50 @@ impl LauncherStateDb {
                         }
                     }
                 }
+                TAG_BOOK_SIG => {
+                    let value = body.trim();
+                    out.book_catalog_signature = if value.is_empty() {
+                        None
+                    } else {
+                        Some(value.to_string())
+                    };
+                }
+                TAG_BOOK_CAT => {
+                    out.book_catalog_entries.clear();
+                    for line in body.lines() {
+                        let Some((path, title)) = line.split_once('\t') else {
+                            continue;
+                        };
+                        let path = path.trim();
+                        let title = title.trim();
+                        if !path.is_empty() {
+                            out.book_catalog_entries
+                                .push((path.to_string(), title.to_string()));
+                        }
+                    }
+                }
+                TAG_IMAGE_SIG => {
+                    let value = body.trim();
+                    out.image_catalog_signature = if value.is_empty() {
+                        None
+                    } else {
+                        Some(value.to_string())
+                    };
+                }
+                TAG_IMAGE_CAT => {
+                    out.image_catalog_entries.clear();
+                    for line in body.lines() {
+                        let Some((path, title)) = line.split_once('\t') else {
+                            continue;
+                        };
+                        let path = path.trim();
+                        let title = title.trim();
+                        if !path.is_empty() {
+                            out.image_catalog_entries
+                                .push((path.to_string(), title.to_string()));
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -81,6 +133,32 @@ impl LauncherStateDb {
         db.push_record(0, 1, encode_record(TAG_RESUME, encode_resume(self.resume.as_deref())));
         db.push_record(0, 2, encode_record(TAG_BOOKS, encode_book_positions(&self.book_positions)));
         db.push_record(0, 3, encode_record(TAG_RECENTS, encode_recent_entries(&self.recent_entries)));
+        db.push_record(
+            0,
+            4,
+            encode_record(
+                TAG_BOOK_SIG,
+                self.book_catalog_signature.clone().unwrap_or_default(),
+            ),
+        );
+        db.push_record(
+            0,
+            5,
+            encode_record(TAG_BOOK_CAT, encode_book_catalog(&self.book_catalog_entries)),
+        );
+        db.push_record(
+            0,
+            6,
+            encode_record(
+                TAG_IMAGE_SIG,
+                self.image_catalog_signature.clone().unwrap_or_default(),
+            ),
+        );
+        db.push_record(
+            0,
+            7,
+            encode_record(TAG_IMAGE_CAT, encode_book_catalog(&self.image_catalog_entries)),
+        );
         db.to_bytes()
     }
 }
@@ -191,6 +269,17 @@ fn encode_recent_entries(entries: &[String]) -> String {
     out
 }
 
+fn encode_book_catalog(entries: &[(String, String)]) -> String {
+    let mut out = String::new();
+    for (path, title) in entries {
+        out.push_str(path);
+        out.push('\t');
+        out.push_str(title);
+        out.push('\n');
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::{LauncherStateDb, payload_hash_32};
@@ -205,6 +294,18 @@ mod tests {
             ]
             .to_vec(),
             recent_entries: ["img/a.tri".into(), "books/one.trbk".into()].to_vec(),
+            book_catalog_signature: Some("sig".into()),
+            book_catalog_entries: [
+                ("books/one.trbk".into(), "One".into()),
+                ("books/two.trbk".into(), "Two".into()),
+            ]
+            .to_vec(),
+            image_catalog_signature: Some("img-sig".into()),
+            image_catalog_entries: [
+                ("img/a.tri".into(), "a.tri".into()),
+                ("img/b.png".into(), "b.png".into()),
+            ]
+            .to_vec(),
         };
 
         let encoded = state.to_bytes();

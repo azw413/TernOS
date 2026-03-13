@@ -191,6 +191,24 @@ pub trait PersistenceSource {
     fn load_recent_entries(&mut self) -> Vec<String> {
         Vec::new()
     }
+    fn save_book_catalog(
+        &mut self,
+        _signature: &str,
+        _entries: &[(String, String)],
+    ) {
+    }
+    fn load_book_catalog(&mut self) -> Option<(String, Vec<(String, String)>)> {
+        None
+    }
+    fn save_image_catalog(
+        &mut self,
+        _signature: &str,
+        _entries: &[(String, String)],
+    ) {
+    }
+    fn load_image_catalog(&mut self) -> Option<(String, Vec<(String, String)>)> {
+        None
+    }
     fn load_thumbnail(&mut self, _key: &str) -> Option<ImageData> {
         None
     }

@@ -132,26 +132,6 @@ impl MinifbDisplay {
             self.mouse_down = false;
         }
         self.buttons.update_with_typed(current, &typed[..typed_len]);
-        if self.buttons.is_pressed(Buttons::Left)
-            || self.buttons.is_pressed(Buttons::Right)
-            || self.buttons.is_pressed(Buttons::Up)
-            || self.buttons.is_pressed(Buttons::Down)
-            || self.buttons.is_pressed(Buttons::Confirm)
-            || self.buttons.is_pressed(Buttons::Back)
-            || self.buttons.is_pressed(Buttons::Power)
-        {
-            info!(
-                "desktop input pressed left={} right={} up={} down={} confirm={} back={} power={} current=0x{:02X}",
-                self.buttons.is_pressed(Buttons::Left),
-                self.buttons.is_pressed(Buttons::Right),
-                self.buttons.is_pressed(Buttons::Up),
-                self.buttons.is_pressed(Buttons::Down),
-                self.buttons.is_pressed(Buttons::Confirm),
-                self.buttons.is_pressed(Buttons::Back),
-                self.buttons.is_pressed(Buttons::Power),
-                current
-            );
-        }
         self.collect_button_events();
     }
 

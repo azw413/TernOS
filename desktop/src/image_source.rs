@@ -48,18 +48,6 @@ impl DesktopImageSource {
             || name.ends_with(".tdb")
     }
 
-    fn resume_path_legacy(&self) -> PathBuf {
-        self.root.join(".trusty_resume")
-    }
-
-    fn book_positions_path_legacy(&self) -> PathBuf {
-        self.root.join(".trusty_books")
-    }
-
-    fn recent_entries_path_legacy(&self) -> PathBuf {
-        self.root.join(".trusty_recents")
-    }
-
     fn thumbnail_dir(&self) -> PathBuf {
         self.root.join(".tern_cache")
     }
@@ -434,13 +422,7 @@ impl ImageSource for DesktopImageSource {
             let entry = entry.map_err(|_| ImageError::Io)?;
             let file_type = entry.file_type().map_err(|_| ImageError::Io)?;
             let name = entry.file_name().to_string_lossy().to_string();
-            if name == ".tern_resume"
-                || name == ".trusty_resume"
-                || name == ".tern_books"
-                || name == ".trusty_books"
-                || name == ".tern_recents"
-                || name == ".trusty_recents"
-                || (path.is_empty() && name == "db")
+            if (path.is_empty() && name == "db")
                 || name == ".tern_cache"
                 || name == ".trusty_cache"
             {
@@ -782,57 +764,22 @@ impl PersistenceSource for DesktopImageSource {
         let mut state_db = self.load_state_db();
         state_db.resume = name.map(|value| value.to_string());
         self.save_state_db(&state_db);
-        let _ = fs::remove_file(self.root.join(".tern_resume"));
-        let _ = fs::remove_file(self.resume_path_legacy());
     }
 
     fn load_resume(&mut self) -> Option<String> {
         let state_db = self.load_state_db();
-        state_db.resume.or_else(|| {
-            let data = fs::read(self.root.join(".tern_resume"))
-                .or_else(|_| fs::read(self.resume_path_legacy()))
-                .ok()?;
-            let name = String::from_utf8_lossy(&data).trim().to_string();
-            if name.is_empty() { None } else { Some(name) }
-        })
+        state_db.resume
     }
 
     fn save_book_positions(&mut self, entries: &[(String, usize)]) {
         let mut state_db = self.load_state_db();
         state_db.book_positions = entries.to_vec();
         self.save_state_db(&state_db);
-        let _ = fs::remove_file(self.root.join(".tern_books"));
-        let _ = fs::remove_file(self.book_positions_path_legacy());
     }
 
     fn load_book_positions(&mut self) -> Vec<(String, usize)> {
         let state_db = self.load_state_db();
-        if !state_db.book_positions.is_empty() {
-            return state_db.book_positions;
-        }
-        let data = match fs::read(self.root.join(".tern_books"))
-            .or_else(|_| fs::read(self.book_positions_path_legacy()))
-        {
-            Ok(data) => data,
-            Err(_) => return Vec::new(),
-        };
-        let text = String::from_utf8_lossy(&data);
-        let mut entries = Vec::new();
-        for line in text.lines() {
-            let Some((name, page_str)) = line.split_once('\t') else {
-                continue;
-            };
-            let name = name.trim();
-            let page_str = page_str.trim();
-            if name.is_empty() {
-                continue;
-            }
-            let Ok(page) = page_str.parse::<usize>() else {
-                continue;
-            };
-            entries.push((name.to_string(), page));
-        }
-        entries
+        state_db.book_positions
     }
 
     fn save_recent_entries(&mut self, entries: &[String]) {
@@ -840,29 +787,41 @@ impl PersistenceSource for DesktopImageSource {
         state_db.recent_entries = entries.to_vec();
         self.save_state_db(&state_db);
         let _ = fs::remove_file(self.root.join(".tern_recents"));
-        let _ = fs::remove_file(self.recent_entries_path_legacy());
     }
 
     fn load_recent_entries(&mut self) -> Vec<String> {
         let state_db = self.load_state_db();
-        if !state_db.recent_entries.is_empty() {
-            return state_db.recent_entries;
-        }
-        let data = match fs::read(self.root.join(".tern_recents"))
-            .or_else(|_| fs::read(self.recent_entries_path_legacy()))
-        {
-            Ok(data) => data,
-            Err(_) => return Vec::new(),
-        };
-        let text = String::from_utf8_lossy(&data);
-        let mut entries = Vec::new();
-        for line in text.lines() {
-            let value = line.trim();
-            if !value.is_empty() {
-                entries.push(value.to_string());
-            }
-        }
-        entries
+        state_db.recent_entries
+    }
+
+    fn save_book_catalog(&mut self, signature: &str, entries: &[(String, String)]) {
+        let mut state_db = self.load_state_db();
+        state_db.book_catalog_signature = Some(signature.to_string());
+        state_db.book_catalog_entries = entries.to_vec();
+        self.save_state_db(&state_db);
+    }
+
+    fn load_book_catalog(&mut self) -> Option<(String, Vec<(String, String)>)> {
+        let state_db = self.load_state_db();
+        Some((
+            state_db.book_catalog_signature?,
+            state_db.book_catalog_entries,
+        ))
+    }
+
+    fn save_image_catalog(&mut self, signature: &str, entries: &[(String, String)]) {
+        let mut state_db = self.load_state_db();
+        state_db.image_catalog_signature = Some(signature.to_string());
+        state_db.image_catalog_entries = entries.to_vec();
+        self.save_state_db(&state_db);
+    }
+
+    fn load_image_catalog(&mut self) -> Option<(String, Vec<(String, String)>)> {
+        let state_db = self.load_state_db();
+        Some((
+            state_db.image_catalog_signature?,
+            state_db.image_catalog_entries,
+        ))
     }
 
     fn load_thumbnail(&mut self, key: &str) -> Option<ImageData> {

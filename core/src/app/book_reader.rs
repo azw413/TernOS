@@ -745,11 +745,28 @@ fn map_display_point(rotation: Rotation, x: i32, y: i32) -> Option<(usize, usize
     if x < 0 || y < 0 {
         return None;
     }
+    let xu = x as usize;
+    let yu = y as usize;
     let (x, y) = match rotation {
-        Rotation::Rotate0 => (x as usize, y as usize),
-        Rotation::Rotate90 => (y as usize, FB_HEIGHT - 1 - x as usize),
-        Rotation::Rotate180 => (FB_WIDTH - 1 - x as usize, FB_HEIGHT - 1 - y as usize),
-        Rotation::Rotate270 => (FB_WIDTH - 1 - y as usize, x as usize),
+        Rotation::Rotate0 => (xu, yu),
+        Rotation::Rotate90 => {
+            if xu >= FB_HEIGHT {
+                return None;
+            }
+            (yu, FB_HEIGHT - 1 - xu)
+        }
+        Rotation::Rotate180 => {
+            if xu >= FB_WIDTH || yu >= FB_HEIGHT {
+                return None;
+            }
+            (FB_WIDTH - 1 - xu, FB_HEIGHT - 1 - yu)
+        }
+        Rotation::Rotate270 => {
+            if yu >= FB_WIDTH {
+                return None;
+            }
+            (FB_WIDTH - 1 - yu, xu)
+        }
     };
     if x >= FB_WIDTH || y >= FB_HEIGHT {
         None

@@ -14,8 +14,9 @@ use embedded_graphics::{
 use crate::display::{Display, RefreshMode};
 use crate::framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
 use crate::image_viewer::{AppSource, ImageData, ImageEntry, ImageError, InstalledAppEntry};
+use crate::platform::ButtonId;
 use crate::render_policy::RenderPolicy;
-use crate::ternos::ui::{flush_queue, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_pull_down_box, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, ListItem, ListView, Rect, RenderQueue, UiContext, View};
+use crate::ternos::ui::{flush_queue, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_pull_down_box, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, FormResource, ListItem, ListView, ObjectId, ObjectResource, Rect, RenderQueue, TableCellRenderer, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
 
 const START_MENU_MARGIN: i32 = 16;
 const START_MENU_RECENT_THUMB: i32 = 74;
@@ -26,6 +27,13 @@ const LIST_TOP: i32 = 72;
 const LINE_HEIGHT: i32 = 30;
 const LIST_MARGIN_X: i32 = 18;
 const APP_GRID_COLS: usize = 3;
+const HOME_FORM_ID: u16 = 1;
+const HOME_OBJ_CATEGORY_TRIGGER: ObjectId = 100;
+const HOME_OBJ_RECENTS_TABLE: ObjectId = 110;
+const HOME_OBJ_APPS_TABLE: ObjectId = 111;
+const HOME_OBJ_CONTENT_BASE: ObjectId = 1000;
+const HOME_OBJ_CATEGORY_MENU_BASE: ObjectId = 2000;
+const HOME_OBJ_DIALOG_DISMISS: ObjectId = 3000;
 
 #[derive(Clone, Copy, Debug)]
 struct PalmChromeMetrics {
@@ -71,14 +79,16 @@ pub struct HomeState {
     pub entries: Vec<ImageEntry>,
     pub selected: usize,
     pub path: Vec<String>,
+    pub ui_runtime: UiRuntime,
+    pub prev_focus_object_id: Option<ObjectId>,
     pub start_menu_section: StartMenuSection,
     pub launcher_category: LauncherCategory,
     pub start_menu_index: usize,
-    pub start_menu_prev_section: StartMenuSection,
-    pub start_menu_prev_index: usize,
     pub category_menu_open: bool,
     pub category_menu_index: usize,
     pub start_menu_cache: Vec<RecentPreview>,
+    pub books_cache: Vec<RecentPreview>,
+    pub images_cache: Vec<RecentPreview>,
     pub installed_apps: Vec<InstalledAppEntry>,
     pub start_menu_nav_pending: bool,
     pub start_menu_need_base_refresh: bool,
@@ -142,20 +152,213 @@ pub struct HomeRenderContext<'a, S: AppSource> {
     pub draw_trbk_image: DrawTrbkImageFn,
 }
 
+struct RecentTableRenderer<'a> {
+    previews: &'a [RecentPreview],
+    thumb_size: i32,
+    palm_fonts: &'a [crate::palm::runtime::PalmFont],
+    render_policy: RenderPolicy,
+    draw_trbk_image: DrawTrbkImageFn,
+}
+
+impl TableCellRenderer for RecentTableRenderer<'_> {
+    fn render_cell(
+        &self,
+        ctx: &mut UiContext<'_>,
+        cell_rect: Rect,
+        _row: &UiTableRow,
+        cell: &UiTableCell,
+        row_index: usize,
+        _col_index: usize,
+        selected: bool,
+    ) {
+        let Some(preview) = self.previews.get(row_index) else {
+            return;
+        };
+        let thumb_x = cell_rect.x + 4;
+        let thumb_y = cell_rect.y + ((cell_rect.h - self.thumb_size) / 2).max(0);
+        Rectangle::new(
+            Point::new(thumb_x, thumb_y),
+            Size::new(self.thumb_size as u32, self.thumb_size as u32),
+        )
+        .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_stroke(
+            if selected { BinaryColor::On } else { BinaryColor::Off },
+            1,
+        ))
+        .draw(ctx.buffers)
+        .ok();
+        if let Some(image) = preview.image.as_ref() {
+            let mut gray2_ctx = None;
+            (self.draw_trbk_image)(
+                ctx.buffers,
+                image,
+                &mut gray2_ctx,
+                self.render_policy,
+                thumb_x + 2,
+                thumb_y + 2,
+                self.thumb_size - 4,
+                self.thumb_size - 4,
+            );
+        }
+        let text_color = if selected { BinaryColor::On } else { BinaryColor::Off };
+        let title_x = thumb_x + self.thumb_size + 12;
+        let title_max_w = (cell_rect.w - (title_x - cell_rect.x) - 6).max(20);
+        let lines = wrap_home_title_lines(
+            &cell.text,
+            title_max_w,
+            self.palm_fonts,
+            0,
+            6,
+            5,
+            2,
+        );
+        if !self.palm_fonts.is_empty() {
+            let line_h = palm_text_height_scaled(0, self.palm_fonts, 6, 5).max(8) + 2;
+            for (line_idx, line) in lines.iter().enumerate() {
+                draw_palm_text_scaled(
+                    ctx.buffers,
+                    line.as_str(),
+                    title_x,
+                    cell_rect.y + 10 + (line_idx as i32 * line_h),
+                    0,
+                    self.palm_fonts,
+                    6,
+                    5,
+                    text_color,
+                );
+            }
+        } else {
+            let label_style = MonoTextStyle::new(&FONT_10X20, text_color);
+            for (line_idx, line) in lines.iter().enumerate() {
+                Text::new(
+                    line.as_str(),
+                    Point::new(title_x, cell_rect.y + 26 + (line_idx as i32 * 18)),
+                    label_style,
+                )
+                .draw(ctx.buffers)
+                .ok();
+            }
+        }
+    }
+}
+
+struct AppsTableRenderer<'a> {
+    apps: &'a [InstalledAppEntry],
+    palm_fonts: &'a [crate::palm::runtime::PalmFont],
+    render_policy: RenderPolicy,
+    draw_trbk_image: DrawTrbkImageFn,
+}
+
+impl TableCellRenderer for AppsTableRenderer<'_> {
+    fn render_cell(
+        &self,
+        ctx: &mut UiContext<'_>,
+        cell_rect: Rect,
+        row: &UiTableRow,
+        cell: &UiTableCell,
+        _row_index: usize,
+        col_index: usize,
+        selected: bool,
+    ) {
+        let item_index = row.data as usize + col_index;
+        let Some(app) = self.apps.get(item_index) else {
+            return;
+        };
+        let icon_size = 60i32;
+        let icon_x = cell_rect.x + ((cell_rect.w - icon_size) / 2).max(0);
+        let icon_y = cell_rect.y + 2;
+        if let Some(image) = app.icon.as_ref() {
+            let mut gray2_ctx = None;
+            (self.draw_trbk_image)(
+                ctx.buffers,
+                image,
+                &mut gray2_ctx,
+                self.render_policy,
+                icon_x,
+                icon_y,
+                icon_size,
+                icon_size,
+            );
+        } else {
+            Rectangle::new(
+                Point::new(icon_x, icon_y),
+                Size::new(icon_size as u32, icon_size as u32),
+            )
+            .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_stroke(
+                BinaryColor::Off,
+                1,
+            ))
+            .draw(ctx.buffers)
+            .ok();
+        }
+        let title_max_w = (cell_rect.w - 6).max(20);
+        let title_lines = wrap_home_title_lines(
+            &cell.text,
+            title_max_w,
+            self.palm_fonts,
+            0,
+            6,
+            5,
+            2,
+        );
+        let title_color = if selected { BinaryColor::On } else { BinaryColor::Off };
+        let title_bg = if selected { BinaryColor::Off } else { BinaryColor::On };
+        let line_h = palm_text_height_scaled(0, self.palm_fonts, 6, 5).max(10);
+        let title_block_h = (title_lines.len() as i32 * line_h).max(line_h);
+        let title_top = icon_y + icon_size + 6;
+        if selected {
+            Rectangle::new(
+                Point::new(cell_rect.x + 2, title_top - 2),
+                Size::new((cell_rect.w - 4).max(1) as u32, (title_block_h + 4).max(1) as u32),
+            )
+            .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(title_bg))
+            .draw(ctx.buffers)
+            .ok();
+        }
+        if !self.palm_fonts.is_empty() {
+            for (line_idx, line) in title_lines.iter().enumerate() {
+                let tw = palm_text_width_scaled(line, 0, self.palm_fonts, 6, 5);
+                let tx = cell_rect.x + ((cell_rect.w - tw) / 2).max(0);
+                let ty = title_top + (line_idx as i32 * line_h);
+                draw_palm_text_scaled(
+                    ctx.buffers,
+                    line.as_str(),
+                    tx,
+                    ty,
+                    0,
+                    self.palm_fonts,
+                    6,
+                    5,
+                    title_color,
+                );
+            }
+        } else {
+            Text::new(
+                app.title.as_str(),
+                Point::new(cell_rect.x + 4, title_top + 12),
+                MonoTextStyle::new(&FONT_10X20, title_color),
+            )
+            .draw(ctx.buffers)
+            .ok();
+        }
+    }
+}
+
 impl HomeState {
     pub fn new() -> Self {
         Self {
             entries: Vec::new(),
             selected: 0,
             path: Vec::new(),
+            ui_runtime: UiRuntime::default(),
+            prev_focus_object_id: None,
             start_menu_section: StartMenuSection::Recents,
             launcher_category: LauncherCategory::Recents,
             start_menu_index: 0,
-            start_menu_prev_section: StartMenuSection::Recents,
-            start_menu_prev_index: 0,
             category_menu_open: false,
             category_menu_index: 0,
             start_menu_cache: Vec::new(),
+            books_cache: Vec::new(),
+            images_cache: Vec::new(),
             installed_apps: Vec::new(),
             start_menu_nav_pending: false,
             start_menu_need_base_refresh: true,
@@ -282,126 +485,444 @@ impl HomeState {
                 .all(|(path, cached)| path == &cached.path)
     }
 
+    fn launcher_object_id_for_index(index: usize) -> ObjectId {
+        HOME_OBJ_CONTENT_BASE.saturating_add(index as u16)
+    }
+
+    fn category_menu_object_id(index: usize) -> ObjectId {
+        HOME_OBJ_CATEGORY_MENU_BASE.saturating_add(index as u16)
+    }
+
+    fn content_index_from_object_id(object_id: ObjectId) -> Option<usize> {
+        if object_id >= HOME_OBJ_CONTENT_BASE {
+            Some((object_id - HOME_OBJ_CONTENT_BASE) as usize)
+        } else {
+            None
+        }
+    }
+
+    fn category_index_from_object_id(object_id: ObjectId) -> Option<usize> {
+        if object_id >= HOME_OBJ_CATEGORY_MENU_BASE && object_id < HOME_OBJ_CATEGORY_MENU_BASE + 16 {
+            Some((object_id - HOME_OBJ_CATEGORY_MENU_BASE) as usize)
+        } else {
+            None
+        }
+    }
+
+    fn sync_start_menu_ui(&mut self, recents: &[String]) {
+        let content_len = self.start_menu_content_len(recents);
+        let mut objects = vec![ObjectResource::Button {
+            id: HOME_OBJ_CATEGORY_TRIGGER,
+            bounds: Rect::new(0, START_MENU_FORM_Y, 160, 24),
+        }];
+        if self.install_dialog.is_some() {
+            objects.push(ObjectResource::Button {
+                id: HOME_OBJ_DIALOG_DISMISS,
+                bounds: Rect::new(40, 80, 80, 24),
+            });
+        } else if self.category_menu_open {
+            for idx in 0..4usize {
+                objects.push(ObjectResource::Button {
+                    id: Self::category_menu_object_id(idx),
+                    bounds: Rect::new(100, START_MENU_FORM_Y + (idx as i32 * 18), 60, 16),
+                });
+            }
+        } else {
+            let table_model = self.build_launcher_table_model(recents);
+            let table_object_id = match self.launcher_category {
+                LauncherCategory::Recents => HOME_OBJ_RECENTS_TABLE,
+                LauncherCategory::Apps => HOME_OBJ_APPS_TABLE,
+                LauncherCategory::Books | LauncherCategory::Images => HOME_OBJ_RECENTS_TABLE,
+            };
+            objects.push(ObjectResource::Table {
+                id: table_object_id,
+                bounds: Rect::new(
+                    START_MENU_MARGIN,
+                    LIST_TOP,
+                    120,
+                    (content_len.max(1) as i32) * 18,
+                ),
+                model: table_model,
+            });
+            for idx in 0..content_len {
+                objects.push(ObjectResource::Button {
+                    id: Self::launcher_object_id_for_index(idx),
+                    bounds: Rect::new(START_MENU_MARGIN, LIST_TOP + (idx as i32 * 18), 120, 16),
+                });
+            }
+        }
+        self.ui_runtime.upsert_form(FormResource {
+            form_id: HOME_FORM_ID,
+            title: Some("Launcher".to_string()),
+            objects,
+        }
+        .into_ui_form());
+        self.ui_runtime.set_active_form(HOME_FORM_ID);
+        self.sync_start_menu_focus(recents);
+    }
+
+    fn build_launcher_table_model(&self, recents: &[String]) -> UiTableModel {
+        match self.launcher_category {
+            LauncherCategory::Recents => {
+                let rows = self
+                    .start_menu_cache
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, preview)| UiTableRow {
+                        id: idx as u16,
+                        height: 99,
+                        usable: true,
+                        selectable: true,
+                        data: idx as u32,
+                        cells: vec![UiTableCell {
+                            text: preview.title.clone(),
+                        }],
+                    })
+                    .collect();
+                UiTableModel {
+                    cols: 1,
+                    columns: vec![UiTableColumn {
+                        width: 0,
+                        spacing: 0,
+                        usable: true,
+                    }],
+                    selected_row: self.selected_content_index(recents).map(|idx| idx as u16),
+                    selected_col: Some(0),
+                    rows,
+                }
+            }
+            LauncherCategory::Apps => {
+                let selected_index = self.selected_content_index(recents).unwrap_or(0);
+                let selected_row = (selected_index / APP_GRID_COLS) as u16;
+                let selected_col = (selected_index % APP_GRID_COLS) as u16;
+                let rows = self
+                    .installed_apps
+                    .chunks(APP_GRID_COLS)
+                    .enumerate()
+                    .map(|(row_idx, apps)| UiTableRow {
+                        id: row_idx as u16,
+                        height: 120,
+                        usable: true,
+                        selectable: true,
+                        data: (row_idx * APP_GRID_COLS) as u32,
+                        cells: apps
+                            .iter()
+                            .map(|app| UiTableCell {
+                                text: app.title.clone(),
+                            })
+                            .collect(),
+                    })
+                    .collect();
+                UiTableModel {
+                    cols: APP_GRID_COLS as u16,
+                    columns: (0..APP_GRID_COLS)
+                        .map(|_| UiTableColumn {
+                            width: 0,
+                            spacing: 0,
+                            usable: true,
+                        })
+                        .collect(),
+                    rows,
+                    selected_row: Some(selected_row),
+                    selected_col: Some(selected_col),
+                }
+            }
+            LauncherCategory::Books => {
+                let rows = self
+                    .books_cache
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, book)| UiTableRow {
+                        id: idx as u16,
+                        height: 99,
+                        usable: true,
+                        selectable: true,
+                        data: idx as u32,
+                        cells: vec![UiTableCell {
+                            text: book.title.clone(),
+                        }],
+                    })
+                    .collect();
+                UiTableModel {
+                    cols: 1,
+                    columns: vec![UiTableColumn {
+                        width: 0,
+                        spacing: 0,
+                        usable: true,
+                    }],
+                    selected_row: self.selected_content_index(recents).map(|idx| idx as u16),
+                    selected_col: Some(0),
+                    rows,
+                }
+            }
+            LauncherCategory::Images => {
+                let rows = self
+                    .images_cache
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, image)| UiTableRow {
+                        id: idx as u16,
+                        height: 99,
+                        usable: true,
+                        selectable: true,
+                        data: idx as u32,
+                        cells: vec![UiTableCell {
+                            text: image.title.clone(),
+                        }],
+                    })
+                    .collect();
+                UiTableModel {
+                    cols: 1,
+                    columns: vec![UiTableColumn {
+                        width: 0,
+                        spacing: 0,
+                        usable: true,
+                    }],
+                    selected_row: self.selected_content_index(recents).map(|idx| idx as u16),
+                    selected_col: Some(0),
+                    rows,
+                }
+            }
+        }
+    }
+
+    fn sync_start_menu_focus(&mut self, recents: &[String]) {
+        let target = if self.install_dialog.is_some() {
+            Some(HOME_OBJ_DIALOG_DISMISS)
+        } else if self.category_menu_open {
+            Some(Self::category_menu_object_id(self.category_menu_index.min(3)))
+        } else if self.start_menu_section == StartMenuSection::Actions {
+            Some(HOME_OBJ_CATEGORY_TRIGGER)
+        } else if self.start_menu_content_len(recents) > 0 {
+            Some(Self::launcher_object_id_for_index(
+                self.start_menu_index.min(self.start_menu_content_len(recents).saturating_sub(1)),
+            ))
+        } else {
+            Some(HOME_OBJ_CATEGORY_TRIGGER)
+        };
+        self.prev_focus_object_id = self.ui_runtime.focus.object_id;
+        self.ui_runtime.set_focus(HOME_FORM_ID, target);
+        self.sync_selection_from_ui_focus(recents);
+    }
+
+    fn sync_selection_from_ui_focus(&mut self, recents: &[String]) {
+        let Some(object_id) = self.ui_runtime.focus.object_id else {
+            return;
+        };
+        if object_id == HOME_OBJ_DIALOG_DISMISS {
+            return;
+        }
+        if object_id == HOME_OBJ_CATEGORY_TRIGGER {
+            self.start_menu_section = StartMenuSection::Actions;
+            return;
+        }
+        if let Some(index) = Self::category_index_from_object_id(object_id) {
+            self.start_menu_section = StartMenuSection::Actions;
+            self.category_menu_index = index.min(3);
+            return;
+        }
+        if let Some(index) = Self::content_index_from_object_id(object_id) {
+            let content_len = self.start_menu_content_len(recents);
+            if index < content_len {
+                self.start_menu_section = StartMenuSection::Recents;
+                self.start_menu_index = index;
+            }
+        }
+    }
+
+    fn set_content_focus(&mut self, recents: &[String], index: usize) {
+        self.start_menu_section = StartMenuSection::Recents;
+        self.start_menu_index = index.min(self.start_menu_content_len(recents).saturating_sub(1));
+        self.prev_focus_object_id = self.ui_runtime.focus.object_id;
+        self.ui_runtime
+            .set_focus(HOME_FORM_ID, Some(Self::launcher_object_id_for_index(self.start_menu_index)));
+    }
+
+    fn set_actions_focus(&mut self) {
+        self.start_menu_section = StartMenuSection::Actions;
+        self.prev_focus_object_id = self.ui_runtime.focus.object_id;
+        self.ui_runtime
+            .set_focus(HOME_FORM_ID, Some(HOME_OBJ_CATEGORY_TRIGGER));
+    }
+
+    fn focused_object_id(&self) -> Option<ObjectId> {
+        self.ui_runtime.focus.object_id
+    }
+
+    fn action_trigger_focused(&self) -> bool {
+        self.focused_object_id() == Some(HOME_OBJ_CATEGORY_TRIGGER) && !self.category_menu_open
+    }
+
+    fn selected_category_menu_index(&self) -> Option<usize> {
+        self.focused_object_id().and_then(Self::category_index_from_object_id)
+    }
+
+    fn selected_content_index(&self, recents: &[String]) -> Option<usize> {
+        let object_id = self.focused_object_id()?;
+        let index = Self::content_index_from_object_id(object_id)?;
+        let content_len = self.start_menu_content_len(recents);
+        (index < content_len).then_some(index)
+    }
+
+    fn previous_content_index(&self, recents: &[String]) -> Option<usize> {
+        let object_id = self.prev_focus_object_id?;
+        let index = Self::content_index_from_object_id(object_id)?;
+        let content_len = self.start_menu_content_len(recents);
+        (index < content_len).then_some(index)
+    }
+
+    fn launcher_event_from_buttons(
+        buttons: &crate::input::ButtonState,
+    ) -> Option<UiEvent> {
+        use crate::input::Buttons;
+        if buttons.is_pressed(Buttons::Up) {
+            Some(UiEvent::ButtonDown { button: ButtonId::Up })
+        } else if buttons.is_pressed(Buttons::Down) {
+            Some(UiEvent::ButtonDown { button: ButtonId::Down })
+        } else if buttons.is_pressed(Buttons::Left) {
+            Some(UiEvent::ButtonDown { button: ButtonId::Left })
+        } else if buttons.is_pressed(Buttons::Right) {
+            Some(UiEvent::ButtonDown { button: ButtonId::Right })
+        } else if buttons.is_pressed(Buttons::Confirm) {
+            Some(UiEvent::ButtonDown { button: ButtonId::Confirm })
+        } else if buttons.is_pressed(Buttons::Back) {
+            Some(UiEvent::ButtonDown { button: ButtonId::Back })
+        } else {
+            None
+        }
+    }
+
     pub fn handle_start_menu_input(
         &mut self,
         recents: &[String],
         buttons: &crate::input::ButtonState,
     ) -> HomeAction {
-        use crate::input::Buttons;
+        self.sync_start_menu_ui(recents);
         let content_len = self.start_menu_content_len(recents);
         if content_len > 0 && self.start_menu_index >= content_len {
             self.start_menu_index = content_len.saturating_sub(1);
         }
+        self.sync_selection_from_ui_focus(recents);
         let categories = [
             LauncherCategory::Recents,
             LauncherCategory::Apps,
             LauncherCategory::Books,
             LauncherCategory::Images,
         ];
+        let event = Self::launcher_event_from_buttons(buttons);
 
         if self.install_dialog.is_some() {
-            if buttons.is_pressed(Buttons::Confirm) || buttons.is_pressed(Buttons::Back) {
+            if matches!(
+                event,
+                Some(UiEvent::ButtonDown {
+                    button: ButtonId::Confirm | ButtonId::Back
+                })
+            ) {
                 self.install_dialog = None;
                 self.start_menu_need_base_refresh = true;
+                self.sync_start_menu_ui(recents);
             }
             return HomeAction::None;
         }
 
         if self.category_menu_open {
-            if buttons.is_pressed(Buttons::Up) {
+            if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Up })) {
                 self.category_menu_index = self.category_menu_index.saturating_sub(1);
+                self.ui_runtime.set_focus(
+                    HOME_FORM_ID,
+                    Some(Self::category_menu_object_id(self.category_menu_index)),
+                );
                 self.start_menu_nav_pending = true;
                 return HomeAction::None;
             }
-            if buttons.is_pressed(Buttons::Down) {
+            if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Down })) {
                 self.category_menu_index =
                     (self.category_menu_index + 1).min(categories.len().saturating_sub(1));
+                self.ui_runtime.set_focus(
+                    HOME_FORM_ID,
+                    Some(Self::category_menu_object_id(self.category_menu_index)),
+                );
                 self.start_menu_nav_pending = true;
                 return HomeAction::None;
             }
-            if buttons.is_pressed(Buttons::Confirm) {
+            if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Confirm })) {
                 self.launcher_category = categories[self.category_menu_index];
                 self.category_menu_open = false;
-                self.start_menu_section = StartMenuSection::Recents;
-                self.start_menu_index = 0;
+                self.set_content_focus(recents, 0);
                 self.start_menu_need_base_refresh = true;
+                self.sync_start_menu_ui(recents);
                 return HomeAction::None;
             }
-            if buttons.is_pressed(Buttons::Back) || buttons.is_pressed(Buttons::Left) {
+            if matches!(
+                event,
+                Some(UiEvent::ButtonDown {
+                    button: ButtonId::Back | ButtonId::Left
+                })
+            ) {
                 self.category_menu_open = false;
+                self.set_actions_focus();
                 self.start_menu_nav_pending = true;
                 return HomeAction::None;
             }
             return HomeAction::None;
         }
 
-        if buttons.is_pressed(Buttons::Up) {
-            self.start_menu_prev_section = self.start_menu_section;
-            self.start_menu_prev_index = self.start_menu_index;
+        if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Up })) {
             if self.start_menu_section == StartMenuSection::Recents {
                 if self.launcher_category == LauncherCategory::Apps {
                     if content_len > 0 && self.start_menu_index >= APP_GRID_COLS {
-                        self.start_menu_index -= APP_GRID_COLS;
+                        self.set_content_focus(recents, self.start_menu_index - APP_GRID_COLS);
                     } else {
-                        self.start_menu_section = StartMenuSection::Actions;
+                        self.set_actions_focus();
                     }
                 } else if content_len > 0 && self.start_menu_index > 0 {
-                    self.start_menu_index -= 1;
+                    self.set_content_focus(recents, self.start_menu_index - 1);
                 } else {
-                    self.start_menu_section = StartMenuSection::Actions;
+                    self.set_actions_focus();
                 }
             }
             self.start_menu_nav_pending = true;
             return HomeAction::None;
         }
 
-        if buttons.is_pressed(Buttons::Down) {
-            self.start_menu_prev_section = self.start_menu_section;
-            self.start_menu_prev_index = self.start_menu_index;
+        if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Down })) {
             if self.start_menu_section == StartMenuSection::Actions {
-                self.start_menu_section = StartMenuSection::Recents;
-                self.start_menu_index = 0;
+                self.set_content_focus(recents, 0);
             } else if self.launcher_category == LauncherCategory::Apps {
                 if content_len > 0 {
                     let next = self.start_menu_index + APP_GRID_COLS;
                     if next < content_len {
-                        self.start_menu_index = next;
+                        self.set_content_focus(recents, next);
                     }
                 }
             } else if content_len > 0 && self.start_menu_index + 1 < content_len {
-                self.start_menu_index += 1;
+                self.set_content_focus(recents, self.start_menu_index + 1);
             }
             self.start_menu_nav_pending = true;
             return HomeAction::None;
         }
 
-        if buttons.is_pressed(Buttons::Left) {
+        if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Left })) {
             if self.start_menu_section == StartMenuSection::Recents {
                 if self.launcher_category == LauncherCategory::Apps {
                     if content_len > 0 {
                         let row_start = (self.start_menu_index / APP_GRID_COLS) * APP_GRID_COLS;
                         if self.start_menu_index > row_start {
-                            self.start_menu_prev_section = self.start_menu_section;
-                            self.start_menu_prev_index = self.start_menu_index;
-                            self.start_menu_index -= 1;
+                            self.set_content_focus(recents, self.start_menu_index - 1);
                             self.start_menu_nav_pending = true;
                         }
                     }
                 } else {
-                    self.start_menu_prev_section = self.start_menu_section;
-                    self.start_menu_prev_index = self.start_menu_index;
-                    self.start_menu_section = StartMenuSection::Actions;
+                    self.set_actions_focus();
                     self.start_menu_nav_pending = true;
                 }
             }
             return HomeAction::None;
         }
 
-        if buttons.is_pressed(Buttons::Right) {
+        if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Right })) {
             if self.start_menu_section == StartMenuSection::Actions {
-                self.start_menu_prev_section = self.start_menu_section;
-                self.start_menu_prev_index = self.start_menu_index;
-                self.start_menu_section = StartMenuSection::Recents;
+                self.set_content_focus(recents, self.start_menu_index);
                 self.start_menu_nav_pending = true;
             } else if self.start_menu_section == StartMenuSection::Recents
                 && self.launcher_category == LauncherCategory::Apps
@@ -410,22 +931,21 @@ impl HomeState {
                 let row_start = (self.start_menu_index / APP_GRID_COLS) * APP_GRID_COLS;
                 let row_end = (row_start + APP_GRID_COLS).min(content_len).saturating_sub(1);
                 if self.start_menu_index < row_end {
-                    self.start_menu_prev_section = self.start_menu_section;
-                    self.start_menu_prev_index = self.start_menu_index;
-                    self.start_menu_index += 1;
+                    self.set_content_focus(recents, self.start_menu_index + 1);
                     self.start_menu_nav_pending = true;
                 }
             }
             return HomeAction::None;
         }
 
-        if buttons.is_pressed(Buttons::Confirm) {
+        if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Confirm })) {
             if self.start_menu_section == StartMenuSection::Actions {
                 self.category_menu_open = true;
                 self.category_menu_index = categories
                     .iter()
                     .position(|c| *c == self.launcher_category)
                     .unwrap_or(0);
+                self.sync_start_menu_ui(recents);
                 self.start_menu_nav_pending = true;
                 return HomeAction::None;
             } else if self.launcher_category == LauncherCategory::Recents {
@@ -435,6 +955,14 @@ impl HomeState {
             } else if self.launcher_category == LauncherCategory::Apps {
                 if let Some(app) = self.installed_apps.get(self.start_menu_index) {
                     return HomeAction::OpenRecent(app.path.clone());
+                }
+            } else if self.launcher_category == LauncherCategory::Books {
+                if let Some(book) = self.books_cache.get(self.start_menu_index) {
+                    return HomeAction::OpenRecent(book.path.clone());
+                }
+            } else if self.launcher_category == LauncherCategory::Images {
+                if let Some(image) = self.images_cache.get(self.start_menu_index) {
+                    return HomeAction::OpenRecent(image.path.clone());
                 }
             }
         }
@@ -446,7 +974,8 @@ impl HomeState {
         match self.launcher_category {
             LauncherCategory::Recents => recents.len(),
             LauncherCategory::Apps => self.installed_apps.len(),
-            LauncherCategory::Books | LauncherCategory::Images => 0,
+            LauncherCategory::Books => self.books_cache.len(),
+            LauncherCategory::Images => self.images_cache.len(),
         }
     }
 
@@ -490,7 +1019,13 @@ impl HomeState {
         let mid_y = height - START_MENU_MARGIN;
 
         self.ensure_start_menu_cache(ctx, recents);
+        if self.launcher_category == LauncherCategory::Books {
+            self.ensure_books_cache(ctx);
+        } else if self.launcher_category == LauncherCategory::Images {
+            self.ensure_images_cache(ctx);
+        }
         self.ensure_installed_apps_cache(ctx);
+        self.sync_start_menu_ui(recents);
 
         let list_top = HEADER_Y + 28;
         let max_items = 6usize;
@@ -548,23 +1083,23 @@ impl HomeState {
                 item_height,
                 thumb_size,
             );
-            if self.launcher_category == LauncherCategory::Recents
-                && self.start_menu_section == StartMenuSection::Recents
-            {
-                if self.start_menu_index < max_items {
-                    let y = list_top + (self.start_menu_index as i32 * item_height);
-                    if y + item_height <= mid_y {
+            if self.launcher_category == LauncherCategory::Recents {
+                if let Some(selected_index) = self.selected_content_index(recents) {
+                    if selected_index < max_items {
+                        let y = list_top + (selected_index as i32 * item_height);
+                        if y + item_height <= mid_y {
                             let mut rq = RenderQueue::default();
                             rq.push(
                                 Rect::new(START_MENU_MARGIN - 4, y - 4, list_width + 8, item_height - 4),
                                 ctx.render_policy.partial_refresh_mode(),
                             );
-                        flush_queue(
-                            display,
-                            ctx.display_buffers,
-                            &mut rq,
-                            ctx.render_policy.partial_refresh_mode(),
-                        );
+                            flush_queue(
+                                display,
+                                ctx.display_buffers,
+                                &mut rq,
+                                ctx.render_policy.partial_refresh_mode(),
+                            );
+                        }
                     }
                 }
             }
@@ -592,12 +1127,15 @@ impl HomeState {
                 let mut rq = RenderQueue::default();
                 if self.category_menu_open {
                     rq.push(category_popup_rect, ctx.render_policy.partial_refresh_mode());
-                } else if self.start_menu_section == StartMenuSection::Actions {
+                } else if self.action_trigger_focused() {
                     rq.push(header_rect, ctx.render_policy.partial_refresh_mode());
                 } else if self.launcher_category != LauncherCategory::Recents {
                     rq.push(content_rect, ctx.render_policy.partial_refresh_mode());
                 } else if self.launcher_category == LauncherCategory::Recents {
-                    for idx in [self.start_menu_prev_index, self.start_menu_index] {
+                    for idx in [self.previous_content_index(recents), self.selected_content_index(recents)]
+                        .into_iter()
+                        .flatten()
+                    {
                         if idx < max_items {
                             let y = list_top + (idx as i32 * item_height);
                             if y + item_height <= mid_y {
@@ -625,7 +1163,7 @@ impl HomeState {
                 let mut rq = RenderQueue::default();
                 if self.category_menu_open {
                     rq.push(category_popup_rect, ctx.render_policy.partial_refresh_mode());
-                } else if self.start_menu_section == StartMenuSection::Actions {
+                } else if self.action_trigger_focused() {
                     rq.push(header_rect, ctx.render_policy.partial_refresh_mode());
                 } else {
                     rq.push(header_rect, ctx.render_policy.partial_refresh_mode());
@@ -693,13 +1231,13 @@ impl HomeState {
     fn render_start_menu_contents<S: AppSource>(
         &mut self,
         ctx: &mut HomeRenderContext<'_, S>,
-        suppress_selection: bool,
+        _suppress_selection: bool,
         width: i32,
         mid_y: i32,
         list_top: i32,
-        max_items: usize,
+        _max_items: usize,
         list_width: i32,
-        item_height: i32,
+        _item_height: i32,
         thumb_size: i32,
     ) -> (bool, usize) {
         let chrome = PalmChromeMetrics::palm3();
@@ -707,7 +1245,7 @@ impl HomeState {
         ctx.display_buffers.clear(BinaryColor::On).ok();
         ctx.gray2_lsb.fill(0);
         ctx.gray2_msb.fill(0);
-        let mut gray2_used = false;
+        let gray2_used = false;
 
         Rectangle::new(
             Point::new(0, 0),
@@ -867,7 +1405,7 @@ impl HomeState {
         let right_edge = form_x + form_w - 6;
         let arrow_x = right_edge - cat_w - 14;
         let text_x = right_edge - cat_w;
-        if self.start_menu_section == StartMenuSection::Actions && !self.category_menu_open {
+        if self.action_trigger_focused() {
             Rectangle::new(
                 Point::new(arrow_x - 4, trigger_y - 1),
                 Size::new((cat_w + 18) as u32, (cat_h + 2) as u32),
@@ -878,7 +1416,7 @@ impl HomeState {
             .draw(ctx.display_buffers)
             .ok();
         }
-        let arrow_color = if self.start_menu_section == StartMenuSection::Actions && !self.category_menu_open {
+        let arrow_color = if self.action_trigger_focused() {
             BinaryColor::On
         } else {
             BinaryColor::Off
@@ -973,7 +1511,7 @@ impl HomeState {
             draw_palm_pull_down_box(ctx.display_buffers, menu_x, menu_y, menu_w, menu_h);
             for (i, label) in menu_items.iter().enumerate() {
                 let y = menu_y + 3 + (i as i32 * item_h);
-                let selected = i == self.category_menu_index;
+                let selected = self.selected_category_menu_index() == Some(i);
                 if selected {
                     Rectangle::new(
                         Point::new(menu_x + 1, y - 1),
@@ -1013,242 +1551,69 @@ impl HomeState {
         }
 
         let mut draw_count = 0usize;
-        if self.launcher_category == LauncherCategory::Recents {
-            for (idx, preview) in self.start_menu_cache.iter().take(max_items).enumerate() {
-                let y = list_top + (idx as i32 * item_height);
-                if y + item_height > mid_y {
-                    break;
-                }
-                let is_selected = !suppress_selection
-                    && self.start_menu_section == StartMenuSection::Recents
-                    && self.start_menu_index == idx;
-                if is_selected {
-                    Rectangle::new(
-                        Point::new(START_MENU_MARGIN - 4, y - 4),
-                        Size::new((list_width + 8) as u32, (item_height - 4) as u32),
-                    )
-                    .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
-                        BinaryColor::Off,
-                    ))
-                    .draw(ctx.display_buffers)
-                    .ok();
-                }
-                let thumb_x = START_MENU_MARGIN;
-                let thumb_y = y + (item_height - thumb_size) / 2 - 2;
-                Rectangle::new(
-                    Point::new(thumb_x, thumb_y),
-                    Size::new(thumb_size as u32, thumb_size as u32),
-                )
-                .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_stroke(
-                    if is_selected {
-                        BinaryColor::On
-                    } else {
-                        BinaryColor::Off
-                    },
-                    1,
-                ))
-                .draw(ctx.display_buffers)
-                .ok();
-                if let Some(image) = preview.image.as_ref() {
-                    if let Some(mono) = thumbnail_to_mono(image) {
-                        let mut gray2_ctx = None;
-                        (ctx.draw_trbk_image)(
-                            ctx.display_buffers,
-                            &mono,
-                            &mut gray2_ctx,
-                            ctx.render_policy,
-                            thumb_x + 2,
-                            thumb_y + 2,
-                            thumb_size - 4,
-                            thumb_size - 4,
-                        );
-                    } else {
-                        let gray2_lsb = &mut *ctx.gray2_lsb;
-                        let gray2_msb = &mut *ctx.gray2_msb;
-                        let mut gray2_ctx = Some((gray2_lsb, gray2_msb, &mut gray2_used));
-                        (ctx.draw_trbk_image)(
-                            ctx.display_buffers,
-                            image,
-                            &mut gray2_ctx,
-                            ctx.render_policy,
-                            thumb_x + 2,
-                            thumb_y + 2,
-                            thumb_size - 4,
-                            thumb_size - 4,
-                        );
-                    }
-                }
-                let text_color = if is_selected {
-                    BinaryColor::On
-                } else {
-                    BinaryColor::Off
+        if matches!(
+            self.launcher_category,
+            LauncherCategory::Recents
+                | LauncherCategory::Apps
+                | LauncherCategory::Books
+                | LauncherCategory::Images
+        ) {
+            let model = self.build_launcher_table_model(&self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>());
+            draw_count = model.rows.len();
+            if draw_count == 0 {
+                let msg = match self.launcher_category {
+                    LauncherCategory::Apps => "No installed apps yet.",
+                    LauncherCategory::Books => "No books found.",
+                    LauncherCategory::Images => "No images found.",
+                    _ => "No recent items.",
                 };
-                let title_x = thumb_x + thumb_size + 12;
-                let title_max_w = (list_width - (title_x - START_MENU_MARGIN) - 6).max(20);
-                let lines = wrap_home_title_lines(
-                    &preview.title,
-                    title_max_w,
-                    ctx.palm_fonts,
-                    0,
-                    6,
-                    5,
-                    2,
-                );
-                if !ctx.palm_fonts.is_empty() {
-                    let line_h = palm_text_height_scaled(0, ctx.palm_fonts, 6, 5).max(8) + 2;
-                    for (line_idx, line) in lines.iter().enumerate() {
-                        draw_palm_text_scaled(
-                            ctx.display_buffers,
-                            line.as_str(),
-                            title_x,
-                            y + 10 + (line_idx as i32 * line_h),
-                            0,
-                            ctx.palm_fonts,
-                            6,
-                            5,
-                            text_color,
-                        );
-                    }
-                } else {
-                    let label_style = MonoTextStyle::new(&FONT_10X20, text_color);
-                    for (line_idx, line) in lines.iter().enumerate() {
-                        Text::new(
-                            line.as_str(),
-                            Point::new(title_x, y + 26 + (line_idx as i32 * 18)),
-                            label_style,
-                        )
-                        .draw(ctx.display_buffers)
-                        .ok();
-                    }
-                }
-                draw_count += 1;
-            }
-            if draw_count == 0 {
-                Text::new(
-                    "No recent items.",
-                    Point::new(START_MENU_MARGIN, list_top + 24),
-                    header_style,
-                )
-                .draw(ctx.display_buffers)
-                .ok();
-            }
-        } else if self.launcher_category == LauncherCategory::Apps {
-            let cols = APP_GRID_COLS;
-            let cell_w = (list_width / APP_GRID_COLS as i32).max(1);
-            let cell_h = 120i32;
-            let icon_size = 60i32;
-            let row_count = ((mid_y - list_top) / cell_h).max(0) as usize;
-            let visible = row_count * cols;
-            let start = if visible > 0 && self.start_menu_index >= visible {
-                (self.start_menu_index / cols + 1 - row_count) * cols
+                Text::new(msg, Point::new(START_MENU_MARGIN, list_top + 24), header_style)
+                    .draw(ctx.display_buffers)
+                    .ok();
             } else {
-                0
-            };
-            let end = (start + visible).min(self.installed_apps.len());
-            for (idx, app) in self.installed_apps.iter().enumerate().skip(start).take(end.saturating_sub(start)) {
-                let local = idx - start;
-                let col = (local % cols) as i32;
-                let row = (local / cols) as i32;
-                let cell_x = START_MENU_MARGIN + col * cell_w;
-                let cell_y = list_top + row * cell_h;
-                let selected = self.start_menu_section == StartMenuSection::Recents
-                    && !suppress_selection
-                    && idx == self.start_menu_index;
-                let icon_x = cell_x + ((cell_w - icon_size) / 2);
-                let icon_y = cell_y + 2;
-                if let Some(image) = app.icon.as_ref() {
-                    let mut gray2_ctx = None;
-                    (ctx.draw_trbk_image)(
-                        ctx.display_buffers,
-                        image,
-                        &mut gray2_ctx,
-                        ctx.render_policy,
-                        icon_x,
-                        icon_y,
-                        icon_size,
-                        icon_size,
-                    );
+                let content_h = (mid_y - list_top).max(1);
+                let content_rect = Rect::new(START_MENU_MARGIN - 4, list_top - 4, list_width + 8, content_h);
+                let mut ui = UiContext {
+                    buffers: ctx.display_buffers,
+                    render_policy: ctx.render_policy,
+                };
+                let mut table = TableView::new(&model);
+                table.clear = false;
+                if matches!(
+                    self.launcher_category,
+                    LauncherCategory::Recents | LauncherCategory::Books | LauncherCategory::Images
+                ) {
+                    let previews = match self.launcher_category {
+                        LauncherCategory::Recents => &self.start_menu_cache,
+                        LauncherCategory::Books => &self.books_cache,
+                        LauncherCategory::Images => &self.images_cache,
+                        LauncherCategory::Apps => &self.start_menu_cache,
+                    };
+                    let renderer = RecentTableRenderer {
+                        previews,
+                        thumb_size,
+                        palm_fonts: ctx.palm_fonts,
+                        render_policy: ctx.render_policy,
+                        draw_trbk_image: ctx.draw_trbk_image,
+                    };
+                    table.renderer = Some(&renderer);
+                    table.render(&mut ui, content_rect, &mut RenderQueue::default());
                 } else {
-                    Rectangle::new(
-                        Point::new(icon_x, icon_y),
-                        Size::new(icon_size as u32, icon_size as u32),
-                    )
-                    .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_stroke(
-                        BinaryColor::Off,
-                        1,
-                    ))
-                    .draw(ctx.display_buffers)
-                    .ok();
+                    let renderer = AppsTableRenderer {
+                        apps: &self.installed_apps,
+                        palm_fonts: ctx.palm_fonts,
+                        render_policy: ctx.render_policy,
+                        draw_trbk_image: ctx.draw_trbk_image,
+                    };
+                    table.renderer = Some(&renderer);
+                    table.render(&mut ui, content_rect, &mut RenderQueue::default());
                 }
-                let title_max_w = (cell_w - 6).max(20);
-                let title_lines = wrap_home_title_lines(
-                    app.title.as_str(),
-                    title_max_w,
-                    ctx.palm_fonts,
-                    0,
-                    6,
-                    5,
-                    2,
-                );
-                let title_color = if selected { BinaryColor::On } else { BinaryColor::Off };
-                let title_bg = if selected { BinaryColor::Off } else { BinaryColor::On };
-                let line_h = palm_text_height_scaled(0, ctx.palm_fonts, 6, 5).max(10);
-                let title_block_h = (title_lines.len() as i32 * line_h).max(line_h);
-                let title_top = icon_y + icon_size + 6;
-                if selected {
-                    Rectangle::new(
-                        Point::new(cell_x + 2, title_top - 2),
-                        Size::new((cell_w - 4).max(1) as u32, (title_block_h + 4).max(1) as u32),
-                    )
-                    .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(title_bg))
-                    .draw(ctx.display_buffers)
-                    .ok();
-                }
-                if !ctx.palm_fonts.is_empty() {
-                    for (line_idx, line) in title_lines.iter().enumerate() {
-                        let tw = palm_text_width_scaled(line, 0, ctx.palm_fonts, 6, 5);
-                        let tx = cell_x + ((cell_w - tw) / 2).max(0);
-                        let ty = title_top + (line_idx as i32 * line_h);
-                        draw_palm_text_scaled(
-                            ctx.display_buffers,
-                            line.as_str(),
-                            tx,
-                            ty,
-                            0,
-                            ctx.palm_fonts,
-                            6,
-                            5,
-                            title_color,
-                        );
-                    }
-                } else {
-                    Text::new(
-                        app.title.as_str(),
-                        Point::new(cell_x + 4, title_top + 12),
-                        MonoTextStyle::new(
-                            &FONT_10X20,
-                            title_color,
-                        ),
-                    )
-                    .draw(ctx.display_buffers)
-                    .ok();
-                }
-                draw_count += 1;
-            }
-            if draw_count == 0 {
-                Text::new(
-                    "No installed apps yet.",
-                    Point::new(START_MENU_MARGIN, list_top + 24),
-                    header_style,
-                )
-                .draw(ctx.display_buffers)
-                .ok();
             }
         } else {
             let msg = match self.launcher_category {
                 LauncherCategory::Apps => "No installed apps yet.",
                 LauncherCategory::Books => "No books in launcher yet.",
-                LauncherCategory::Images => "No images in launcher yet.",
+                LauncherCategory::Images => "No images found.",
                 LauncherCategory::Recents => "No recent items.",
             };
             Text::new(msg, Point::new(START_MENU_MARGIN, list_top + 24), header_style)
@@ -1412,6 +1777,153 @@ impl HomeState {
         }
     }
 
+    fn ensure_books_cache<S: AppSource>(&mut self, ctx: &mut HomeRenderContext<'_, S>) {
+        let mut paths = Vec::new();
+        let mut stack = vec![Vec::<String>::new()];
+        while let Some(path) = stack.pop() {
+            let Ok(entries) = ctx.source.refresh(&path) else {
+                continue;
+            };
+            for entry in entries {
+                match entry.kind {
+                    crate::image_viewer::EntryKind::Dir => {
+                        let mut next = path.clone();
+                        next.push(entry.name);
+                        stack.push(next);
+                    }
+                    crate::image_viewer::EntryKind::File => {
+                        let lower = entry.name.to_ascii_lowercase();
+                        if lower.ends_with(".trbk") || lower.ends_with(".tbk") {
+                            let mut full = String::new();
+                            if !path.is_empty() {
+                                full.push_str(&path.join("/"));
+                                full.push('/');
+                            }
+                            full.push_str(&entry.name);
+                            paths.push(full);
+                        }
+                    }
+                }
+            }
+        }
+        paths.sort();
+        let signature = paths.join("\n");
+        let cached_catalog = ctx.source.load_book_catalog();
+        let mut cached_titles = alloc::collections::BTreeMap::new();
+        if let Some((cached_sig, entries)) = cached_catalog {
+            if cached_sig == signature {
+                for (path, title) in entries {
+                    cached_titles.insert(path, title);
+                }
+            }
+        }
+
+        let mut books = Vec::with_capacity(paths.len());
+        let mut catalog_entries = Vec::with_capacity(paths.len());
+        for path in paths {
+            let (title, image) = if let Some(title) = cached_titles.get(&path) {
+                let image = ctx.source.load_thumbnail(&path);
+                (title.clone(), image)
+            } else {
+                self.load_recent_preview(ctx, &path)
+            };
+            catalog_entries.push((path.clone(), title.clone()));
+            books.push(RecentPreview { path, title, image });
+        }
+        books.sort_by(|a, b| {
+            let ta = a.title.to_ascii_lowercase();
+            let tb = b.title.to_ascii_lowercase();
+            ta.cmp(&tb).then_with(|| a.path.cmp(&b.path))
+        });
+        ctx.source.save_book_catalog(&signature, &catalog_entries);
+        let changed = books.len() != self.books_cache.len()
+            || books
+                .iter()
+                .zip(self.books_cache.iter())
+                .any(|(a, b)| a.path != b.path || a.title != b.title);
+        if changed {
+            self.books_cache = books;
+            self.start_menu_need_base_refresh = true;
+        }
+    }
+
+    fn ensure_images_cache<S: AppSource>(&mut self, ctx: &mut HomeRenderContext<'_, S>) {
+        let mut paths = Vec::new();
+        let mut stack = vec![Vec::<String>::new()];
+        while let Some(path) = stack.pop() {
+            let Ok(entries) = ctx.source.refresh(&path) else {
+                continue;
+            };
+            for entry in entries {
+                match entry.kind {
+                    crate::image_viewer::EntryKind::Dir => {
+                        let mut next = path.clone();
+                        next.push(entry.name);
+                        stack.push(next);
+                    }
+                    crate::image_viewer::EntryKind::File => {
+                        if is_launcher_image_name(&entry.name) {
+                            let mut full = String::new();
+                            if !path.is_empty() {
+                                full.push_str(&path.join("/"));
+                                full.push('/');
+                            }
+                            full.push_str(&entry.name);
+                            paths.push(full);
+                        }
+                    }
+                }
+            }
+        }
+        paths.sort();
+        let signature = paths.join("\n");
+        let cached_catalog = ctx.source.load_image_catalog();
+        let mut cached_labels = alloc::collections::BTreeMap::new();
+        if let Some((cached_sig, entries)) = cached_catalog {
+            if cached_sig == signature {
+                for (path, label) in entries {
+                    cached_labels.insert(path, label);
+                }
+            }
+        }
+
+        let mut images = Vec::with_capacity(paths.len());
+        let mut catalog_entries = Vec::with_capacity(paths.len());
+        for path in paths {
+            let label = cached_labels
+                .get(&path)
+                .cloned()
+                .unwrap_or_else(|| basename_from_path(&path));
+            let image = if let Some(image) = ctx.source.load_thumbnail(&path) {
+                Some(image)
+            } else {
+                let (_, image) = self.load_recent_preview(ctx, &path);
+                image
+            };
+            catalog_entries.push((path.clone(), label.clone()));
+            images.push(RecentPreview {
+                path,
+                title: label,
+                image,
+            });
+        }
+        images.sort_by(|a, b| {
+            let ta = a.title.to_ascii_lowercase();
+            let tb = b.title.to_ascii_lowercase();
+            ta.cmp(&tb).then_with(|| a.path.cmp(&b.path))
+        });
+        ctx.source.save_image_catalog(&signature, &catalog_entries);
+        let changed = images.len() != self.images_cache.len()
+            || images
+                .iter()
+                .zip(self.images_cache.iter())
+                .any(|(a, b)| a.path != b.path || a.title != b.title);
+        if changed {
+            self.images_cache = images;
+            self.start_menu_need_base_refresh = true;
+        }
+    }
+
     fn load_recent_preview<S: AppSource>(
         &mut self,
         ctx: &mut HomeRenderContext<'_, S>,
@@ -1557,6 +2069,7 @@ impl HomeState {
     }
 }
 
+
 pub fn draw_icon_gray2(
     buffers: &mut DisplayBuffers,
     gray2_lsb: &mut [u8],
@@ -1631,6 +2144,15 @@ fn map_display_point(rotation: Rotation, x: i32, y: i32) -> Option<(usize, usize
 
 fn basename_from_path(path: &str) -> String {
     path.rsplit('/').next().unwrap_or(path).to_string()
+}
+
+fn is_launcher_image_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".tri")
+        || lower.ends_with(".trimg")
+        || lower.ends_with(".png")
+        || lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
 }
 
 fn same_launcher_path(a: &str, b: &str) -> bool {
