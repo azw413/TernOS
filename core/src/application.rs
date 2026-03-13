@@ -754,6 +754,10 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
     }
 
+    pub fn needs_draw(&self) -> bool {
+        self.dirty
+    }
+
     pub fn draw(&mut self, display: &mut impl crate::display::Display) {
         if !self.dirty {
             return;
@@ -2117,6 +2121,18 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
             }
         }
+    }
+
+    pub fn idle_ms(&self) -> u32 {
+        self.system.idle_ms
+    }
+
+    pub fn is_sleeping_pending(&self) -> bool {
+        self.state == AppState::SleepingPending
+    }
+
+    pub fn is_sleeping(&self) -> bool {
+        self.state == AppState::Sleeping
     }
 
     fn start_sleep_request(&mut self) {

@@ -1,22 +1,26 @@
-use std::vec::Vec;
+extern crate alloc;
+
+use alloc::{format, string::{String, ToString}, vec, vec::Vec};
+use core::ffi::c_char;
 
 use tern_core::image_viewer::{
-    EntryKind, Gray2StreamSource, ImageData, ImageEntry, ImageError, ImageSource,
-    PersistenceSource, PowerSource,
+    BookSource, EntryKind, Gray2StreamSource, ImageData, ImageEntry, ImageError, ImageSource,
+    InstalledAppEntry, PersistenceSource, PowerSource,
 };
-use tern_core::platform::StorageDevice;
 
-use crate::platform::M5PaperIdfStorage;
+use crate::ffi;
 
-pub struct M5PaperImageSource {
-    storage: M5PaperIdfStorage,
-}
+pub struct M5PaperImageSource;
 
 impl M5PaperImageSource {
     pub fn new() -> Self {
-        Self {
-            storage: M5PaperIdfStorage,
-        }
+        Self
+    }
+
+    fn path_bytes(path: &str) -> Vec<u8> {
+        let mut bytes = path.as_bytes().to_vec();
+        bytes.push(0);
+        bytes
     }
 
     fn build_path(path: &[String], name: &str) -> String {
@@ -24,7 +28,9 @@ impl M5PaperImageSource {
             if name.is_empty() {
                 "/".to_string()
             } else {
-                format!("/{}", name)
+                let mut s = String::from("/");
+                s.push_str(name);
+                s
             }
         } else {
             let mut out = String::new();
@@ -38,6 +44,15 @@ impl M5PaperImageSource {
             }
             out
         }
+    }
+
+    fn entry_name(entry: &ffi::StorageEntry) -> String {
+        let nul = entry.name.iter().position(|&b| b == 0).unwrap_or(entry.name.len());
+        let bytes = entry.name[..nul]
+            .iter()
+            .map(|&c| c as u8)
+            .collect::<Vec<_>>();
+        String::from_utf8_lossy(&bytes).into_owned()
     }
 
     fn is_supported(name: &str, is_dir: bool) -> bool {
@@ -66,29 +81,38 @@ impl Default for M5PaperImageSource {
 
 impl ImageSource for M5PaperImageSource {
     fn refresh(&mut self, path: &[String]) -> Result<Vec<ImageEntry>, ImageError> {
-        let path_str = Self::build_path(path, "");
-        let mut entries = self
-            .storage
-            .list(&path_str)
-            .map_err(|_| ImageError::Io)?
-            .into_iter()
-            .filter(|entry| Self::is_supported(&entry.name, entry.is_dir))
-            .map(|entry| ImageEntry {
-                name: entry.name,
-                kind: if entry.is_dir {
-                    EntryKind::Dir
-                } else {
-                    EntryKind::File
-                },
-            })
-            .collect::<Vec<_>>();
+        let path_string = Self::build_path(path, "");
+        let path_bytes = Self::path_bytes(&path_string);
+        let begin = ffi::storage_list_begin(path_bytes.as_ptr() as *const c_char);
+        if begin != ffi::Status::Ok {
+            return Err(ImageError::Io);
+        }
 
+        let mut entries = Vec::new();
+        loop {
+            match ffi::storage_list_next() {
+                Ok(Some(raw)) => {
+                    let name = Self::entry_name(&raw);
+                    if Self::is_supported(&name, raw.is_dir) {
+                        entries.push(ImageEntry {
+                            name,
+                            kind: if raw.is_dir { EntryKind::Dir } else { EntryKind::File },
+                        });
+                    }
+                }
+                Ok(None) => break,
+                Err(_) => {
+                    ffi::storage_list_end();
+                    return Err(ImageError::Io);
+                }
+            }
+        }
+        ffi::storage_list_end();
         entries.sort_by(|a, b| match (a.kind, b.kind) {
             (EntryKind::Dir, EntryKind::File) => core::cmp::Ordering::Less,
             (EntryKind::File, EntryKind::Dir) => core::cmp::Ordering::Greater,
             _ => a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()),
         });
-
         Ok(entries)
     }
 
@@ -96,16 +120,61 @@ impl ImageSource for M5PaperImageSource {
         Err(ImageError::Unsupported)
     }
 
-    fn load_prc_bytes(
-        &mut self,
-        path: &[String],
-        entry: &ImageEntry,
-    ) -> Result<Vec<u8>, ImageError> {
+    fn load_prc_bytes(&mut self, path: &[String], entry: &ImageEntry) -> Result<Vec<u8>, ImageError> {
         let full_path = Self::build_path(path, &entry.name);
-        self.storage.read(&full_path).map_err(|_| ImageError::Io)
+        let full_path_bytes = Self::path_bytes(&full_path);
+        let size = ffi::storage_file_size(full_path_bytes.as_ptr() as *const c_char)
+            .map_err(|_| ImageError::Io)? as usize;
+        let mut data = vec![0u8; size];
+        let mut offset = 0u32;
+        while (offset as usize) < size {
+            let read = ffi::storage_read_chunk(
+                full_path_bytes.as_ptr() as *const c_char,
+                offset,
+                &mut data[offset as usize..],
+            ).map_err(|_| ImageError::Io)?;
+            if read == 0 {
+                return Err(ImageError::Io);
+            }
+            offset += read;
+        }
+        Ok(data)
+    }
+
+    fn list_installed_apps(&mut self) -> Vec<InstalledAppEntry> {
+        let path_bytes = Self::path_bytes("/");
+        if ffi::storage_list_begin(path_bytes.as_ptr() as *const c_char) != ffi::Status::Ok {
+            return Vec::new();
+        }
+
+        let mut entries = Vec::new();
+        loop {
+            match ffi::storage_list_next() {
+                Ok(Some(raw)) => {
+                    if raw.is_dir {
+                        continue;
+                    }
+                    let name = Self::entry_name(&raw);
+                    let lower = name.to_ascii_lowercase();
+                    if lower.ends_with(".prc") || lower.ends_with(".tdb") {
+                        entries.push(InstalledAppEntry {
+                            title: name.clone(),
+                            path: format!("/{}", name),
+                            icon: None,
+                        });
+                    }
+                }
+                Ok(None) => break,
+                Err(_) => break,
+            }
+        }
+        ffi::storage_list_end();
+        entries.sort_by(|a, b| a.title.to_ascii_lowercase().cmp(&b.title.to_ascii_lowercase()));
+        entries
     }
 }
 
 impl Gray2StreamSource for M5PaperImageSource {}
+impl BookSource for M5PaperImageSource {}
 impl PersistenceSource for M5PaperImageSource {}
 impl PowerSource for M5PaperImageSource {}

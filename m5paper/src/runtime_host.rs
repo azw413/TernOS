@@ -1,44 +1,53 @@
-use std::vec::Vec;
+extern crate alloc;
+
+use alloc::vec::Vec;
 
 use tern_core::{
     input::{ButtonState, Buttons},
-    platform::{ButtonId, Platform, PlatformInputEvent},
+    platform::{ButtonId, PlatformInputEvent},
     runtime_host::RuntimeFrame,
 };
 
-use crate::platform::M5PaperIdfPlatform;
+use crate::ffi;
 
 pub struct M5PaperRuntimeHost {
-    platform: M5PaperIdfPlatform,
     current_buttons: u8,
 }
 
 impl M5PaperRuntimeHost {
-    pub fn new(platform: M5PaperIdfPlatform) -> Self {
-        Self {
-            platform,
-            current_buttons: 0,
-        }
-    }
-
-    pub fn platform(&mut self) -> &mut M5PaperIdfPlatform {
-        &mut self.platform
+    pub fn new() -> Self {
+        Self { current_buttons: 0 }
     }
 
     pub fn next_frame(&mut self, elapsed_ms: u32) -> RuntimeFrame {
         let mut events = Vec::new();
-        self.platform.poll_input(&mut |event| {
-            match event {
-                PlatformInputEvent::ButtonDown(button) => {
-                    self.current_buttons |= button_mask(button);
+        while let Ok(Some(event)) = ffi::input_next() {
+            match event.event_type {
+                ffi::INPUT_BUTTON_DOWN => {
+                    let mapped = map_button(event.button_id);
+                    self.current_buttons |= 1 << (mapped as u8);
+                    events.push(PlatformInputEvent::ButtonDown(map_platform_button(mapped)));
                 }
-                PlatformInputEvent::ButtonUp(button) => {
-                    self.current_buttons &= !button_mask(button);
+                ffi::INPUT_BUTTON_UP => {
+                    let mapped = map_button(event.button_id);
+                    self.current_buttons &= !(1 << (mapped as u8));
+                    events.push(PlatformInputEvent::ButtonUp(map_platform_button(mapped)));
                 }
+                ffi::INPUT_TOUCH_DOWN => events.push(PlatformInputEvent::TouchDown {
+                    x: i32::from(event.x),
+                    y: i32::from(event.y),
+                }),
+                ffi::INPUT_TOUCH_MOVE => events.push(PlatformInputEvent::TouchMove {
+                    x: i32::from(event.x),
+                    y: i32::from(event.y),
+                }),
+                ffi::INPUT_TOUCH_UP => events.push(PlatformInputEvent::TouchUp {
+                    x: i32::from(event.x),
+                    y: i32::from(event.y),
+                }),
                 _ => {}
             }
-            events.push(event);
-        });
+        }
 
         let mut buttons = ButtonState::default();
         buttons.update(self.current_buttons);
@@ -46,15 +55,23 @@ impl M5PaperRuntimeHost {
     }
 }
 
-fn button_mask(button: ButtonId) -> u8 {
+fn map_button(button_id: u8) -> Buttons {
+    match button_id {
+        1 => Buttons::Up,
+        2 => Buttons::Down,
+        3 => Buttons::Confirm,
+        _ => Buttons::Back,
+    }
+}
+
+fn map_platform_button(button: Buttons) -> ButtonId {
     match button {
-        ButtonId::Up => 1 << (Buttons::Up as u8),
-        ButtonId::Down => 1 << (Buttons::Down as u8),
-        ButtonId::Power => 1 << (Buttons::Power as u8),
-        ButtonId::Confirm => 1 << (Buttons::Confirm as u8),
-        ButtonId::Back => 1 << (Buttons::Back as u8),
-        ButtonId::Left => 1 << (Buttons::Left as u8),
-        ButtonId::Right => 1 << (Buttons::Right as u8),
-        ButtonId::Menu => 0,
+        Buttons::Up => ButtonId::Up,
+        Buttons::Down => ButtonId::Down,
+        Buttons::Confirm => ButtonId::Confirm,
+        Buttons::Power => ButtonId::Power,
+        Buttons::Back => ButtonId::Back,
+        Buttons::Left => ButtonId::Left,
+        Buttons::Right => ButtonId::Right,
     }
 }

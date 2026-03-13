@@ -76,10 +76,10 @@ Manual build only:
 
 ```sh
 cd m5paper
-cargo +esp build --release --features cshim
+cargo +esp build --release
 ```
 
-The script cleans the ESP-IDF build products, rebuilds `m5paper`, locates the generated `libespidf.elf`, and flashes it with `espflash`.
+The script cleans the ESP-IDF build products, rebuilds `m5paper`, locates the generated `m5paper/espidf/build/tern_m5paper_rust_host.elf`, and flashes it with `espflash`.
 
 
 ## Features

@@ -36,7 +36,7 @@ static ALLOCATOR: EspAllocator = EspAllocator;
 fn alloc_error(layout: Layout) -> ! {
     unsafe {
         crate::ffi::ets_printf(
-            b"m5paper-rust: alloc_error size=%u align=%u\n\0".as_ptr(),
+            b"m5paper: alloc_error size=%u align=%u\n\0".as_ptr(),
             layout.size() as u32,
             layout.align() as u32,
         );

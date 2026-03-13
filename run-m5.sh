@@ -1,27 +1,33 @@
-#!/usr/bin/env bash
+#!/bin/zsh
 set -euo pipefail
-
-cd "$(dirname "$0")/m5paper"
-
 source /Users/andrew/export-esp.sh
-export IDF_TOOLS_PATH="$(pwd)/../.embuild/espressif"
-export ESP_IDF_COMPONENT_MANAGER=false
+ROOT=/Users/andrew/embedded/TernReader
+PYENV="$ROOT/.embuild/espressif/python_env/idf5.3_py3.10_env/bin/python"
+IDFPY="$ROOT/.embuild/espressif/esp-idf/v5.3.2/tools/idf.py"
+ESP_GCC_ROOT="$ROOT/.embuild/espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin"
+PORT="${PORT:-/dev/cu.usbserial-0214212B}"
+MONITOR="${MONITOR:-0}"
 
-rm -rf ../target/xtensa-esp32-espidf ../target/release/build/esp-idf-sys-*
+cd "$ROOT/m5paper"
+cargo +esp build --release
 
-build_log="../target/run-m5-build.log"
-mkdir -p ../target
-if ! cargo +esp build --release --features cshim >"${build_log}" 2>&1; then
-  echo "M5Paper build failed. Last 200 lines from ${build_log}:" >&2
-  tail -n 200 "${build_log}" >&2 || true
-  exit 1
+export TERN_RUST_LIB_PATH="$ROOT/target/xtensa-esp32-espidf/release/libtern_m5paper.a"
+export IDF_COMPONENT_MANAGER=0
+export IDF_PYTHON_ENV_PATH="$ROOT/.embuild/espressif/python_env/idf5.3_py3.10_env"
+export PATH="$ESP_GCC_ROOT:$PATH"
+export CC="$ESP_GCC_ROOT/xtensa-esp32-elf-gcc"
+export CXX="$ESP_GCC_ROOT/xtensa-esp32-elf-g++"
+export ASM="$ESP_GCC_ROOT/xtensa-esp32-elf-gcc"
+
+cd "$ROOT/m5paper/espidf"
+rm -rf build
+"$PYENV" "$IDFPY" -p "$PORT" build flash
+
+if [[ "$MONITOR" == "1" ]]; then
+  "$PYENV" "$IDFPY" -p "$PORT" monitor
+else
+  echo
+  echo "Flashed successfully."
+  echo "To monitor:"
+  echo "  cd $ROOT/m5paper/espidf && $PYENV $IDFPY -p $PORT monitor"
 fi
-
-elf_path="$(ls -td ../target/xtensa-esp32-espidf/release/build/esp-idf-sys-*/out/build/libespidf.elf | head -n1)"
-
-if [[ -z "${elf_path}" || ! -f "${elf_path}" ]]; then
-  echo "Failed to locate libespidf.elf after build" >&2
-  exit 1
-fi
-
-espflash flash --monitor --chip esp32 --port /dev/cu.usbserial-0214212B "${elf_path}"

@@ -1,6 +1,2 @@
-[connection]
 chip = "esp32"
 serial = "/dev/cu.usbserial-0214212B"
-
-[flash]
-# Use the image's embedded segments; do not inherit the X4 partition table.

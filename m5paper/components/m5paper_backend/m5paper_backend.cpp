@@ -12,6 +12,9 @@
 #include <sys/stat.h>
 
 #include "esp_log.h"
+#include "esp_adc_cal.h"
+#include "driver/adc.h"
+#include "esp_sleep.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -36,6 +39,14 @@ constexpr int kButtonUpPin = 37;
 constexpr int kButtonPowerPin = 38;
 constexpr int kButtonDownPin = 39;
 
+constexpr int kBatteryAdcPin = 35;
+constexpr adc1_channel_t kBatteryAdcChannel = ADC1_CHANNEL_7;
+constexpr uint32_t kBatteryBaseMv = 3300;
+constexpr uint32_t kBatteryTopMv = 4150;
+constexpr uint32_t kBatteryScaleInv = 25;
+constexpr uint32_t kBatteryFilterSamples = 16;
+constexpr uint32_t kBatteryBaseVoltage = 1100;
+
 constexpr uint16_t kPanelWidth = 540;
 constexpr uint16_t kPanelHeight = 960;
 constexpr uint32_t kImageBufferAddr = 0x001236E0;
@@ -53,6 +64,8 @@ bool g_touch_ready = false;
 bool g_rtc_ready = false;
 bool g_storage_ready = false;
 bool g_started = false;
+bool g_battery_adc_ready = false;
+esp_adc_cal_characteristics_t* g_adc_chars = nullptr;
 M5EPD_Driver g_epd(VSPI);
 BM8563 g_rtc;
 GT911 g_touch;
@@ -102,6 +115,33 @@ void push_input_event(const tern_m5paper_backend_input_event_t& event) {
     }
     g_input_queue[g_input_queue_tail] = event;
     g_input_queue_tail = next_tail;
+}
+
+uint32_t read_battery_voltage_mv() {
+    if (!g_battery_adc_ready) {
+        adc1_config_width(ADC_WIDTH_BIT_12);
+        adc1_config_channel_atten(kBatteryAdcChannel, ADC_ATTEN_DB_12);
+        g_adc_chars = static_cast<esp_adc_cal_characteristics_t*>(calloc(1, sizeof(esp_adc_cal_characteristics_t)));
+        if (g_adc_chars == nullptr) {
+            return 0;
+        }
+        esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_12, ADC_WIDTH_BIT_12, kBatteryBaseVoltage, g_adc_chars);
+        g_battery_adc_ready = true;
+    }
+
+    uint32_t adc_raw_value = 0;
+    for (uint32_t i = 0; i < kBatteryFilterSamples; ++i) {
+        adc_raw_value += adc1_get_raw(kBatteryAdcChannel);
+    }
+    adc_raw_value /= kBatteryFilterSamples;
+    return static_cast<uint32_t>(esp_adc_cal_raw_to_voltage(adc_raw_value, g_adc_chars) * kBatteryScaleInv);
+}
+
+int32_t battery_percent_from_mv(uint32_t mv) {
+    int32_t level = static_cast<int32_t>((static_cast<int32_t>(mv) - static_cast<int32_t>(kBatteryBaseMv)) * 100 / static_cast<int32_t>(kBatteryTopMv - 3350));
+    if (level < 0) return 0;
+    if (level > 100) return 100;
+    return level;
 }
 
 void backend_task(void*) {
@@ -199,14 +239,14 @@ extern "C" tern_m5paper_backend_status_t tern_m5paper_backend_epd_fill_white(voi
     return status;
 }
 
-extern "C" tern_m5paper_backend_status_t tern_m5paper_backend_epd_update_region(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t* data, uint32_t data_len) {
+extern "C" tern_m5paper_backend_status_t tern_m5paper_backend_epd_update_region(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t* data, uint32_t data_len, tern_m5paper_backend_update_mode_t mode) {
     if (!g_epd_ready || data == nullptr) return TERN_M5PAPER_BACKEND_IO_ERROR;
     const uint32_t expected = (static_cast<uint32_t>(width) * static_cast<uint32_t>(height)) / 2;
     if (data_len < expected) return TERN_M5PAPER_BACKEND_IO_ERROR;
     auto status = map_epd_status(g_epd.WritePartGram4bpp(x, y, width, height, data));
     if (status != TERN_M5PAPER_BACKEND_OK) return status;
     status = map_epd_status(g_epd.UpdateArea(x, y, width, height, UPDATE_MODE_GC16));
-    ESP_LOGI(kLogTag, "epd_update_region=%d x=%u y=%u w=%u h=%u", static_cast<int>(status), x, y, width, height);
+    ESP_LOGI(kLogTag, "epd_update_region=%d x=%u y=%u w=%u h=%u mode=%u", static_cast<int>(status), x, y, width, height, static_cast<unsigned>(mode));
     return status;
 }
 
@@ -403,5 +443,35 @@ extern "C" tern_m5paper_backend_status_t tern_m5paper_backend_storage_read_chunk
     }
     *out_read = static_cast<uint32_t>(fread(out_buf, 1, buf_len, file));
     fclose(file);
+    return TERN_M5PAPER_BACKEND_OK;
+}
+
+extern "C" tern_m5paper_backend_status_t tern_m5paper_backend_battery_read(tern_m5paper_backend_battery_status_t* out_status) {
+    if (!out_status) return TERN_M5PAPER_BACKEND_IO_ERROR;
+    auto board_status = tern_m5paper_backend_board_init();
+    if (board_status != TERN_M5PAPER_BACKEND_OK) return board_status;
+    uint32_t mv = read_battery_voltage_mv();
+    if (mv == 0) return TERN_M5PAPER_BACKEND_IO_ERROR;
+    out_status->millivolts = mv;
+    out_status->percent = battery_percent_from_mv(mv);
+    out_status->charging = false;
+    return TERN_M5PAPER_BACKEND_OK;
+}
+
+extern "C" tern_m5paper_backend_status_t tern_m5paper_backend_sleep(bool deep) {
+    if (g_epd_ready) {
+        g_epd.Sleep();
+    }
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+#if SOC_PM_SUPPORT_EXT0_WAKEUP
+    if (esp_sleep_enable_ext0_wakeup((gpio_num_t)kButtonPowerPin, 0) != ESP_OK) {
+        return TERN_M5PAPER_BACKEND_IO_ERROR;
+    }
+#endif
+    if (deep) {
+        esp_deep_sleep_start();
+    } else {
+        esp_light_sleep_start();
+    }
     return TERN_M5PAPER_BACKEND_OK;
 }

@@ -81,7 +81,7 @@ Inside the current repository:
 
 Working arrangement:
 
-- `m5paper_bridge` owns `app_main()`
+- `m5paper backend` owns `app_main()`
 - the bridge starts and hosts backend services
 - Rust consumes those services through FFI and platform wrappers
 

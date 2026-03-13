@@ -8,25 +8,4 @@ rust-version.workspace = true
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-esp-idf-sys = { version = "0.36" }
 tern_core = { path = "../core" }
-
-[build-dependencies]
-embuild = "0.33"
-
-[features]
-default = []
-cshim = []
-
-[package.metadata.esp-idf-sys]
-esp_idf_tools_install_dir = "workspace"
-esp_idf_version = "tag:v5.3.2"
-esp_idf_components = ["pthread", "m5paper_bridge", "arduino-esp32"]
-esp_idf_sdkconfig_defaults = ["m5paper/sdkconfig.defaults"]
-esp_idf_component_manager = false
-
-[[package.metadata.esp-idf-sys.extra_components]]
-component_dirs = [
-    "/Users/andrew/embedded/TernReader/m5paper/components",
-    "/Users/andrew/embedded/TernReader/third_party",
-]

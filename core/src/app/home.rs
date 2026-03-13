@@ -307,13 +307,13 @@ impl HomeState {
         if self.category_menu_open {
             if buttons.is_pressed(Buttons::Up) {
                 self.category_menu_index = self.category_menu_index.saturating_sub(1);
-                self.start_menu_need_base_refresh = true;
+                self.start_menu_nav_pending = true;
                 return HomeAction::None;
             }
             if buttons.is_pressed(Buttons::Down) {
                 self.category_menu_index =
                     (self.category_menu_index + 1).min(categories.len().saturating_sub(1));
-                self.start_menu_need_base_refresh = true;
+                self.start_menu_nav_pending = true;
                 return HomeAction::None;
             }
             if buttons.is_pressed(Buttons::Confirm) {
@@ -326,7 +326,7 @@ impl HomeState {
             }
             if buttons.is_pressed(Buttons::Back) || buttons.is_pressed(Buttons::Left) {
                 self.category_menu_open = false;
-                self.start_menu_need_base_refresh = true;
+                self.start_menu_nav_pending = true;
                 return HomeAction::None;
             }
             return HomeAction::None;
@@ -423,7 +423,7 @@ impl HomeState {
                     .iter()
                     .position(|c| *c == self.launcher_category)
                     .unwrap_or(0);
-                self.start_menu_need_base_refresh = true;
+                self.start_menu_nav_pending = true;
                 return HomeAction::None;
             } else if self.launcher_category == LauncherCategory::Recents {
                 if let Some(path) = recents.get(self.start_menu_index) {
@@ -494,6 +494,15 @@ impl HomeState {
         let list_width = width - (START_MENU_MARGIN * 2);
         let item_height = 99;
         let thumb_size = 74;
+        let header_rect = Rect::new(0, 0, width, (list_top + 8).min(height));
+        let content_rect = Rect::new(
+            START_MENU_MARGIN - 4,
+            list_top - 4,
+            list_width + 8,
+            (mid_y - list_top + 8).max(1),
+        );
+        let menu_refresh_rect = Rect::new(0, 0, width, mid_y.max(1));
+        let category_popup_rect = Rect::new(width - 140, START_MENU_FORM_Y, 136, 84);
 
         if self.start_menu_need_base_refresh {
             let (gray2_used, draw_count) = self.render_start_menu_contents(
@@ -521,10 +530,7 @@ impl HomeState {
                 ctx.display_buffers.copy_active_to_inactive();
             } else {
                 let mut rq = RenderQueue::default();
-                rq.push(
-                    Rect::new(0, 0, width, height),
-                    ctx.render_policy.refresh_mode(ctx.full_refresh),
-                );
+                rq.push(menu_refresh_rect, ctx.render_policy.refresh_mode(ctx.full_refresh));
                 flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Full);
             }
             self.start_menu_need_base_refresh = false;
@@ -581,14 +587,12 @@ impl HomeState {
         if gray2_used {
             if self.start_menu_nav_pending {
                 let mut rq = RenderQueue::default();
-                if self.category_menu_open
-                    || self.start_menu_section == StartMenuSection::Actions
-                    || self.launcher_category != LauncherCategory::Recents
-                {
-                    rq.push(
-                        Rect::new(0, 0, width, height),
-                        ctx.render_policy.partial_refresh_mode(),
-                    );
+                if self.category_menu_open {
+                    rq.push(category_popup_rect, ctx.render_policy.partial_refresh_mode());
+                } else if self.start_menu_section == StartMenuSection::Actions {
+                    rq.push(header_rect, ctx.render_policy.partial_refresh_mode());
+                } else if self.launcher_category != LauncherCategory::Recents {
+                    rq.push(content_rect, ctx.render_policy.partial_refresh_mode());
                 } else if self.launcher_category == LauncherCategory::Recents {
                     for idx in [self.start_menu_prev_index, self.start_menu_index] {
                         if idx < max_items {
@@ -616,10 +620,14 @@ impl HomeState {
                 self.start_menu_nav_pending = false;
             } else {
                 let mut rq = RenderQueue::default();
-                rq.push(
-                    Rect::new(0, 0, width, height),
-                    ctx.render_policy.partial_refresh_mode(),
-                );
+                if self.category_menu_open {
+                    rq.push(category_popup_rect, ctx.render_policy.partial_refresh_mode());
+                } else if self.start_menu_section == StartMenuSection::Actions {
+                    rq.push(header_rect, ctx.render_policy.partial_refresh_mode());
+                } else {
+                    rq.push(header_rect, ctx.render_policy.partial_refresh_mode());
+                    rq.push(content_rect, ctx.render_policy.partial_refresh_mode());
+                }
                 flush_queue(
                     display,
                     ctx.display_buffers,
@@ -629,10 +637,8 @@ impl HomeState {
             }
         } else {
             let mut rq = RenderQueue::default();
-            rq.push(
-                Rect::new(0, 0, width, height),
-                ctx.render_policy.refresh_mode(ctx.full_refresh),
-            );
+            rq.push(header_rect, ctx.render_policy.refresh_mode(ctx.full_refresh));
+            rq.push(content_rect, ctx.render_policy.refresh_mode(ctx.full_refresh));
             flush_queue(display, ctx.display_buffers, &mut rq, RefreshMode::Full);
         }
     }

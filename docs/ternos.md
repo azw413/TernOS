@@ -117,7 +117,7 @@ For `m5paper`, the only stable integration model proven so far is:
 
 Implications:
 
-- `m5paper_bridge` is a backend service host
+- `m5paper backend` is a backend service host
 - it may own startup and hardware polling
 - it must not become the place where long-term application logic lives
 - temporary bridge-hosted screens are acceptable only as bootstrap/debug surfaces
@@ -139,7 +139,7 @@ The long-term split inside `core/src` should look like this:
 
 `m5paper` currently uses:
 
-- `m5paper/components/m5paper_bridge`
+- `m5paper/components/m5paper backend`
   - ESP-IDF/Arduino-backed hardware services
   - current runtime root
 - `m5paper/src/ffi.rs`
