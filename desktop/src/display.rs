@@ -22,6 +22,7 @@ pub struct MinifbDisplay {
     window: minifb::Window,
     buttons: ButtonState,
     input_events: Vec<PlatformInputEvent>,
+    mouse_down: bool,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -47,6 +48,7 @@ impl MinifbDisplay {
             window,
             buttons: ButtonState::default(),
             input_events: Vec::new(),
+            mouse_down: false,
         };
 
         ret.display_buffer.fill(0xFFFFFFFF);
@@ -70,25 +72,30 @@ impl MinifbDisplay {
         let mut current: u8 = 0;
         let mut typed: [u16; 16] = [0; 16];
         let mut typed_len = 0usize;
-        if self.window.is_key_down(minifb::Key::Left) {
+        let pressed_keys = self.window.get_keys_pressed(minifb::KeyRepeat::No);
+        let key_pressed = |key: minifb::Key| pressed_keys.contains(&key);
+        if self.window.is_key_down(minifb::Key::Left) || key_pressed(minifb::Key::Left) {
             current |= 1 << (Buttons::Left as u8);
         }
-        if self.window.is_key_down(minifb::Key::Right) {
+        if self.window.is_key_down(minifb::Key::Right) || key_pressed(minifb::Key::Right) {
             current |= 1 << (Buttons::Right as u8);
         }
-        if self.window.is_key_down(minifb::Key::Up) {
+        if self.window.is_key_down(minifb::Key::Up) || key_pressed(minifb::Key::Up) {
             current |= 1 << (Buttons::Up as u8);
         }
-        if self.window.is_key_down(minifb::Key::Down) {
+        if self.window.is_key_down(minifb::Key::Down) || key_pressed(minifb::Key::Down) {
             current |= 1 << (Buttons::Down as u8);
         }
-        if self.window.is_key_down(minifb::Key::Enter) {
+        if self.window.is_key_down(minifb::Key::Enter)
+            || key_pressed(minifb::Key::Enter)
+            || key_pressed(minifb::Key::Space)
+        {
             current |= 1 << (Buttons::Confirm as u8);
         }
-        if self.window.is_key_down(minifb::Key::Backspace) {
+        if self.window.is_key_down(minifb::Key::Backspace) || key_pressed(minifb::Key::Backspace) {
             current |= 1 << (Buttons::Back as u8);
         }
-        if self.window.is_key_down(minifb::Key::P) {
+        if self.window.is_key_down(minifb::Key::P) || key_pressed(minifb::Key::P) {
             current |= 1 << (Buttons::Power as u8);
         }
         for key in self.window.get_keys_pressed(minifb::KeyRepeat::Yes) {
@@ -109,7 +116,42 @@ impl MinifbDisplay {
                 });
             }
         }
+        if let Some((mx, my)) = self.window.get_mouse_pos(minifb::MouseMode::Clamp) {
+            let x = mx.round() as i32;
+            let y = my.round() as i32;
+            let left_down = self.window.get_mouse_down(minifb::MouseButton::Left);
+            if left_down && !self.mouse_down {
+                self.input_events.push(PlatformInputEvent::TouchDown { x, y });
+            } else if left_down && self.mouse_down {
+                self.input_events.push(PlatformInputEvent::TouchMove { x, y });
+            } else if !left_down && self.mouse_down {
+                self.input_events.push(PlatformInputEvent::TouchUp { x, y });
+            }
+            self.mouse_down = left_down;
+        } else if self.mouse_down {
+            self.mouse_down = false;
+        }
         self.buttons.update_with_typed(current, &typed[..typed_len]);
+        if self.buttons.is_pressed(Buttons::Left)
+            || self.buttons.is_pressed(Buttons::Right)
+            || self.buttons.is_pressed(Buttons::Up)
+            || self.buttons.is_pressed(Buttons::Down)
+            || self.buttons.is_pressed(Buttons::Confirm)
+            || self.buttons.is_pressed(Buttons::Back)
+            || self.buttons.is_pressed(Buttons::Power)
+        {
+            info!(
+                "desktop input pressed left={} right={} up={} down={} confirm={} back={} power={} current=0x{:02X}",
+                self.buttons.is_pressed(Buttons::Left),
+                self.buttons.is_pressed(Buttons::Right),
+                self.buttons.is_pressed(Buttons::Up),
+                self.buttons.is_pressed(Buttons::Down),
+                self.buttons.is_pressed(Buttons::Confirm),
+                self.buttons.is_pressed(Buttons::Back),
+                self.buttons.is_pressed(Buttons::Power),
+                current
+            );
+        }
         self.collect_button_events();
     }
 

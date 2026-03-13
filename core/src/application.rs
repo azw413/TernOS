@@ -130,6 +130,12 @@ enum ExitFrom {
 }
 
 impl<'a, S: AppSource> Application<'a, S> {
+    const PALM_KEY_LEFT: u16 = 0x001C;
+    const PALM_KEY_RIGHT: u16 = 0x001D;
+    const PALM_KEY_UP: u16 = 0x001E;
+    const PALM_KEY_DOWN: u16 = 0x001F;
+    const PALM_KEY_RETURN: u16 = 0x000A;
+
     fn best_prc_form_index(&self) -> Option<usize> {
         self.prc_forms.iter().enumerate().max_by_key(|(_, f)| {
             let area = (f.w.max(0) as i32) * (f.h.max(0) as i32);
@@ -141,6 +147,102 @@ impl<'a, S: AppSource> Application<'a, S> {
     fn runtime_prc_form(&self) -> Option<palm::form_preview::FormPreview> {
         let fid = self.prc_runtime_form_id?;
         self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
+    }
+
+    fn prc_pane_layout(&self) -> Option<(palm::form_preview::FormPreview, i32, i32, i32)> {
+        const PRC_STATUS_H: i32 = 34;
+        let form = self
+            .runtime_prc_form()
+            .or_else(|| self.prc_forms.get(self.prc_form_index).cloned())
+            .or_else(|| self.prc_forms.first().cloned())?;
+        let size = self.display_buffers.size();
+        let content_top = PRC_STATUS_H + 2;
+        let content_h = (size.height as i32 - content_top).max(1);
+        let max_scale_w = ((size.width as i32) / 160).max(1);
+        let max_scale_h = (content_h / 160).max(1);
+        let max_scale = max_scale_w.min(max_scale_h).max(1);
+        let scale = if max_scale >= 3 { 3 } else { max_scale };
+        let pane_w = 160 * scale;
+        let pane_x = ((size.width as i32 - pane_w) / 2).max(0);
+        let pane_y = content_top;
+        Some((form, pane_x, pane_y, scale.max(1)))
+    }
+
+    fn prc_handle_touch_event(&mut self, event: &PlatformInputEvent) -> bool {
+        const PRC_STATUS_H: i32 = 34;
+        let PlatformInputEvent::TouchDown { x, y } = *event else {
+            return false;
+        };
+        if self.prc_menu_controller.is_active() || self.prc_session.is_none() {
+            return false;
+        }
+
+        let Some((form, pane_x, pane_y, scale)) = self.prc_pane_layout() else {
+            return false;
+        };
+
+        let content_top = PRC_STATUS_H + 2;
+        let pane_h = 160 * scale;
+        let size = self.display_buffers.size();
+        let strip_top = (content_top + pane_h).clamp(0, size.height as i32);
+        let strip_h = (size.height as i32 - strip_top).max(0);
+        if strip_h > 0 {
+            let soft_rect = self.prc_soft_menu_button_rect(strip_top, strip_h);
+            if x >= soft_rect.x
+                && y >= soft_rect.y
+                && x < soft_rect.x + soft_rect.w
+                && y < soft_rect.y + soft_rect.h
+            {
+                if self.prc_menu_controller.open() {
+                    self.dirty = true;
+                }
+                return true;
+            }
+        }
+
+        let local_x = x - pane_x;
+        let local_y = y - pane_y;
+        if local_x < 0 || local_y < 0 {
+            return false;
+        }
+
+        for obj in &form.objects {
+            match obj {
+                palm::form_preview::FormPreviewObject::Button { id, x, y, w, h, .. }
+                | palm::form_preview::FormPreviewObject::Field { id, x, y, w, h, .. } => {
+                    let rx = *x as i32 * scale;
+                    let ry = *y as i32 * scale;
+                    let rw = *w as i32 * scale;
+                    let rh = *h as i32 * scale;
+                    if local_x >= rx && local_y >= ry && local_x < rx + rw && local_y < ry + rh {
+                        let is_field = matches!(
+                            obj,
+                            palm::form_preview::FormPreviewObject::Field { .. }
+                        );
+                        let _ = self.prc_ui_controller.select_control_id(Some(&form), *id);
+                        if let Some(session) = self.prc_session.as_mut() {
+                            if is_field {
+                                session.inject_event_now(
+                                    palm::runtime::EVT_FLD_ENTER,
+                                    *id,
+                                    "touchFldEnter",
+                                );
+                            } else {
+                                session.inject_control_select_now(*id);
+                            }
+                            self.prc_blocked_elapsed_ms = 0;
+                            self.prc_blocked_timeout_ticks = 0;
+                            self.resume_prc_runtime_session();
+                        }
+                        self.dirty = true;
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        false
     }
 
     fn prc_form_by_id(&self, fid: u16) -> Option<palm::form_preview::FormPreview> {
@@ -377,6 +479,14 @@ impl<'a, S: AppSource> Application<'a, S> {
 
         if Self::has_input(buttons) {
             self.system.reset_idle();
+        }
+
+        if matches!(self.state, AppState::PrcViewing) {
+            for event in events {
+                if self.prc_handle_touch_event(event) {
+                    return;
+                }
+            }
         }
 
         match self.state {
@@ -641,6 +751,16 @@ impl<'a, S: AppSource> Application<'a, S> {
                             palm::controller::FocusDirection::Left,
                         ) {
                             self.dirty = true;
+                        } else if let Some(session) = self.prc_session.as_mut() {
+                            session.inject_event_now(
+                                palm::runtime::EVT_KEY_DOWN,
+                                Self::PALM_KEY_LEFT,
+                                "keyLeft",
+                            );
+                            self.prc_blocked_elapsed_ms = 0;
+                            self.prc_blocked_timeout_ticks = 0;
+                            self.resume_prc_runtime_session();
+                            return;
                         }
                     }
                 } else if buttons.is_pressed(input::Buttons::Right) {
@@ -651,6 +771,16 @@ impl<'a, S: AppSource> Application<'a, S> {
                             palm::controller::FocusDirection::Right,
                         ) {
                             self.dirty = true;
+                        } else if let Some(session) = self.prc_session.as_mut() {
+                            session.inject_event_now(
+                                palm::runtime::EVT_KEY_DOWN,
+                                Self::PALM_KEY_RIGHT,
+                                "keyRight",
+                            );
+                            self.prc_blocked_elapsed_ms = 0;
+                            self.prc_blocked_timeout_ticks = 0;
+                            self.resume_prc_runtime_session();
+                            return;
                         }
                     }
                 } else if buttons.is_pressed(input::Buttons::Up) {
@@ -679,6 +809,16 @@ impl<'a, S: AppSource> Application<'a, S> {
                         palm::controller::FocusDirection::Up,
                     ) {
                         self.dirty = true;
+                    } else if let Some(session) = self.prc_session.as_mut() {
+                        session.inject_event_now(
+                            palm::runtime::EVT_KEY_DOWN,
+                            Self::PALM_KEY_UP,
+                            "keyUp",
+                        );
+                        self.prc_blocked_elapsed_ms = 0;
+                        self.prc_blocked_timeout_ticks = 0;
+                        self.resume_prc_runtime_session();
+                        return;
                     }
                 } else if buttons.is_pressed(input::Buttons::Down) {
                     let form = self.runtime_prc_form();
@@ -690,11 +830,28 @@ impl<'a, S: AppSource> Application<'a, S> {
                     ) {
                         self.dirty = true;
                     } else {
+                        if let Some(session) = self.prc_session.as_mut() {
+                            session.inject_event_now(
+                                palm::runtime::EVT_KEY_DOWN,
+                                Self::PALM_KEY_DOWN,
+                                "keyDownNav",
+                            );
+                            self.prc_blocked_elapsed_ms = 0;
+                            self.prc_blocked_timeout_ticks = 0;
+                            self.resume_prc_runtime_session();
+                            return;
+                        }
                         self.prc_soft_menu_last_control = self.prc_ui_controller.focused_control_id();
                         self.prc_soft_menu_focused = true;
                         self.dirty = true;
                     }
                 } else if buttons.is_pressed(input::Buttons::Confirm) {
+                    log::info!(
+                        "PRC viewing confirm soft_menu_focused={} focused_control={:?} has_session={}",
+                        self.prc_soft_menu_focused,
+                        self.prc_ui_controller.focused_control_id(),
+                        self.prc_session.is_some()
+                    );
                     if self.prc_soft_menu_focused {
                         if self.prc_menu_controller.open() {
                             self.dirty = true;
@@ -717,6 +874,11 @@ impl<'a, S: AppSource> Application<'a, S> {
                                     })
                                 })
                                 .unwrap_or(false);
+                            log::info!(
+                                "PRC viewing confirm inject control_id={} focused_is_field={}",
+                                control_id,
+                                focused_is_field
+                            );
                             if focused_is_field {
                                 session.inject_event_now(
                                     palm::runtime::EVT_FLD_ENTER,
@@ -730,7 +892,20 @@ impl<'a, S: AppSource> Application<'a, S> {
                             self.prc_blocked_timeout_ticks = 0;
                             self.resume_prc_runtime_session();
                         } else {
-                            self.set_state_menu();
+                            if let Some(session) = self.prc_session.as_mut() {
+                                log::info!(
+                                    "PRC viewing confirm fallback keyReturn"
+                                );
+                                session.inject_event_now(
+                                    palm::runtime::EVT_KEY_DOWN,
+                                    Self::PALM_KEY_RETURN,
+                                    "keyReturn",
+                                );
+                                self.prc_blocked_elapsed_ms = 0;
+                                self.prc_blocked_timeout_ticks = 0;
+                                self.resume_prc_runtime_session();
+                                return;
+                            }
                         }
                     }
                 } else if buttons.is_pressed(input::Buttons::Back) {

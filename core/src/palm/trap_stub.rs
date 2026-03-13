@@ -626,29 +626,33 @@ pub fn apply_prc_runtime_trap_stub(
         arg_offset: u32,
     ) -> u32 {
         let sp = cpu.a[7];
-        let raw = memory.read_u32_be(sp.saturating_add(arg_offset)).unwrap_or(0) & 0x00FF_FFFF;
+        let raw_full = memory.read_u32_be(sp.saturating_add(arg_offset)).unwrap_or(0);
+        if raw_full != 0 && memory.contains_addr(raw_full) {
+            return raw_full;
+        }
+        let raw = raw_full & 0x00FF_FFFF;
         if raw != 0 && memory.contains_addr(raw) {
             return raw;
         }
         // Palm 68K glue frequently passes frame-relative locals as 16-bit offsets
         // (signed or unsigned representation depending on codegen).
-        if raw <= 0xFFFF || (raw & 0xFFFF_0000) == 0xFFFF_0000 {
-            let off_signed = (raw as u16) as i16 as i32;
+        if raw_full <= 0xFFFF || (raw_full & 0xFFFF_0000) == 0xFFFF_0000 {
+            let off_signed = (raw_full as u16) as i16 as i32;
             let signed_candidate = if off_signed >= 0 {
                 cpu.a[6].wrapping_add(off_signed as u32)
             } else {
                 cpu.a[6].wrapping_sub((-off_signed) as u32)
-            } & 0x00FF_FFFF;
+            };
             if signed_candidate != 0 && memory.contains_addr(signed_candidate) {
                 return signed_candidate;
             }
-            let off_unsigned = (raw as u16) as u32;
-            let unsigned_candidate = cpu.a[6].wrapping_add(off_unsigned) & 0x00FF_FFFF;
+            let off_unsigned = (raw_full as u16) as u32;
+            let unsigned_candidate = cpu.a[6].wrapping_add(off_unsigned);
             if unsigned_candidate != 0 && memory.contains_addr(unsigned_candidate) {
                 return unsigned_candidate;
             }
         }
-        raw
+        raw_full
     }
 
     fn type_to_name(db_type: u32) -> alloc::string::String {

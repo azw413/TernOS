@@ -34,7 +34,7 @@ fn main() {
         panic!("Unable to open window: {}", e);
     });
 
-    window.set_target_fps(5);
+    window.set_target_fps(60);
 
     let mut display_buffers = Box::new(DisplayBuffers::default());
     let mut display = Box::new(MinifbDisplay::new(window));
