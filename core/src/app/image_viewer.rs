@@ -10,7 +10,7 @@ use crate::display::{Display, RefreshMode};
 use crate::framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
 use crate::image_viewer::{AppSource, ImageData, ImageEntry, ImageError};
 use crate::render_policy::RenderPolicy;
-use crate::ui::{flush_queue, Rect, RenderQueue, UiContext, ReaderView, View};
+use crate::ternos::ui::{flush_queue, Rect, RenderQueue, UiContext, ReaderView, View};
 
 const DEBUG_GRAY2_MODE: u8 = 0; // 0=normal, 1=base, 2=lsb, 3=msb
 

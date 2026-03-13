@@ -9,8 +9,12 @@ use alloc::vec::Vec;
 
 use embedded_io::{Read, Seek, SeekFrom, Write};
 use tern_core::fs::{DirEntry, Directory, File, Filesystem, Mode};
-use tern_core::palm_db::{DbKind, InstallDecision, InstallInboxEntry, InstallPlanner, InstallSummary, InstalledDbIdentity, InstalledDbMeta};
-use tern_core::prc_app::{PrcCodeScan, PrcDbKind, PrcInfo, PrcResourceEntry, PrcSectionStat};
+use tern_core::palm::{self, PrcCodeScan, PrcDbKind, PrcInfo, PrcResourceEntry, PrcSectionStat};
+use tern_core::ternos::services::db::{
+    DbKind, InstallDecision, InstallInboxEntry, InstallPlanner, InstallSummary,
+    InstalledDbIdentity, InstalledDbMeta,
+};
+use tern_core::ternos::services::state::{self, LauncherStateDb};
 use crate::sdspi_fs::UsbFsOps;
 use tern_core::image_viewer::{
     BookSource, EntryKind, Gray2StreamSource, ImageData, ImageEntry, ImageError, ImageSource,
@@ -161,24 +165,12 @@ where
             || name.ends_with(".tdb")
     }
 
-    fn resume_filename() -> &'static str {
-        "TRRESUME"
-    }
-
     fn resume_filename_legacy() -> &'static str {
         ".trusty_resume"
     }
 
-    fn book_positions_filename() -> &'static str {
-        "TRBOOKS"
-    }
-
     fn book_positions_filename_legacy() -> &'static str {
         ".trusty_books"
-    }
-
-    fn recent_entries_filename() -> &'static str {
-        "TRRECENT"
     }
 
     fn recent_entries_filename_legacy() -> &'static str {
@@ -215,23 +207,22 @@ where
         "/install"
     }
 
-    fn palmdb_root_dirname() -> &'static str {
-        "/palmdb/v1"
+    fn db_root_dirname() -> &'static str {
+        "/db/v1"
     }
 
-    fn palmdb_catalog_filename() -> &'static str {
-        "/palmdb/v1/catalog.txt"
+    fn db_catalog_filename() -> &'static str {
+        "/db/v1/catalog.txt"
     }
 
-    fn palmdb_db_dirname() -> &'static str {
-        "/palmdb/v1/db"
+    fn db_data_dirname() -> &'static str {
+        "/db/v1/db"
     }
 
     fn read_resume(&self) -> Option<String> {
         let mut file = self
             .fs
-            .open_file(Self::resume_filename(), Mode::Read)
-            .or_else(|_| self.fs.open_file(Self::resume_filename_legacy(), Mode::Read))
+            .open_file(Self::resume_filename_legacy(), Mode::Read)
             .ok()?;
         let mut buf = [0u8; 128];
         let read = file.read(&mut buf).ok()?;
@@ -249,8 +240,7 @@ where
     fn read_book_positions(&self) -> Vec<(String, usize)> {
         let mut file = match self
             .fs
-            .open_file(Self::book_positions_filename(), Mode::Read)
-            .or_else(|_| self.fs.open_file(Self::book_positions_filename_legacy(), Mode::Read))
+            .open_file(Self::book_positions_filename_legacy(), Mode::Read)
         {
             Ok(file) => file,
             Err(_) => return Vec::new(),
@@ -290,6 +280,54 @@ where
             entries.push((name.to_string(), page));
         }
         entries
+    }
+
+    fn state_db_path(uid: u64) -> String {
+        state::state_db_rel_path(uid)
+    }
+
+    fn load_state_db(&self) -> LauncherStateDb {
+        let catalog = self.load_palm_catalog();
+        let Some(uid) = state::state_db_uid(&catalog) else {
+            return LauncherStateDb::default();
+        };
+        let path = Self::state_db_path(uid);
+        let mut file = match self.fs.open_file(&path, Mode::Read) {
+            Ok(file) => file,
+            Err(_) => return LauncherStateDb::default(),
+        };
+        let mut data = Vec::new();
+        let mut chunk = [0u8; 256];
+        loop {
+            let read = match file.read(&mut chunk) {
+                Ok(read) => read,
+                Err(_) => return LauncherStateDb::default(),
+            };
+            if read == 0 {
+                break;
+            }
+            if data.try_reserve(read).is_err() {
+                return LauncherStateDb::default();
+            }
+            data.extend_from_slice(&chunk[..read]);
+        }
+        LauncherStateDb::from_bytes(&data).unwrap_or_default()
+    }
+
+    fn save_state_db(&self, state_db: &LauncherStateDb) -> Result<(), ImageError> {
+        let _ = self.fs.create_dir_all("db");
+        let _ = self.fs.create_dir_all("db/v1");
+        let _ = self.fs.create_dir_all(Self::db_data_dirname());
+
+        let data = state_db.to_bytes();
+        let mut catalog = self.load_palm_catalog();
+        let uid = state::upsert_state_db_meta(&mut catalog, state::payload_hash_32(&data));
+        let path = Self::state_db_path(uid);
+        let mut file = self.fs.open_file(&path, Mode::Write).map_err(|_| ImageError::Io)?;
+        write_all(&mut file, &data)?;
+        let _ = file.flush();
+        self.save_palm_catalog(&catalog)?;
+        Ok(())
     }
 
 }
@@ -516,7 +554,7 @@ where
     }
 
     fn load_palm_catalog(&self) -> Vec<InstalledDbMeta> {
-        let mut file = match self.fs.open_file(Self::palmdb_catalog_filename(), Mode::Read) {
+        let mut file = match self.fs.open_file(Self::db_catalog_filename(), Mode::Read) {
             Ok(file) => file,
             Err(_) => return Vec::new(),
         };
@@ -597,11 +635,11 @@ where
 
     fn save_palm_catalog(&self, catalog: &[InstalledDbMeta]) -> Result<(), ImageError> {
         // FatFs mkdir returns an error when the directory already exists; tolerate that.
-        let _ = self.fs.create_dir_all("/palmdb");
-        let _ = self.fs.create_dir_all(Self::palmdb_root_dirname());
+        let _ = self.fs.create_dir_all("/db");
+        let _ = self.fs.create_dir_all(Self::db_root_dirname());
         let mut file = self
             .fs
-            .open_file(Self::palmdb_catalog_filename(), Mode::Write)
+            .open_file(Self::db_catalog_filename(), Mode::Write)
             .map_err(|_| ImageError::Io)?;
         for meta in catalog {
             let kind = match meta.kind {
@@ -802,7 +840,7 @@ fn identity_from_prc_header(data: &[u8]) -> Option<(InstalledDbIdentity, DbKind,
 }
 
 fn extract_app_icon(raw: &[u8]) -> Option<ImageData> {
-    let bitmaps = tern_core::prc_app::bitmap::parse_prc_bitmaps(raw);
+    let bitmaps = tern_core::palm::bitmap::parse_prc_bitmaps(raw);
     let best = bitmaps
         .iter()
         .filter(|b| b.width > 0 && b.height > 0)
@@ -1276,17 +1314,12 @@ where
             if name.is_empty()
                 || name.starts_with('.')
                 || short_is_hidden
-                || upper == Self::resume_filename()
+                || (path.is_empty() && upper == "DB")
                 || upper == Self::resume_filename_legacy().to_ascii_uppercase()
-                || upper == Self::book_positions_filename()
                 || upper == Self::book_positions_filename_legacy().to_ascii_uppercase()
-                || upper == Self::recent_entries_filename()
                 || upper == Self::recent_entries_filename_legacy().to_ascii_uppercase()
                 || upper == Self::thumbnails_dirname()
                 || upper == Self::thumbnails_dirname_legacy().to_ascii_uppercase()
-                || short_upper == Self::resume_filename()
-                || short_upper == Self::book_positions_filename()
-                || short_upper == Self::recent_entries_filename()
                 || short_upper == Self::thumbnails_dirname()
             {
                 continue;
@@ -1654,7 +1687,7 @@ where
         _path: &[String],
         entry: &ImageEntry,
         info: &PrcInfo,
-    ) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
+    ) -> Vec<tern_core::palm::runtime::ResourceBlob> {
         let mut out = Vec::new();
         let Some(current_uid) = parse_tdb_uid_from_name(&entry.name) else {
             return out;
@@ -1671,7 +1704,7 @@ where
             if meta.identity.db_type != *b"ovly" || meta.identity.creator != creator_4 {
                 continue;
             }
-            let file_path = format!("/palmdb/v1/db/{:016x}.tdb", meta.uid);
+            let file_path = format!("/db/v1/db/{:016x}.tdb", meta.uid);
             let Ok(mut file) = self.fs.open_file(&file_path, Mode::Read) else {
                 continue;
             };
@@ -1687,13 +1720,13 @@ where
             if read_exact(&mut file, &mut raw).is_err() {
                 continue;
             }
-            let blobs = tern_core::prc_app::parse_prc_resource_blobs(&raw);
+            let blobs = tern_core::palm::parse_prc_resource_blobs(&raw);
             out.extend(blobs);
         }
         out
     }
 
-    fn load_prc_system_resources(&mut self) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
+    fn load_prc_system_resources(&mut self) -> Vec<tern_core::palm::runtime::ResourceBlob> {
         let mut out = Vec::new();
         let mut listed = None;
         for dir in ["fonts", "/fonts"] {
@@ -1713,10 +1746,10 @@ where
                 continue;
             }
             let name = entry.name().to_string();
-            if !tern_core::prc_app::font::is_prc_font_resource_blob_name(&name) {
+            if !tern_core::palm::font::is_prc_font_resource_blob_name(&name) {
                 continue;
             }
-            let Some(id) = tern_core::prc_app::font::parse_font_resource_id_from_name(&name) else {
+            let Some(id) = tern_core::palm::font::parse_font_resource_id_from_name(&name) else {
                 continue;
             };
             let mut data = Vec::new();
@@ -1742,7 +1775,7 @@ where
             if read_exact(&mut file, &mut data).is_err() {
                 continue;
             }
-            out.push(tern_core::prc_app::runtime::ResourceBlob {
+            out.push(tern_core::palm::runtime::ResourceBlob {
                 kind: u32::from_be_bytes(*b"NFNT"),
                 id,
                 data,
@@ -1754,7 +1787,7 @@ where
         out
     }
 
-    fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+    fn load_prc_system_fonts(&mut self) -> Vec<tern_core::palm::runtime::PalmFont> {
         let out = embedded_prc_fonts::load_embedded_prc_fonts_72();
         let embedded_loaded = out.len();
         if embedded_loaded > 0 {
@@ -1768,7 +1801,7 @@ where
         out
     }
 
-    fn load_home_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+    fn load_home_system_fonts(&mut self) -> Vec<tern_core::palm::runtime::PalmFont> {
         let mut out = embedded_prc_fonts::load_embedded_prc_fonts_144();
         if out.is_empty() {
             out = embedded_prc_fonts::load_embedded_prc_fonts_72();
@@ -1784,9 +1817,9 @@ where
 
     fn scan_palm_install_inbox(&mut self) -> Option<InstallSummary> {
         // FatFs backend's `create_dir_all` is single-level; ensure parents explicitly.
-        let _ = self.fs.create_dir_all("palmdb");
-        let _ = self.fs.create_dir_all("palmdb/v1");
-        let _ = self.fs.create_dir_all(Self::palmdb_db_dirname());
+        let _ = self.fs.create_dir_all("db");
+        let _ = self.fs.create_dir_all("db/v1");
+        let _ = self.fs.create_dir_all(Self::db_data_dirname());
 
         let listed = {
             let Ok(dir) = self.fs.open_directory(Self::install_dirname()) else {
@@ -1800,10 +1833,10 @@ where
             items
         };
 
-        if self.fs.open_directory(Self::palmdb_db_dirname()).is_err() {
+        if self.fs.open_directory(Self::db_data_dirname()).is_err() {
             log::warn!(
                 "Palm DB directory unavailable after mkdir: {}",
-                Self::palmdb_db_dirname()
+                Self::db_data_dirname()
             );
             return Some(InstallSummary {
                 scanned: 0,
@@ -1907,7 +1940,7 @@ where
                         creator
                     );
                     let uid = catalog.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
-                    let out_path = format!("{}/{:016x}.tdb", Self::palmdb_db_dirname(), uid);
+                    let out_path = format!("{}/{:016x}.tdb", Self::db_data_dirname(), uid);
                     let mut out = match self.fs.open_file(&out_path, Mode::Write) {
                         Ok(f) => f,
                         Err(_) => {
@@ -1966,7 +1999,7 @@ where
                         type_code,
                         creator
                     );
-                    let out_path = format!("{}/{:016x}.tdb", Self::palmdb_db_dirname(), existing_uid);
+                    let out_path = format!("{}/{:016x}.tdb", Self::db_data_dirname(), existing_uid);
                     let mut out = match self.fs.open_file(&out_path, Mode::Write) {
                         Ok(f) => f,
                         Err(_) => {
@@ -2038,7 +2071,7 @@ where
             if meta.identity.db_type != *b"appl" && meta.identity.db_type != *b"panl" {
                 continue;
             }
-            let path = format!("/palmdb/v1/db/{:016x}.tdb", meta.uid);
+            let path = format!("/db/v1/db/{:016x}.tdb", meta.uid);
             let icon = (|| {
                 let mut file = self.fs.open_file(&path, Mode::Read).ok()?;
                 extract_app_icon_streaming(&mut file)
@@ -2060,95 +2093,49 @@ where
     F: Filesystem,
 {
     fn save_resume(&mut self, name: Option<&str>) {
-        let resume_name = Self::resume_filename();
-        if let Some(name) = name {
-            log::info!("Saving resume state: {}", name);
-            let mut file = match self.fs.open_file(resume_name, Mode::Write) {
-                Ok(file) => file,
-                Err(_) => return,
-            };
-            let mut written = 0usize;
-            let bytes = name.as_bytes();
-            while written < bytes.len() {
-                match file.write(&bytes[written..]) {
-                    Ok(0) | Err(_) => break,
-                    Ok(n) => written += n,
-                }
-            }
-            let _ = file.flush();
-        } else {
-            let _ = self.fs.open_file(resume_name, Mode::Write);
-        }
+        let mut state_db = self.load_state_db();
+        state_db.resume = name.map(|value| value.to_string());
+        let _ = self.save_state_db(&state_db);
     }
 
     fn load_resume(&mut self) -> Option<String> {
-        self.read_resume()
+        let state_db = self.load_state_db();
+        state_db.resume.or_else(|| self.read_resume())
     }
 
     fn save_book_positions(&mut self, entries: &[(String, usize)]) {
-        let positions_name = Self::book_positions_filename();
-        if entries.is_empty() {
-            return;
-        }
-        let mut file = match self.fs.open_file(positions_name, Mode::Write) {
-            Ok(file) => file,
-            Err(_) => return,
-        };
-        for (name, page) in entries {
-            let mut line = String::new();
-            line.push_str(name);
-            line.push('\t');
-            line.push_str(&page.to_string());
-            line.push('\n');
-            if write_all(&mut file, line.as_bytes()).is_err() {
-                return;
-            }
-        }
-        let _ = file.flush();
+        let mut state_db = self.load_state_db();
+        state_db.book_positions = entries.to_vec();
+        let _ = self.save_state_db(&state_db);
     }
 
     fn load_book_positions(&mut self) -> Vec<(String, usize)> {
-        self.read_book_positions()
+        let state_db = self.load_state_db();
+        if !state_db.book_positions.is_empty() {
+            state_db.book_positions
+        } else {
+            self.read_book_positions()
+        }
     }
 
     fn save_recent_entries(&mut self, entries: &[String]) {
-        let name = Self::recent_entries_filename();
-        if entries.is_empty() {
-            return;
-        }
-        log::info!("Saving recent entries: {} -> {}", entries.len(), name);
-        let mut file = match self.fs.open_file(name, Mode::Write) {
-            Ok(file) => file,
-            Err(err) => {
-                log::warn!("Failed to open recent entries file {}: {:?}", name, err);
-                return;
-            }
-        };
-        for entry in entries {
-            if write_all(&mut file, entry.as_bytes()).is_err() {
-                log::warn!("Failed to write recent entry to {}", name);
-                return;
-            }
-            if write_all(&mut file, b"\n").is_err() {
-                log::warn!("Failed to write recent entry newline to {}", name);
-                return;
-            }
-        }
-        let _ = file.flush();
+        let mut state_db = self.load_state_db();
+        state_db.recent_entries = entries.to_vec();
+        let _ = self.save_state_db(&state_db);
     }
 
     fn load_recent_entries(&mut self) -> Vec<String> {
+        let state_db = self.load_state_db();
+        if !state_db.recent_entries.is_empty() {
+            return state_db.recent_entries;
+        }
         let mut file = match self
             .fs
-            .open_file(Self::recent_entries_filename(), Mode::Read)
-            .or_else(|_| self.fs.open_file(Self::recent_entries_filename_legacy(), Mode::Read))
+            .open_file(Self::recent_entries_filename_legacy(), Mode::Read)
         {
             Ok(file) => file,
             Err(err) => {
                 log::info!("No recent entries file: {:?}", err);
-                if let Ok(mut file) = self.fs.open_file(Self::recent_entries_filename(), Mode::Write) {
-                    let _ = file.flush();
-                }
                 return Vec::new();
             }
         };

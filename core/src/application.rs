@@ -2,7 +2,6 @@ extern crate alloc;
 
 use alloc::{format, string::{String, ToString}};
 use alloc::vec::Vec;
-use alloc::vec;
 
 use embedded_graphics::{
     Drawable,
@@ -55,9 +54,9 @@ use crate::{
     image_viewer::{AppSource, EntryKind, ImageEntry, ImageError},
     input,
     platform::PlatformInputEvent,
-    prc_app,
+    palm,
     render_policy::RenderPolicy,
-    ui::{flush_queue, Rect, RenderQueue},
+    ternos::ui::{flush_queue, Rect, RenderQueue},
 };
 
 const LIST_MARGIN_X: i32 = 16;
@@ -79,21 +78,21 @@ pub struct Application<'a, S: AppSource> {
     prc_lines: Vec<String>,
     prc_scroll: usize,
     prc_form_index: usize,
-    prc_forms: Vec<prc_app::form_preview::FormPreview>,
-    prc_bitmaps: Vec<prc_app::bitmap::PrcBitmap>,
+    prc_forms: Vec<palm::form_preview::FormPreview>,
+    prc_bitmaps: Vec<palm::bitmap::PrcBitmap>,
     prc_runtime_form_id: Option<u16>,
     prc_runtime_underlay_form_id: Option<u16>,
-    prc_ui_controller: prc_app::controller::PrcUiController,
-    prc_runtime_bitmap_draws: Vec<prc_app::runner::RuntimeBitmapDraw>,
-    prc_runtime_field_draws: Vec<prc_app::runner::RuntimeFieldDraw>,
-    prc_runtime_table_draws: Vec<prc_app::runner::RuntimeTableDraw>,
+    prc_ui_controller: palm::controller::PrcUiController,
+    prc_runtime_bitmap_draws: Vec<palm::runner::RuntimeBitmapDraw>,
+    prc_runtime_field_draws: Vec<palm::runner::RuntimeFieldDraw>,
+    prc_runtime_table_draws: Vec<palm::runner::RuntimeTableDraw>,
     prc_runtime_focused_field_id: Option<u16>,
-    prc_system_fonts: Vec<prc_app::runtime::PalmFont>,
-    home_system_fonts: Vec<prc_app::runtime::PalmFont>,
-    prc_menu_controller: prc_app::controller::PrcMenuController,
-    prc_help_controller: prc_app::controller::PrcHelpDialogController,
+    prc_system_fonts: Vec<palm::runtime::PalmFont>,
+    home_system_fonts: Vec<palm::runtime::PalmFont>,
+    prc_menu_controller: palm::controller::PrcMenuController,
+    prc_help_controller: palm::controller::PrcHelpDialogController,
     prc_active_entry: Option<ImageEntry>,
-    prc_session: Option<prc_app::runner::PrcRuntimeSession>,
+    prc_session: Option<palm::runner::PrcRuntimeSession>,
     prc_blocked_timeout_ticks: u32,
     prc_blocked_elapsed_ms: u32,
     prc_soft_menu_focused: bool,
@@ -139,12 +138,12 @@ impl<'a, S: AppSource> Application<'a, S> {
         }).map(|(idx, _)| idx)
     }
 
-    fn runtime_prc_form(&self) -> Option<prc_app::form_preview::FormPreview> {
+    fn runtime_prc_form(&self) -> Option<palm::form_preview::FormPreview> {
         let fid = self.prc_runtime_form_id?;
         self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
     }
 
-    fn prc_form_by_id(&self, fid: u16) -> Option<prc_app::form_preview::FormPreview> {
+    fn prc_form_by_id(&self, fid: u16) -> Option<palm::form_preview::FormPreview> {
         self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
     }
 
@@ -245,15 +244,15 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_bitmaps: Vec::new(),
             prc_runtime_form_id: None,
             prc_runtime_underlay_form_id: None,
-            prc_ui_controller: prc_app::controller::PrcUiController::default(),
+            prc_ui_controller: palm::controller::PrcUiController::default(),
             prc_runtime_bitmap_draws: Vec::new(),
             prc_runtime_field_draws: Vec::new(),
             prc_runtime_table_draws: Vec::new(),
             prc_runtime_focused_field_id: None,
             prc_system_fonts: Vec::new(),
             home_system_fonts: Vec::new(),
-            prc_menu_controller: prc_app::controller::PrcMenuController::default(),
-            prc_help_controller: prc_app::controller::PrcHelpDialogController::default(),
+            prc_menu_controller: palm::controller::PrcMenuController::default(),
+            prc_help_controller: palm::controller::PrcHelpDialogController::default(),
             prc_active_entry: None,
             prc_session: None,
             prc_blocked_timeout_ticks: 0,
@@ -531,32 +530,32 @@ impl<'a, S: AppSource> Application<'a, S> {
                     .unwrap_or(false)
                 {
                     let event = if buttons.is_pressed(input::Buttons::Up) {
-                        Some(prc_app::ui_component::UiNavEvent::Up)
+                        Some(palm::ui_component::UiNavEvent::Up)
                     } else if buttons.is_pressed(input::Buttons::Down) {
-                        Some(prc_app::ui_component::UiNavEvent::Down)
+                        Some(palm::ui_component::UiNavEvent::Down)
                     } else if buttons.is_pressed(input::Buttons::Back) {
-                        Some(prc_app::ui_component::UiNavEvent::Back)
+                        Some(palm::ui_component::UiNavEvent::Back)
                     } else if buttons.is_pressed(input::Buttons::Confirm) {
-                        Some(prc_app::ui_component::UiNavEvent::Confirm)
+                        Some(palm::ui_component::UiNavEvent::Confirm)
                     } else {
                         None
                     };
                     if let Some(event) = event {
                         match self.prc_help_controller.on_event(event) {
-                            prc_app::controller::HelpDialogAction::Scroll(delta) => {
+                            palm::controller::HelpDialogAction::Scroll(delta) => {
                                 if let Some(session) = self.prc_session.as_mut() {
                                     if session.scroll_help_dialog(delta) {
                                         self.dirty = true;
                                     }
                                 }
                             }
-                            prc_app::controller::HelpDialogAction::Dismiss => {
+                            palm::controller::HelpDialogAction::Dismiss => {
                                 if let Some(session) = self.prc_session.as_mut() {
                                     let _ = session.dismiss_help_dialog();
                                     self.resume_prc_runtime_session();
                                 }
                             }
-                            prc_app::controller::HelpDialogAction::None => {}
+                            palm::controller::HelpDialogAction::None => {}
                         }
                     } else if self.system.add_idle(elapsed_ms) {
                         self.start_sleep_request();
@@ -565,26 +564,26 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
                 if self.prc_menu_controller.is_active() {
                     let event = if buttons.is_pressed(input::Buttons::Back) {
-                        Some(prc_app::ui_component::UiNavEvent::Back)
+                        Some(palm::ui_component::UiNavEvent::Back)
                     } else if buttons.is_pressed(input::Buttons::Left) {
-                        Some(prc_app::ui_component::UiNavEvent::Left)
+                        Some(palm::ui_component::UiNavEvent::Left)
                     } else if buttons.is_pressed(input::Buttons::Right) {
-                        Some(prc_app::ui_component::UiNavEvent::Right)
+                        Some(palm::ui_component::UiNavEvent::Right)
                     } else if buttons.is_pressed(input::Buttons::Up) {
-                        Some(prc_app::ui_component::UiNavEvent::Up)
+                        Some(palm::ui_component::UiNavEvent::Up)
                     } else if buttons.is_pressed(input::Buttons::Down) {
-                        Some(prc_app::ui_component::UiNavEvent::Down)
+                        Some(palm::ui_component::UiNavEvent::Down)
                     } else if buttons.is_pressed(input::Buttons::Confirm) {
-                        Some(prc_app::ui_component::UiNavEvent::Confirm)
+                        Some(palm::ui_component::UiNavEvent::Confirm)
                     } else {
                         None
                     };
                     if let Some(event) = event {
                         match self.prc_menu_controller.on_event(event) {
-                            prc_app::controller::MenuAction::Activate(item_id) => {
+                            palm::controller::MenuAction::Activate(item_id) => {
                                 if let Some(session) = self.prc_session.as_mut() {
                                     session.inject_event_now(
-                                        prc_app::runtime::EVT_MENU,
+                                        palm::runtime::EVT_MENU,
                                         item_id,
                                         "menuSelect",
                                     );
@@ -595,11 +594,11 @@ impl<'a, S: AppSource> Application<'a, S> {
                                     self.dirty = true;
                                 }
                             }
-                            prc_app::controller::MenuAction::Redraw
-                            | prc_app::controller::MenuAction::Closed => {
+                            palm::controller::MenuAction::Redraw
+                            | palm::controller::MenuAction::Closed => {
                                 self.dirty = true;
                             }
-                            prc_app::controller::MenuAction::None => {}
+                            palm::controller::MenuAction::None => {}
                         }
                     } else if self.system.add_idle(elapsed_ms) {
                         self.start_sleep_request();
@@ -623,7 +622,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                     if let Some(session) = self.prc_session.as_mut() {
                         for ch in typed_chars {
                             session.inject_event_now(
-                                prc_app::runtime::EVT_KEY_DOWN,
+                                palm::runtime::EVT_KEY_DOWN,
                                 *ch,
                                 "keyDown",
                             );
@@ -639,7 +638,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                         let form = self.runtime_prc_form();
                         if self.prc_ui_controller.move_focus_direction(
                             form.as_ref(),
-                            prc_app::controller::FocusDirection::Left,
+                            palm::controller::FocusDirection::Left,
                         ) {
                             self.dirty = true;
                         }
@@ -649,7 +648,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                         let form = self.runtime_prc_form();
                         if self.prc_ui_controller.move_focus_direction(
                             form.as_ref(),
-                            prc_app::controller::FocusDirection::Right,
+                            palm::controller::FocusDirection::Right,
                         ) {
                             self.dirty = true;
                         }
@@ -671,13 +670,13 @@ impl<'a, S: AppSource> Application<'a, S> {
                         if !restored {
                             let _ = self.prc_ui_controller.move_focus_direction(
                                 form.as_ref(),
-                                prc_app::controller::FocusDirection::Up,
+                                palm::controller::FocusDirection::Up,
                             );
                         }
                         self.dirty = true;
                     } else if self.prc_ui_controller.move_focus_direction(
                         form.as_ref(),
-                        prc_app::controller::FocusDirection::Up,
+                        palm::controller::FocusDirection::Up,
                     ) {
                         self.dirty = true;
                     }
@@ -687,7 +686,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                         // Single soft button in this bar; nothing further down.
                     } else if self.prc_ui_controller.move_focus_direction(
                         form.as_ref(),
-                        prc_app::controller::FocusDirection::Down,
+                        palm::controller::FocusDirection::Down,
                     ) {
                         self.dirty = true;
                     } else {
@@ -709,7 +708,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                                 .as_ref()
                                 .and_then(|f| {
                                     f.objects.iter().find_map(|o| match o {
-                                        prc_app::form_preview::FormPreviewObject::Field { id, .. }
+                                        palm::form_preview::FormPreviewObject::Field { id, .. }
                                             if *id == control_id =>
                                         {
                                             Some(true)
@@ -720,7 +719,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                                 .unwrap_or(false);
                             if focused_is_field {
                                 session.inject_event_now(
-                                    prc_app::runtime::EVT_FLD_ENTER,
+                                    palm::runtime::EVT_FLD_ENTER,
                                     control_id,
                                     "fldEnter",
                                 );
@@ -971,7 +970,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_session = None;
                 self.prc_blocked_timeout_ticks = 0;
                 self.prc_blocked_elapsed_ms = 0;
-                self.prc_lines = prc_app::format_info_lines(&info);
+                self.prc_lines = palm::format_info_lines(&info);
                 let runtime_snapshot = self.log_prc_info(&entry, &info);
                 self.prc_runtime_form_id = runtime_snapshot.form_id;
                 self.prc_runtime_underlay_form_id = runtime_snapshot.underlay_form_id;
@@ -996,20 +995,20 @@ impl<'a, S: AppSource> Application<'a, S> {
                     let mut merged_resources =
                         self.source
                             .load_prc_app_resources(&self.home.path, &entry, &info);
-                    merged_resources.extend(prc_app::parse_prc_resource_blobs(&prc_raw));
+                    merged_resources.extend(palm::parse_prc_resource_blobs(&prc_raw));
                     self.prc_forms =
-                        prc_app::form_preview::parse_form_previews_from_resource_blobs(
+                        palm::form_preview::parse_form_previews_from_resource_blobs(
                             &merged_resources,
                         );
                     self.prc_bitmaps =
-                        prc_app::bitmap::parse_prc_bitmaps_from_resource_blobs(&merged_resources);
+                        palm::bitmap::parse_prc_bitmaps_from_resource_blobs(&merged_resources);
                     if self.prc_forms.is_empty() {
-                        self.prc_forms = prc_app::form_preview::parse_form_previews(&prc_raw);
+                        self.prc_forms = palm::form_preview::parse_form_previews(&prc_raw);
                     }
                     if self.prc_bitmaps.is_empty() {
-                        self.prc_bitmaps = prc_app::bitmap::parse_prc_bitmaps(&prc_raw);
+                        self.prc_bitmaps = palm::bitmap::parse_prc_bitmaps(&prc_raw);
                     }
-                    let menu_bar = prc_app::menu_preview::parse_menu_bar_preview(&prc_raw);
+                    let menu_bar = palm::menu_preview::parse_menu_bar_preview(&prc_raw);
                     log::info!(
                         "PRC parsed previews forms={} bitmaps={} menus={} merged_resources={}",
                         self.prc_forms.len(),
@@ -1029,7 +1028,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                     self.prc_menu_controller.set_menu_bar(menu_bar);
                 }
-                if let Ok(session) = prc_app::runner::PrcRuntimeSession::from_source(
+                if let Ok(session) = palm::runner::PrcRuntimeSession::from_source(
                     self.source,
                     &self.home.path,
                     &entry,
@@ -1080,7 +1079,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_session = None;
                 self.prc_blocked_timeout_ticks = 0;
                 self.prc_blocked_elapsed_ms = 0;
-                self.prc_lines = prc_app::format_info_lines(&info);
+                self.prc_lines = palm::format_info_lines(&info);
                 let runtime_snapshot = self.log_prc_info(&entry, &info);
                 self.prc_runtime_form_id = runtime_snapshot.form_id;
                 self.prc_runtime_underlay_form_id = runtime_snapshot.underlay_form_id;
@@ -1097,23 +1096,23 @@ impl<'a, S: AppSource> Application<'a, S> {
                     let mut merged_resources =
                         self.source
                             .load_prc_app_resources(&path, &entry, &info);
-                    merged_resources.extend(prc_app::parse_prc_resource_blobs(&prc_raw));
+                    merged_resources.extend(palm::parse_prc_resource_blobs(&prc_raw));
                     self.prc_forms =
-                        prc_app::form_preview::parse_form_previews_from_resource_blobs(
+                        palm::form_preview::parse_form_previews_from_resource_blobs(
                             &merged_resources,
                         );
                     self.prc_bitmaps =
-                        prc_app::bitmap::parse_prc_bitmaps_from_resource_blobs(&merged_resources);
+                        palm::bitmap::parse_prc_bitmaps_from_resource_blobs(&merged_resources);
                     if self.prc_forms.is_empty() {
-                        self.prc_forms = prc_app::form_preview::parse_form_previews(&prc_raw);
+                        self.prc_forms = palm::form_preview::parse_form_previews(&prc_raw);
                     }
                     if self.prc_bitmaps.is_empty() {
-                        self.prc_bitmaps = prc_app::bitmap::parse_prc_bitmaps(&prc_raw);
+                        self.prc_bitmaps = palm::bitmap::parse_prc_bitmaps(&prc_raw);
                     }
-                    let menu_bar = prc_app::menu_preview::parse_menu_bar_preview(&prc_raw);
+                    let menu_bar = palm::menu_preview::parse_menu_bar_preview(&prc_raw);
                     self.prc_menu_controller.set_menu_bar(menu_bar);
                 }
-                if let Ok(session) = prc_app::runner::PrcRuntimeSession::from_source(
+                if let Ok(session) = palm::runner::PrcRuntimeSession::from_source(
                     self.source,
                     &path,
                     &entry,
@@ -1183,7 +1182,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             }
         }
         self.prc_blocked_timeout_ticks = match runtime_out.state {
-            prc_app::runner::RuntimeRunState::BlockedOnEvent { timeout_ticks } => {
+            palm::runner::RuntimeRunState::BlockedOnEvent { timeout_ticks } => {
                 log::info!(
                     "PRC runtime blocked on EvtGetEvent timeout={} ticks steps={}",
                     timeout_ticks,
@@ -1191,7 +1190,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 );
                 timeout_ticks
             }
-            prc_app::runner::RuntimeRunState::Stopped(reason) => {
+            palm::runner::RuntimeRunState::Stopped(reason) => {
                 log::info!(
                     "PRC runtime stopped reason={:?} steps={}",
                     reason,
@@ -1199,7 +1198,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 );
                 0
             }
-            prc_app::runner::RuntimeRunState::Running => {
+            palm::runner::RuntimeRunState::Running => {
                 log::info!("PRC runtime running steps={}", runtime_out.steps);
                 0
             }
@@ -1213,8 +1212,8 @@ impl<'a, S: AppSource> Application<'a, S> {
     fn log_prc_info(
         &mut self,
         entry: &ImageEntry,
-        info: &prc_app::PrcInfo,
-    ) -> prc_app::runner::RuntimeUiSnapshot {
+        info: &palm::PrcInfo,
+    ) -> palm::runner::RuntimeUiSnapshot {
         log::info!(
             "PRC name='{}' type='{}' creator='{}' kind={:?} entries={} ver={} attrs=0x{:04X} size={} code_bytes={} other_bytes={}",
             info.db_name,
@@ -1253,7 +1252,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 info.unique_a_traps.len()
             );
             for trap in &info.unique_a_traps {
-                let meta = prc_app::traps::table::lookup(*trap);
+                let meta = palm::traps::table::lookup(*trap);
                 for (group, count) in &mut group_counts {
                     if *group == meta.group.as_str() {
                         *count = count.saturating_add(1);
@@ -1291,7 +1290,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                     scan.unique_a_traps.len()
                 );
                 for trap in &scan.unique_a_traps {
-                    let meta = prc_app::traps::table::lookup(*trap);
+                    let meta = palm::traps::table::lookup(*trap);
                     log::info!(
                         "PRC code_scan id={} trap=0x{:04X} group={} name={}",
                         scan.resource_id,
@@ -1302,7 +1301,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
             }
 
-            let dry_run = prc_app::runtime::dry_run_default(info);
+            let dry_run = palm::runtime::dry_run_default(info);
             log::info!(
                 "PRC dry_run(strict) total_hits={} handled={} stubbed={}",
                 dry_run.total_hits,
@@ -1354,7 +1353,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
             }
 
-            let dry_run_no_lib = prc_app::runtime::dry_run_ignore_lib(info);
+            let dry_run_no_lib = palm::runtime::dry_run_ignore_lib(info);
             log::info!(
                 "PRC dry_run(ignore_lib) total_hits={} handled={} stubbed={}",
                 dry_run_no_lib.total_hits,
@@ -1406,7 +1405,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
             }
 
-            let dry_run_bootstrap = prc_app::runtime::dry_run_ignore_bootstrap_lib(info);
+            let dry_run_bootstrap = palm::runtime::dry_run_ignore_bootstrap_lib(info);
             log::info!(
                 "PRC dry_run(ignore_bootstrap_lib) total_hits={} handled={} stubbed={}",
                 dry_run_bootstrap.total_hits,
@@ -1438,7 +1437,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
 
         if Self::prc_verbose_logs() {
-            prc_app::runner::log_prc_runtime_first_trap(
+            palm::runner::log_prc_runtime_first_trap(
                 self.source,
                 &self.home.path,
                 entry,
@@ -1446,7 +1445,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 true,
             )
         } else {
-            prc_app::runner::RuntimeUiSnapshot::default()
+            palm::runner::RuntimeUiSnapshot::default()
         }
     }
 
@@ -1710,20 +1709,20 @@ impl<'a, S: AppSource> Application<'a, S> {
         .draw(self.display_buffers)
         .ok();
         if !self.home_system_fonts.is_empty() {
-            let tw = crate::ui::prc_components::palm_text_width(
+            let tw = crate::ternos::ui::prc_components::palm_text_width(
                 &battery_text,
                 0,
                 self.home_system_fonts.as_slice(),
                 1,
             );
-            let th = crate::ui::prc_components::palm_text_height(
+            let th = crate::ternos::ui::prc_components::palm_text_height(
                 0,
                 self.home_system_fonts.as_slice(),
                 1,
             );
             let tx = batt_x + (batt_w - tw) / 2;
             let ty = batt_y + (batt_h - th) / 2;
-            crate::ui::prc_components::draw_palm_text(
+            crate::ternos::ui::prc_components::draw_palm_text(
                 self.display_buffers,
                 &battery_text,
                 tx,
@@ -1763,7 +1762,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             if dialog_framed {
                 if let Some(underlay_id) = self.prc_runtime_underlay_form_id {
                     if let Some(underlay_form) = self.prc_form_by_id(underlay_id) {
-                        prc_app::ui::draw_form_preview(
+                        palm::ui::draw_form_preview(
                             self.display_buffers,
                             &underlay_form,
                             &self.prc_system_fonts,
@@ -1786,7 +1785,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 }
             }
-            prc_app::ui::draw_form_preview(
+            palm::ui::draw_form_preview(
                 self.display_buffers,
                 &form,
                 &self.prc_system_fonts,
@@ -1830,6 +1829,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
 
         if strip_h > 0 && !self.prc_reserved_gray_initialized {
+            self.ensure_gray2_buffers();
             self.gray2_lsb.fill(0);
             self.gray2_msb.fill(0);
             fill_gray2_rect(

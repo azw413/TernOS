@@ -22,7 +22,7 @@ use crate::{
     framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH},
     image_viewer::{AppSource, EntryKind, ImageData, ImageEntry},
     render_policy::RenderPolicy,
-    ui::{flush_queue, ReaderView, Rect, RenderQueue, UiContext, View},
+    ternos::ui::{flush_queue, ReaderView, Rect, RenderQueue, UiContext, View},
 };
 
 pub struct SleepOverlay {

@@ -15,7 +15,7 @@ use crate::display::{Display, RefreshMode};
 use crate::framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
 use crate::image_viewer::{AppSource, ImageData, ImageEntry, ImageError, InstalledAppEntry};
 use crate::render_policy::RenderPolicy;
-use crate::ui::{flush_queue, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_pull_down_box, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, ListItem, ListView, Rect, RenderQueue, UiContext, View};
+use crate::ternos::ui::{flush_queue, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_pull_down_box, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, ListItem, ListView, Rect, RenderQueue, UiContext, View};
 
 const START_MENU_MARGIN: i32 = 16;
 const START_MENU_RECENT_THUMB: i32 = 74;
@@ -137,7 +137,7 @@ pub struct HomeRenderContext<'a, S: AppSource> {
     pub full_refresh: bool,
     pub battery_percent: Option<u8>,
     pub render_policy: RenderPolicy,
-    pub palm_fonts: &'a [crate::prc_app::runtime::PalmFont],
+    pub palm_fonts: &'a [crate::palm::runtime::PalmFont],
     pub icons: HomeIcons<'a>,
     pub draw_trbk_image: DrawTrbkImageFn,
 }
@@ -163,7 +163,10 @@ impl HomeState {
         }
     }
 
-    pub fn show_install_summary_dialog(&mut self, summary: crate::palm_db::InstallSummary) {
+    pub fn show_install_summary_dialog(
+        &mut self,
+        summary: crate::ternos::services::db::InstallSummary,
+    ) {
         let mut msg = format!(
             "Scanned {} files.\nInstalled: {}\nUpgraded: {}\nSkipped: {}\nFailed: {}",
             summary.scanned, summary.installed, summary.upgraded, summary.skipped, summary.failed
@@ -1264,7 +1267,7 @@ impl HomeState {
         &self,
         target: &mut DisplayBuffers,
         dialog: &InstallDialogState,
-        fonts: &[crate::prc_app::runtime::PalmFont],
+        fonts: &[crate::palm::runtime::PalmFont],
         width: i32,
         content_bottom: i32,
     ) {
@@ -1777,7 +1780,7 @@ fn adjust_thumbnail_luma(lum: u8) -> u8 {
 fn wrap_home_title_lines(
     text: &str,
     max_width: i32,
-    fonts: &[crate::prc_app::runtime::PalmFont],
+    fonts: &[crate::palm::runtime::PalmFont],
     font_id: u8,
     scale_num: i32,
     scale_den: i32,

@@ -1,5 +1,5 @@
 use crate::framebuffer::{BUFFER_SIZE, DisplayBuffers};
-use crate::ui::Rect;
+use crate::ternos::ui::Rect;
 
 pub const WIDTH: usize = 800;
 pub const HEIGHT: usize = 480;

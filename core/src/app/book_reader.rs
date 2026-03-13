@@ -16,7 +16,7 @@ use crate::framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEI
 use crate::image_viewer::{AppSource, ImageData, ImageError};
 use crate::input;
 use crate::render_policy::RenderPolicy;
-use crate::ui::{flush_queue, ListItem, ListView, Rect, RenderQueue, UiContext, View};
+use crate::ternos::ui::{flush_queue, ListItem, ListView, Rect, RenderQueue, UiContext, View};
 
 const LIST_TOP: i32 = 60;
 const LINE_HEIGHT: i32 = 24;

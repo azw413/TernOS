@@ -117,13 +117,13 @@ Match Palm behavior: PRC/PDB files are install payloads; execution/data access h
 
 Use a versioned database root under the image source:
 
-- `sdcard/palmdb/v1/` on device
+- `sdcard/db/v1/` on device
 - equivalent host path on desktop image source
 
 Layout:
 
-- `sdcard/palmdb/v1/catalog.bin`
-- `sdcard/palmdb/v1/db/<db_uid>.tdb`
+- `sdcard/db/v1/catalog.bin`
+- `sdcard/db/v1/db/<db_uid>.tdb`
 - `sdcard/install/` (drop-in inbox for `*.prc` / `*.pdb`)
 - `sdcard/install/done/` (processed successfully)
 - `sdcard/install/failed/` (parse/install failures)

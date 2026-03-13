@@ -235,7 +235,7 @@ fn generate_embedded_prc_fonts() {
     }
 
     let mut body = String::new();
-    body.push_str("use tern_core::prc_app::runtime::{PalmFont, PalmWidths, PalmGlyphs, PalmGlyphStatic};\n");
+    body.push_str("use tern_core::palm::runtime::{PalmFont, PalmWidths, PalmGlyphs, PalmGlyphStatic};\n");
     let mut emitted: BTreeMap<String, u16> = BTreeMap::new();
     for (tag, map) in [("72", &chosen_72), ("144", &chosen_144)] {
         for (font_id, (_name, path)) in map.iter() {

@@ -15,7 +15,7 @@ use crate::{
     display::{Display, RefreshMode},
     framebuffer::{DisplayBuffers, BUFFER_SIZE},
     render_policy::RenderPolicy,
-    ui::{flush_queue, Rect, RenderQueue},
+    ternos::ui::{flush_queue, Rect, RenderQueue},
 };
 
 const LIST_MARGIN_X: i32 = 16;

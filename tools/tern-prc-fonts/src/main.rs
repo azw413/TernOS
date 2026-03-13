@@ -30,7 +30,7 @@ fn main() -> Result<(), String> {
     let input_path = PathBuf::from(input);
     let out_path = PathBuf::from(out_dir);
     let raw = read_file(&input_path)?;
-    let info = tern_core::prc_app::parse_prc(&raw)
+    let info = tern_core::palm::parse_prc(&raw)
         .ok_or_else(|| format!("{} is not a parseable PRC/PDB resource DB", input_path.display()))?;
 
     let mut extracted = 0usize;

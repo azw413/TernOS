@@ -55,7 +55,7 @@ pub trait ImageSource {
         &mut self,
         _path: &[String],
         _entry: &ImageEntry,
-    ) -> Result<crate::prc_app::PrcInfo, ImageError> {
+    ) -> Result<crate::palm::PrcInfo, ImageError> {
         Err(ImageError::Unsupported)
     }
     fn load_prc_code_resource(
@@ -78,27 +78,27 @@ pub trait ImageSource {
         &mut self,
         _path: &[String],
         _entry: &ImageEntry,
-        _info: &crate::prc_app::PrcInfo,
-    ) -> Vec<crate::prc_app::runtime::ResourceBlob> {
+        _info: &crate::palm::PrcInfo,
+    ) -> Vec<crate::palm::runtime::ResourceBlob> {
         Vec::new()
     }
-    fn load_prc_system_resources(&mut self) -> Vec<crate::prc_app::runtime::ResourceBlob> {
+    fn load_prc_system_resources(&mut self) -> Vec<crate::palm::runtime::ResourceBlob> {
         Vec::new()
     }
-    fn load_prc_system_fonts(&mut self) -> Vec<crate::prc_app::runtime::PalmFont> {
+    fn load_prc_system_fonts(&mut self) -> Vec<crate::palm::runtime::PalmFont> {
         Vec::new()
     }
     /// Optional high-density Palm font set for full-resolution shell UI.
     ///
     /// Default falls back to runtime/system PRC fonts.
-    fn load_home_system_fonts(&mut self) -> Vec<crate::prc_app::runtime::PalmFont> {
+    fn load_home_system_fonts(&mut self) -> Vec<crate::palm::runtime::PalmFont> {
         self.load_prc_system_fonts()
     }
     /// Optional `/install` inbox scan hook.
     ///
     /// Implementations can return `Some(summary)` when they support Palm DB
     /// install scanning, or `None` to opt out.
-    fn scan_palm_install_inbox(&mut self) -> Option<crate::palm_db::InstallSummary> {
+    fn scan_palm_install_inbox(&mut self) -> Option<crate::ternos::services::db::InstallSummary> {
         None
     }
 

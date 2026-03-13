@@ -3,7 +3,12 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use log::error;
-use tern_core::palm_db::{DbKind, InstallDecision, InstallInboxEntry, InstallPlanner, InstallSummary, InstalledDbIdentity, InstalledDbMeta};
+use tern_core::palm;
+use tern_core::ternos::services::db::{
+    DbKind, InstallDecision, InstallInboxEntry, InstallPlanner, InstallSummary,
+    InstalledDbIdentity, InstalledDbMeta,
+};
+use tern_core::ternos::services::state::{self, LauncherStateDb};
 use tern_core::image_viewer::{
     BookSource, EntryKind, Gray2StreamSource, ImageData, ImageEntry, ImageError, ImageSource,
     InstalledAppEntry,
@@ -43,24 +48,12 @@ impl DesktopImageSource {
             || name.ends_with(".tdb")
     }
 
-    fn resume_path(&self) -> PathBuf {
-        self.root.join(".tern_resume")
-    }
-
     fn resume_path_legacy(&self) -> PathBuf {
         self.root.join(".trusty_resume")
     }
 
-    fn book_positions_path(&self) -> PathBuf {
-        self.root.join(".tern_books")
-    }
-
     fn book_positions_path_legacy(&self) -> PathBuf {
         self.root.join(".trusty_books")
-    }
-
-    fn recent_entries_path(&self) -> PathBuf {
-        self.root.join(".tern_recents")
     }
 
     fn recent_entries_path_legacy(&self) -> PathBuf {
@@ -113,22 +106,47 @@ impl DesktopImageSource {
         self.root.join("install")
     }
 
-    fn palmdb_root(&self) -> PathBuf {
-        self.root.join("palmdb").join("v1")
+    fn db_root(&self) -> PathBuf {
+        self.root.join("db").join("v1")
     }
 
-    fn palmdb_catalog_path(&self) -> PathBuf {
-        self.palmdb_root().join("catalog.txt")
+    fn db_catalog_path(&self) -> PathBuf {
+        self.db_root().join("catalog.txt")
     }
 
-    fn palmdb_db_dir(&self) -> PathBuf {
-        self.palmdb_root().join("db")
+    fn db_data_dir(&self) -> PathBuf {
+        self.db_root().join("db")
+    }
+
+    fn state_db_path(&self, uid: u64) -> PathBuf {
+        self.root.join(state::state_db_rel_path(uid))
+    }
+
+    fn load_state_db(&self) -> LauncherStateDb {
+        let catalog = load_catalog(&self.db_catalog_path());
+        let Some(uid) = state::state_db_uid(&catalog) else {
+            return LauncherStateDb::default();
+        };
+        let Ok(data) = fs::read(self.state_db_path(uid)) else {
+            return LauncherStateDb::default();
+        };
+        LauncherStateDb::from_bytes(&data).unwrap_or_default()
+    }
+
+    fn save_state_db(&self, state_db: &LauncherStateDb) {
+        let _ = fs::create_dir_all(self.db_data_dir());
+        let mut catalog = load_catalog(&self.db_catalog_path());
+        let data = state_db.to_bytes();
+        let uid = state::upsert_state_db_meta(&mut catalog, state::payload_hash_32(&data));
+        if fs::write(self.state_db_path(uid), &data).is_ok() {
+            let _ = save_catalog(&self.db_catalog_path(), &catalog);
+        }
     }
 
     fn load_prc_fonts_with_variant(
         &self,
         prefer_144: bool,
-    ) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+    ) -> Vec<palm::runtime::PalmFont> {
         let mut out = Vec::new();
         fn font_variant_rank(name: &str, prefer_144: bool) -> u8 {
             let lower = name.to_ascii_lowercase();
@@ -151,7 +169,7 @@ impl DesktopImageSource {
         let mut embedded: std::collections::BTreeMap<u16, (&str, &str, u8)> =
             std::collections::BTreeMap::new();
         for (name, text) in embedded_prc_fonts::EMBEDDED_PRC_FONT_TXT {
-            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(name) else {
+            let Some(resource_id) = palm::font::parse_font_resource_id_from_name(name) else {
                 continue;
             };
             let font_id = resource_id.saturating_sub(9100);
@@ -164,7 +182,7 @@ impl DesktopImageSource {
             }
         }
         for (font_id, (_name, text, _rank)) in embedded.into_iter() {
-            if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(text, font_id) {
+            if let Some(font) = palm::font::parse_pumpkin_txt_font(text, font_id) {
                 out.push(font);
             }
         }
@@ -193,7 +211,7 @@ impl DesktopImageSource {
             if !name.to_ascii_lowercase().ends_with(".txt") {
                 continue;
             }
-            let Some(resource_id) = tern_core::prc_app::font::parse_font_resource_id_from_name(&name) else {
+            let Some(resource_id) = palm::font::parse_font_resource_id_from_name(&name) else {
                 continue;
             };
             let font_id = resource_id.saturating_sub(9100);
@@ -211,12 +229,12 @@ impl DesktopImageSource {
             };
             if let Some(pos) = out
                 .iter()
-                .position(|f: &tern_core::prc_app::runtime::PalmFont| f.font_id == font_id)
+                .position(|f: &palm::runtime::PalmFont| f.font_id == font_id)
             {
-                if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(&text, font_id) {
+                if let Some(font) = palm::font::parse_pumpkin_txt_font(&text, font_id) {
                     out[pos] = font;
                 }
-            } else if let Some(font) = tern_core::prc_app::font::parse_pumpkin_txt_font(&text, font_id) {
+            } else if let Some(font) = palm::font::parse_pumpkin_txt_font(&text, font_id) {
                 out.push(font);
             }
         }
@@ -276,7 +294,7 @@ fn payload_hash_32(data: &[u8]) -> [u8; 32] {
     out
 }
 
-fn identity_from_prc(info: &tern_core::prc_app::PrcInfo) -> InstalledDbIdentity {
+fn identity_from_prc(info: &tern_core::palm::PrcInfo) -> InstalledDbIdentity {
     let mut name = [0u8; 32];
     let raw_name = info.db_name.as_bytes();
     let copy_n = raw_name.len().min(name.len());
@@ -294,7 +312,7 @@ fn identity_from_prc(info: &tern_core::prc_app::PrcInfo) -> InstalledDbIdentity 
 }
 
 fn extract_app_icon(raw: &[u8]) -> Option<ImageData> {
-    let bitmaps = tern_core::prc_app::bitmap::parse_prc_bitmaps(raw);
+    let bitmaps = tern_core::palm::bitmap::parse_prc_bitmaps(raw);
     let best = bitmaps
         .iter()
         .filter(|b| b.width > 0 && b.height > 0)
@@ -422,6 +440,7 @@ impl ImageSource for DesktopImageSource {
                 || name == ".trusty_books"
                 || name == ".tern_recents"
                 || name == ".trusty_recents"
+                || (path.is_empty() && name == "db")
                 || name == ".tern_cache"
                 || name == ".trusty_cache"
             {
@@ -483,7 +502,7 @@ impl ImageSource for DesktopImageSource {
         &mut self,
         path: &[String],
         entry: &ImageEntry,
-    ) -> Result<tern_core::prc_app::PrcInfo, ImageError> {
+    ) -> Result<tern_core::palm::PrcInfo, ImageError> {
         let lower = entry.name.to_ascii_lowercase();
         if entry.kind != EntryKind::File || (!lower.ends_with(".prc") && !lower.ends_with(".tdb")) {
             return Err(ImageError::Unsupported);
@@ -491,7 +510,7 @@ impl ImageSource for DesktopImageSource {
         let base = path.iter().fold(self.root.clone(), |acc, part| acc.join(part));
         let full_path = base.join(&entry.name);
         let data = fs::read(full_path).map_err(|_| ImageError::Io)?;
-        tern_core::prc_app::parse_prc(&data).ok_or(ImageError::Decode)
+        tern_core::palm::parse_prc(&data).ok_or(ImageError::Decode)
     }
 
     fn load_prc_code_resource(
@@ -507,7 +526,7 @@ impl ImageSource for DesktopImageSource {
         let base = path.iter().fold(self.root.clone(), |acc, part| acc.join(part));
         let full_path = base.join(&entry.name);
         let data = fs::read(full_path).map_err(|_| ImageError::Io)?;
-        let info = tern_core::prc_app::parse_prc(&data).ok_or(ImageError::Decode)?;
+        let info = tern_core::palm::parse_prc(&data).ok_or(ImageError::Decode)?;
         let res = info
             .resources
             .iter()
@@ -537,8 +556,8 @@ impl ImageSource for DesktopImageSource {
         &mut self,
         _path: &[String],
         entry: &ImageEntry,
-        info: &tern_core::prc_app::PrcInfo,
-    ) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
+        info: &tern_core::palm::PrcInfo,
+    ) -> Vec<tern_core::palm::runtime::ResourceBlob> {
         let mut out = Vec::new();
         let Some(current_uid) = parse_tdb_uid_from_name(&entry.name) else {
             return out;
@@ -547,7 +566,7 @@ impl ImageSource for DesktopImageSource {
         let Ok(creator_4) = <[u8; 4]>::try_from(creator.get(..4).unwrap_or(b"????")) else {
             return out;
         };
-        let catalog = load_catalog(&self.palmdb_catalog_path());
+        let catalog = load_catalog(&self.db_catalog_path());
         for meta in catalog {
             if meta.uid == current_uid {
                 continue;
@@ -557,17 +576,17 @@ impl ImageSource for DesktopImageSource {
             }
             let path = self
                 .root
-                .join(format!("palmdb/v1/db/{:016x}.tdb", meta.uid));
+                .join(format!("db/v1/db/{:016x}.tdb", meta.uid));
             let Ok(raw) = fs::read(path) else {
                 continue;
             };
-            let blobs = tern_core::prc_app::parse_prc_resource_blobs(&raw);
+            let blobs = tern_core::palm::parse_prc_resource_blobs(&raw);
             out.extend(blobs);
         }
         out
     }
 
-    fn load_prc_system_resources(&mut self) -> Vec<tern_core::prc_app::runtime::ResourceBlob> {
+    fn load_prc_system_resources(&mut self) -> Vec<tern_core::palm::runtime::ResourceBlob> {
         let dir = self.fonts_dir();
         let Ok(read_dir) = fs::read_dir(&dir) else {
             return Vec::new();
@@ -581,11 +600,11 @@ impl ImageSource for DesktopImageSource {
                 continue;
             }
             let name = dent.file_name().to_string_lossy().to_string();
-            if !tern_core::prc_app::font::is_prc_font_resource_blob_name(&name)
+            if !tern_core::palm::font::is_prc_font_resource_blob_name(&name)
             {
                 continue;
             }
-            let Some(id) = tern_core::prc_app::font::parse_font_resource_id_from_name(&name) else {
+            let Some(id) = tern_core::palm::font::parse_font_resource_id_from_name(&name) else {
                 continue;
             };
             let Ok(data) = fs::read(dent.path()) else {
@@ -594,7 +613,7 @@ impl ImageSource for DesktopImageSource {
             if data.len() < 26 {
                 continue;
             }
-            out.push(tern_core::prc_app::runtime::ResourceBlob {
+            out.push(tern_core::palm::runtime::ResourceBlob {
                 kind: u32::from_be_bytes(*b"NFNT"),
                 id,
                 data,
@@ -606,11 +625,11 @@ impl ImageSource for DesktopImageSource {
         out
     }
 
-    fn load_prc_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+    fn load_prc_system_fonts(&mut self) -> Vec<tern_core::palm::runtime::PalmFont> {
         self.load_prc_fonts_with_variant(false)
     }
 
-    fn load_home_system_fonts(&mut self) -> Vec<tern_core::prc_app::runtime::PalmFont> {
+    fn load_home_system_fonts(&mut self) -> Vec<tern_core::palm::runtime::PalmFont> {
         self.load_prc_fonts_with_variant(true)
     }
 
@@ -620,7 +639,7 @@ impl ImageSource for DesktopImageSource {
             return Some(InstallSummary::default());
         };
 
-        let db_dir = self.palmdb_db_dir();
+        let db_dir = self.db_data_dir();
         if fs::create_dir_all(&db_dir).is_err() {
             return Some(InstallSummary {
                 scanned: 0,
@@ -630,7 +649,7 @@ impl ImageSource for DesktopImageSource {
                 failed: 1,
             });
         }
-        let catalog_path = self.palmdb_catalog_path();
+        let catalog_path = self.db_catalog_path();
         let mut catalog = load_catalog(&catalog_path);
         let mut summary = InstallSummary::default();
 
@@ -659,7 +678,7 @@ impl ImageSource for DesktopImageSource {
                 summary.failed += 1;
                 continue;
             };
-            let Some(info) = tern_core::prc_app::parse_prc(&data) else {
+            let Some(info) = tern_core::palm::parse_prc(&data) else {
                 summary.failed += 1;
                 continue;
             };
@@ -691,8 +710,8 @@ impl ImageSource for DesktopImageSource {
                         continue;
                     }
                     let kind = match info.kind {
-                        tern_core::prc_app::PrcDbKind::Resource => DbKind::Resource,
-                        tern_core::prc_app::PrcDbKind::Record => DbKind::Record,
+                        tern_core::palm::PrcDbKind::Resource => DbKind::Resource,
+                        tern_core::palm::PrcDbKind::Record => DbKind::Record,
                     };
                     catalog.push(InstalledDbMeta {
                         uid,
@@ -716,8 +735,8 @@ impl ImageSource for DesktopImageSource {
                         meta.identity = identity;
                         meta.attributes = info.attributes;
                         meta.kind = match info.kind {
-                            tern_core::prc_app::PrcDbKind::Resource => DbKind::Resource,
-                            tern_core::prc_app::PrcDbKind::Record => DbKind::Record,
+                            tern_core::palm::PrcDbKind::Resource => DbKind::Resource,
+                            tern_core::palm::PrcDbKind::Record => DbKind::Record,
                         };
                         meta.mod_number = meta.mod_number.saturating_add(1);
                         meta.payload_hash = payload_hash;
@@ -735,7 +754,7 @@ impl ImageSource for DesktopImageSource {
     }
 
     fn list_installed_apps(&mut self) -> Vec<InstalledAppEntry> {
-        let catalog = load_catalog(&self.palmdb_catalog_path());
+        let catalog = load_catalog(&self.db_catalog_path());
         let mut out = Vec::new();
         for meta in catalog {
             // Show launchable app-like databases in Home > Apps.
@@ -743,7 +762,7 @@ impl ImageSource for DesktopImageSource {
             if meta.identity.db_type != *b"appl" && meta.identity.db_type != *b"panl" {
                 continue;
             }
-            let path = format!("palmdb/v1/db/{:016x}.tdb", meta.uid);
+            let path = format!("db/v1/db/{:016x}.tdb", meta.uid);
             let icon = fs::read(self.root.join(&path))
                 .ok()
                 .and_then(|raw| extract_app_icon(&raw));
@@ -760,44 +779,38 @@ impl ImageSource for DesktopImageSource {
 
 impl PersistenceSource for DesktopImageSource {
     fn save_resume(&mut self, name: Option<&str>) {
-        let path = self.resume_path();
-        if let Some(name) = name {
-            let _ = fs::write(path, name.as_bytes());
-        } else {
-            let _ = fs::remove_file(path);
-        }
+        let mut state_db = self.load_state_db();
+        state_db.resume = name.map(|value| value.to_string());
+        self.save_state_db(&state_db);
+        let _ = fs::remove_file(self.root.join(".tern_resume"));
+        let _ = fs::remove_file(self.resume_path_legacy());
     }
 
     fn load_resume(&mut self) -> Option<String> {
-        let data = fs::read(self.resume_path())
-            .or_else(|_| fs::read(self.resume_path_legacy()))
-            .ok()?;
-        let name = String::from_utf8_lossy(&data).trim().to_string();
-        if name.is_empty() {
-            None
-        } else {
-            Some(name)
-        }
+        let state_db = self.load_state_db();
+        state_db.resume.or_else(|| {
+            let data = fs::read(self.root.join(".tern_resume"))
+                .or_else(|_| fs::read(self.resume_path_legacy()))
+                .ok()?;
+            let name = String::from_utf8_lossy(&data).trim().to_string();
+            if name.is_empty() { None } else { Some(name) }
+        })
     }
 
     fn save_book_positions(&mut self, entries: &[(String, usize)]) {
-        let path = self.book_positions_path();
-        if entries.is_empty() {
-            let _ = fs::remove_file(path);
-            return;
-        }
-        let mut contents = String::new();
-        for (name, page) in entries {
-            contents.push_str(name);
-            contents.push('\t');
-            contents.push_str(&page.to_string());
-            contents.push('\n');
-        }
-        let _ = fs::write(path, contents.as_bytes());
+        let mut state_db = self.load_state_db();
+        state_db.book_positions = entries.to_vec();
+        self.save_state_db(&state_db);
+        let _ = fs::remove_file(self.root.join(".tern_books"));
+        let _ = fs::remove_file(self.book_positions_path_legacy());
     }
 
     fn load_book_positions(&mut self) -> Vec<(String, usize)> {
-        let data = match fs::read(self.book_positions_path())
+        let state_db = self.load_state_db();
+        if !state_db.book_positions.is_empty() {
+            return state_db.book_positions;
+        }
+        let data = match fs::read(self.root.join(".tern_books"))
             .or_else(|_| fs::read(self.book_positions_path_legacy()))
         {
             Ok(data) => data,
@@ -823,21 +836,19 @@ impl PersistenceSource for DesktopImageSource {
     }
 
     fn save_recent_entries(&mut self, entries: &[String]) {
-        let path = self.recent_entries_path();
-        if entries.is_empty() {
-            let _ = fs::remove_file(path);
-            return;
-        }
-        let mut contents = String::new();
-        for entry in entries {
-            contents.push_str(entry);
-            contents.push('\n');
-        }
-        let _ = fs::write(path, contents.as_bytes());
+        let mut state_db = self.load_state_db();
+        state_db.recent_entries = entries.to_vec();
+        self.save_state_db(&state_db);
+        let _ = fs::remove_file(self.root.join(".tern_recents"));
+        let _ = fs::remove_file(self.recent_entries_path_legacy());
     }
 
     fn load_recent_entries(&mut self) -> Vec<String> {
-        let data = match fs::read(self.recent_entries_path())
+        let state_db = self.load_state_db();
+        if !state_db.recent_entries.is_empty() {
+            return state_db.recent_entries;
+        }
+        let data = match fs::read(self.root.join(".tern_recents"))
             .or_else(|_| fs::read(self.recent_entries_path_legacy()))
         {
             Ok(data) => data,

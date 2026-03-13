@@ -5,7 +5,7 @@ use alloc::boxed::Box;
 
 use tern_core::display::{Display, GrayscaleMode, RefreshMode};
 use tern_core::framebuffer::{BUFFER_SIZE, DisplayBuffers, HEIGHT as FB_HEIGHT, Rotation, WIDTH as FB_WIDTH};
-use tern_core::ui::Rect;
+use tern_core::ternos::ui::Rect;
 
 use crate::ffi::{self, UpdateMode};
 
