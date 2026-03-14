@@ -23,6 +23,8 @@ pub struct MinifbDisplay {
     buttons: ButtonState,
     input_events: Vec<PlatformInputEvent>,
     mouse_down: bool,
+    mouse_pos: Option<(i32, i32)>,
+    cursor_restore: Vec<(usize, u32)>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -49,6 +51,8 @@ impl MinifbDisplay {
             buttons: ButtonState::default(),
             input_events: Vec::new(),
             mouse_down: false,
+            mouse_pos: None,
+            cursor_restore: Vec::new(),
         };
 
         ret.display_buffer.fill(0xFFFFFFFF);
@@ -61,6 +65,8 @@ impl MinifbDisplay {
     }
 
     pub fn update_display(&mut self /*, window: &mut minifb::Window */) {
+        self.restore_cursor_overlay();
+        self.draw_cursor_overlay();
         self.window
             .update_with_buffer(&self.display_buffer, HEIGHT, WIDTH)
             .unwrap();
@@ -119,6 +125,7 @@ impl MinifbDisplay {
         if let Some((mx, my)) = self.window.get_mouse_pos(minifb::MouseMode::Clamp) {
             let x = mx.round() as i32;
             let y = my.round() as i32;
+            self.mouse_pos = Some((x, y));
             let left_down = self.window.get_mouse_down(minifb::MouseButton::Left);
             if left_down && !self.mouse_down {
                 self.input_events.push(PlatformInputEvent::TouchDown { x, y });
@@ -130,6 +137,9 @@ impl MinifbDisplay {
             self.mouse_down = left_down;
         } else if self.mouse_down {
             self.mouse_down = false;
+            self.mouse_pos = None;
+        } else {
+            self.mouse_pos = None;
         }
         self.buttons.update_with_typed(current, &typed[..typed_len]);
         self.collect_button_events();
@@ -297,6 +307,39 @@ impl MinifbDisplay {
         } else {
             0xFFFFFFFF
         }
+    }
+
+    fn restore_cursor_overlay(&mut self) {
+        for (idx, color) in self.cursor_restore.drain(..) {
+            if idx < self.display_buffer.len() {
+                self.display_buffer[idx] = color;
+            }
+        }
+    }
+
+    fn draw_cursor_overlay(&mut self) {
+        let Some((x, y)) = self.mouse_pos else {
+            return;
+        };
+        for dy in -6..=6 {
+            self.draw_cursor_pixel(x, y + dy, if dy == 0 { 0xFFFF0000 } else { 0xFF000000 });
+        }
+        for dx in -6..=6 {
+            self.draw_cursor_pixel(x + dx, y, if dx == 0 { 0xFFFF0000 } else { 0xFF000000 });
+        }
+        self.draw_cursor_pixel(x, y, 0xFFFFFFFF);
+    }
+
+    fn draw_cursor_pixel(&mut self, x: i32, y: i32, color: u32) {
+        if x < 0 || y < 0 || x >= HEIGHT as i32 || y >= WIDTH as i32 {
+            return;
+        }
+        let idx = y as usize * HEIGHT + x as usize;
+        if idx >= self.display_buffer.len() {
+            return;
+        }
+        self.cursor_restore.push((idx, self.display_buffer[idx]));
+        self.display_buffer[idx] = color;
     }
 }
 

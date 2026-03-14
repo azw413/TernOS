@@ -20,8 +20,8 @@ fn main() {
     let options = minifb::WindowOptions {
         borderless: false,
         title: true,
-        resize: true,
-        scale: minifb::Scale::X2,
+        resize: false,
+        scale: minifb::Scale::X1,
         ..minifb::WindowOptions::default()
     };
     let mut window = minifb::Window::new(
@@ -35,6 +35,7 @@ fn main() {
     });
 
     window.set_target_fps(60);
+    window.set_cursor_visibility(true);
 
     let mut display_buffers = Box::new(DisplayBuffers::default());
     let mut display = Box::new(MinifbDisplay::new(window));

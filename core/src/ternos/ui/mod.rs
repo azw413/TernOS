@@ -12,7 +12,7 @@ pub mod view;
 
 pub use event::UiEvent;
 pub use geom::{Point, Rect, Size};
-pub use list_view::{ListItem, ListView};
+pub use list_view::{ListHit, ListItem, ListView};
 pub use reader_view::ReaderView;
 pub use resource::{FormResource, ObjectResource};
 pub use runtime::{
@@ -20,6 +20,6 @@ pub use runtime::{
     MenuState, ObjectId, ObjectIndex, UiForm, UiObject, UiRuntime, UiTableCell, UiTableColumn,
     UiTableModel, UiTableRow,
 };
-pub use table_view::{TableCellRenderer, TableView};
+pub use table_view::{TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView};
 pub use text_view::TextView;
 pub use view::{flush_queue, RenderQueue, UiContext, View};

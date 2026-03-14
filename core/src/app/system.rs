@@ -73,7 +73,7 @@ pub enum ApplyResumeOutcome {
     None,
     Missing,
     Ready {
-        entry: ImageEntry,
+        path: String,
         page: Option<usize>,
         refreshed: bool,
     },
@@ -248,34 +248,40 @@ impl SystemState {
     pub fn apply_resume<S: AppSource>(
         &mut self,
         outcome: TryResumeOutcome,
-        home: &mut crate::app::home::HomeState,
         source: &mut S,
     ) -> ApplyResumeOutcome {
         let TryResumeOutcome::Resume { path, file, page } = outcome else {
             return ApplyResumeOutcome::None;
         };
-        home.path = path;
-        let entries = match source.refresh(&home.path) {
-            Ok(entries) => {
-                home.set_entries(entries);
-                true
-            }
-            Err(_) => false,
-        };
-        let entry = home
-            .entries
-            .iter()
-            .find(|entry| entry.name == file)
-            .cloned();
-        if let Some(entry) = entry {
-            ApplyResumeOutcome::Ready {
-                entry,
-                page,
-                refreshed: entries,
+        let entries = source.refresh(&path);
+        if let Ok(entries) = entries {
+            let found = entries.iter().any(|entry| entry.name == file);
+            if found {
+                let full_path = if path.is_empty() {
+                    file
+                } else {
+                    alloc::format!("{}/{}", path.join("/"), file)
+                };
+                ApplyResumeOutcome::Ready {
+                    path: full_path,
+                    page,
+                    refreshed: true,
+                }
+            } else {
+                source.save_resume(None);
+                ApplyResumeOutcome::Missing
             }
         } else {
-            source.save_resume(None);
-            ApplyResumeOutcome::Missing
+            let full_path = if path.is_empty() {
+                file
+            } else {
+                alloc::format!("{}/{}", path.join("/"), file)
+            };
+            ApplyResumeOutcome::Ready {
+                path: full_path,
+                page,
+                refreshed: false,
+            }
         }
     }
 

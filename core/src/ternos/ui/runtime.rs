@@ -39,6 +39,7 @@ pub struct UiTableModel {
     pub cols: u16,
     pub columns: Vec<UiTableColumn>,
     pub rows: Vec<UiTableRow>,
+    pub top_row: u16,
     pub selected_row: Option<u16>,
     pub selected_col: Option<u16>,
 }

@@ -38,11 +38,8 @@ use crate::{
         home::{
             HomeAction,
             HomeIcons,
-            HomeOpen,
-            HomeOpenError,
             HomeRenderContext,
             HomeState,
-            MenuAction,
         },
         image_viewer::{ImageViewerContext, ImageViewerState},
         settings::{draw_settings, SettingsContext},
@@ -112,7 +109,6 @@ pub struct Application<'a, S: AppSource> {
 enum AppState {
     StartMenu,
     Settings,
-    Menu,
     Viewing,
     BookViewing,
     ExitingPending,
@@ -170,16 +166,131 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn prc_handle_touch_event(&mut self, event: &PlatformInputEvent) -> bool {
         const PRC_STATUS_H: i32 = 34;
-        let PlatformInputEvent::TouchDown { x, y } = *event else {
-            return false;
+        let (x, y, is_down, is_up) = match *event {
+            PlatformInputEvent::TouchDown { x, y } => (x, y, true, false),
+            PlatformInputEvent::TouchUp { x, y } => (x, y, false, true),
+            _ => return false,
         };
-        if self.prc_menu_controller.is_active() || self.prc_session.is_none() {
+        if self.prc_session.is_none() {
             return false;
         }
 
         let Some((form, pane_x, pane_y, scale)) = self.prc_pane_layout() else {
             return false;
         };
+
+        let local_x = x - pane_x;
+        let local_y = y - pane_y;
+        let palm_x = local_x.div_euclid(scale.max(1));
+        let palm_y = local_y.div_euclid(scale.max(1));
+
+        if let Some(help) = self
+            .prc_session
+            .as_ref()
+            .and_then(|session| session.help_dialog())
+        {
+            if let Some(hit) = palm::ui::hit_test_help_overlay(
+                &help,
+                self.prc_system_fonts.as_slice(),
+                crate::ternos::ui::Point::new(palm_x, palm_y),
+            ) {
+                match hit {
+                    palm::ui::HelpOverlayHit::Done => {
+                        if is_up {
+                            if let Some(session) = self.prc_session.as_mut() {
+                                let _ = session.dismiss_help_dialog();
+                                self.resume_prc_runtime_session();
+                            }
+                        } else {
+                            self.dirty = true;
+                        }
+                        return true;
+                    }
+                    palm::ui::HelpOverlayHit::ScrollUp => {
+                        if is_down {
+                            if let Some(session) = self.prc_session.as_mut() {
+                                if session.scroll_help_dialog(-self.prc_help_controller.scroll_step_lines) {
+                                    self.dirty = true;
+                                }
+                            }
+                        }
+                        return true;
+                    }
+                    palm::ui::HelpOverlayHit::ScrollDown => {
+                        if is_down {
+                            if let Some(session) = self.prc_session.as_mut() {
+                                if session.scroll_help_dialog(self.prc_help_controller.scroll_step_lines) {
+                                    self.dirty = true;
+                                }
+                            }
+                        }
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        if self.prc_menu_controller.is_active() {
+            if let Some((menu, active_menu_index, _)) = self.prc_menu_controller.overlay() {
+                match palm::ui::hit_test_menu_overlay(
+                    menu,
+                    active_menu_index,
+                    self.prc_system_fonts.as_slice(),
+                    crate::ternos::ui::Point::new(palm_x, palm_y),
+                ) {
+                    Some(palm::ui::MenuOverlayHit::Title(menu_index)) => {
+                        if self.prc_menu_controller.select_menu(menu_index) {
+                            self.dirty = true;
+                        }
+                        return true;
+                    }
+                    Some(palm::ui::MenuOverlayHit::Item {
+                        menu_index,
+                        item_index,
+                    }) => {
+                        let mut changed = self.prc_menu_controller.select_menu(menu_index);
+                        changed |= self.prc_menu_controller.select_item(item_index);
+                        if is_up {
+                            match self
+                                .prc_menu_controller
+                                .on_event(palm::ui_component::UiNavEvent::Confirm)
+                            {
+                                palm::controller::MenuAction::Activate(item_id) => {
+                                    if let Some(session) = self.prc_session.as_mut() {
+                                        session.inject_event_now(
+                                            palm::runtime::EVT_MENU,
+                                            item_id,
+                                            "menuSelect",
+                                        );
+                                        self.prc_blocked_elapsed_ms = 0;
+                                        self.prc_blocked_timeout_ticks = 0;
+                                        self.resume_prc_runtime_session();
+                                    }
+                                    self.dirty = true;
+                                }
+                                palm::controller::MenuAction::Redraw
+                                | palm::controller::MenuAction::Closed => {
+                                    self.dirty = true;
+                                }
+                                palm::controller::MenuAction::None => {}
+                            }
+                        } else if changed {
+                            self.dirty = true;
+                        }
+                        return true;
+                    }
+                    None => {
+                        if is_down {
+                            self.prc_menu_controller.close();
+                            self.dirty = true;
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
 
         let content_top = PRC_STATUS_H + 2;
         let pane_h = 160 * scale;
@@ -188,7 +299,8 @@ impl<'a, S: AppSource> Application<'a, S> {
         let strip_h = (size.height as i32 - strip_top).max(0);
         if strip_h > 0 {
             let soft_rect = self.prc_soft_menu_button_rect(strip_top, strip_h);
-            if x >= soft_rect.x
+            if is_down
+                && x >= soft_rect.x
                 && y >= soft_rect.y
                 && x < soft_rect.x + soft_rect.w
                 && y < soft_rect.y + soft_rect.h
@@ -200,8 +312,6 @@ impl<'a, S: AppSource> Application<'a, S> {
             }
         }
 
-        let local_x = x - pane_x;
-        let local_y = y - pane_y;
         if local_x < 0 || local_y < 0 {
             return false;
         }
@@ -234,8 +344,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                             self.prc_blocked_timeout_ticks = 0;
                             self.resume_prc_runtime_session();
                         }
-                        self.dirty = true;
-                        return true;
+                        if is_down {
+                            self.dirty = true;
+                            return true;
+                        }
                     }
                 }
                 _ => {}
@@ -243,6 +355,49 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
 
         false
+    }
+
+    fn start_menu_handle_touch_event(
+        &mut self,
+        event: &PlatformInputEvent,
+        recents: &[String],
+    ) -> bool {
+        if !matches!(
+            event,
+            PlatformInputEvent::TouchDown { .. } | PlatformInputEvent::TouchUp { .. }
+        ) {
+            return false;
+        }
+        let size = self.display_buffers.size();
+        match self
+            .home
+            .handle_start_menu_touch(recents, event, size.width as i32, size.height as i32)
+        {
+            HomeAction::OpenRecent(path) => {
+                if path.to_ascii_lowercase().ends_with(".tdb")
+                    || path.to_ascii_lowercase().ends_with(".prc")
+                {
+                    if let Err(err) = self.open_prc_path(&path) {
+                        self.set_error(err);
+                    }
+                } else {
+                    if let Err(err) = self.open_path(&path) {
+                        if self.system.remove_recent(&path) {
+                            if self.last_viewed_entry.as_deref() == Some(path.as_str()) {
+                                self.last_viewed_entry = None;
+                            }
+                            self.system.save_recent_entries_now(self.source);
+                        }
+                        self.set_error(err);
+                    }
+                }
+                true
+            }
+            HomeAction::None => {
+                self.dirty = true;
+                true
+            }
+        }
     }
 
     fn prc_form_by_id(&self, fid: u16) -> Option<palm::form_preview::FormPreview> {
@@ -371,7 +526,6 @@ impl<'a, S: AppSource> Application<'a, S> {
             exit_from: ExitFrom::Image,
             exit_overlay_drawn: false,
         };
-        app.refresh_entries();
         app.try_resume();
         app
     }
@@ -444,7 +598,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                 || buttons.is_held(input::Buttons::Power))
         {
             self.source.wake();
-            let mut resumed_viewer = false;
             if let Some(overlay) = self.system.sleep_overlay.take() {
                 SystemState::restore_rect_bits(self.display_buffers, &overlay);
                 if self.book_reader.current_book.is_some() {
@@ -457,15 +610,11 @@ impl<'a, S: AppSource> Application<'a, S> {
                 } else {
                     self.set_state_start_menu(true);
                 }
-                resumed_viewer = true;
             } else {
                 self.set_state_start_menu(true);
             }
             self.system.on_wake();
             self.dirty = true;
-            if !resumed_viewer {
-                self.refresh_entries();
-            }
             return;
         }
 
@@ -489,6 +638,15 @@ impl<'a, S: AppSource> Application<'a, S> {
             }
         }
 
+        if matches!(self.state, AppState::StartMenu) {
+            let recents = self.system.collect_recent_paths(self.last_viewed_entry.as_ref());
+            for event in events {
+                if self.start_menu_handle_touch_event(event, &recents) {
+                    return;
+                }
+            }
+        }
+
         match self.state {
             AppState::StartMenu => {
                 let recents = self.system.collect_recent_paths(self.last_viewed_entry.as_ref());
@@ -501,21 +659,14 @@ impl<'a, S: AppSource> Application<'a, S> {
                                 self.set_error(err);
                             }
                         } else {
-                            match self.home.open_recent_path(self.source, &path) {
-                                Ok(()) => {
-                                    let index = self.home.selected;
-                                    self.open_index(index);
-                                }
-                                Err(err) => {
-                                    if self.system.remove_recent(&path) {
-                                        if self.last_viewed_entry.as_deref() == Some(path.as_str())
-                                        {
-                                            self.last_viewed_entry = None;
-                                        }
-                                        self.system.save_recent_entries_now(self.source);
+                            if let Err(err) = self.open_path(&path) {
+                                if self.system.remove_recent(&path) {
+                                    if self.last_viewed_entry.as_deref() == Some(path.as_str()) {
+                                        self.last_viewed_entry = None;
                                     }
-                                    self.set_error(err);
+                                    self.system.save_recent_entries_now(self.source);
                                 }
+                                self.set_error(err);
                             }
                         }
                     }
@@ -535,29 +686,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 }
             }
-            AppState::Menu => {
-                match self.home.handle_menu_input(buttons) {
-                    MenuAction::OpenSelected => {
-                        self.open_selected();
-                    }
-                    MenuAction::Back => {
-                        if !self.home.path.is_empty() {
-                            self.home.path.pop();
-                            self.refresh_entries();
-                        } else {
-                            self.set_state_start_menu(true);
-                        }
-                    }
-                    MenuAction::Dirty => {
-                        self.dirty = true;
-                    }
-                    MenuAction::None => {
-                        if self.system.add_idle(elapsed_ms) {
-                            self.start_sleep_request();
-                        }
-                    }
-                }
-            }
             AppState::Settings => {
                 if buttons.is_pressed(input::Buttons::Back)
                     || buttons.is_pressed(input::Buttons::Confirm)
@@ -571,15 +699,9 @@ impl<'a, S: AppSource> Application<'a, S> {
             }
             AppState::Viewing => {
                 if buttons.is_pressed(input::Buttons::Left) {
-                    if !self.home.entries.is_empty() {
-                        let next = self.home.selected.saturating_sub(1);
-                        self.open_index(next);
-                    }
+                    self.open_neighbor_file(-1);
                 } else if buttons.is_pressed(input::Buttons::Right) {
-                    if !self.home.entries.is_empty() {
-                        let next = (self.home.selected + 1).min(self.home.entries.len() - 1);
-                        self.open_index(next);
-                    }
+                    self.open_neighbor_file(1);
                 } else if buttons.is_pressed(input::Buttons::Back)
                     || buttons.is_pressed(input::Buttons::Confirm)
                 {
@@ -930,7 +1052,6 @@ impl<'a, S: AppSource> Application<'a, S> {
         match self.state {
             AppState::StartMenu => self.draw_start_menu(display),
             AppState::Settings => self.draw_settings(display),
-            AppState::Menu => self.draw_menu(display),
             AppState::Viewing => self.draw_image_viewer(display),
             AppState::BookViewing => {
                 if let Some(indicator) = self.book_reader.take_page_turn_indicator() {
@@ -962,12 +1083,10 @@ impl<'a, S: AppSource> Application<'a, S> {
             AppState::SleepingPending => {
                 self.draw_sleeping_indicator(display);
                 let resume_debug = format!(
-                    "state={:?} current_entry={:?} last_viewed_entry={:?} path={:?} selected={} has_book={} current_page={} last_rendered={:?}",
+                    "state={:?} current_entry={:?} last_viewed_entry={:?} has_book={} current_page={} last_rendered={:?}",
                     self.state,
                     self.current_entry,
                     self.last_viewed_entry,
-                    self.home.path,
-                    self.home.selected,
                     self.book_reader.current_book.is_some(),
                     self.book_reader.current_page,
                     self.book_reader.last_rendered_page
@@ -978,7 +1097,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                     in_start_menu: self.state == AppState::StartMenu,
                     current_entry: self.current_entry.as_ref(),
                     last_viewed_entry: self.last_viewed_entry.as_ref(),
-                    home_current_entry: self.home.current_entry_name_owned(),
+                    home_current_entry: None,
                     book_reader: &self.book_reader,
                 });
                 if outcome.is_ok() {
@@ -1032,44 +1151,68 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
     }
 
-    fn open_selected(&mut self) {
-        let action = match self.home.open_selected() {
-            Ok(action) => action,
-            Err(HomeOpenError::Empty) => {
-                self.error_message = Some("No entries found.".into());
-                self.state = AppState::Error;
-                self.dirty = true;
-                return;
-            }
-        };
-        match action {
-            HomeOpen::EnterDir => {
-                self.refresh_entries();
-                if matches!(self.state, AppState::Error) {
-                    self.home.path.pop();
-                    self.refresh_entries();
-                    self.set_error(ImageError::Message("Folder open failed.".into()));
-                }
-            }
-            HomeOpen::OpenFile(entry) => {
-                self.open_file_entry(entry);
-            }
+    fn split_entry_path(full_path: &str) -> Result<(Vec<String>, ImageEntry), ImageError> {
+        let mut parts: Vec<String> = full_path
+            .split('/')
+            .filter(|p| !p.is_empty())
+            .map(|p| p.to_string())
+            .collect();
+        if parts.is_empty() {
+            return Err(ImageError::Message("Invalid path.".into()));
+        }
+        let name = parts.pop().unwrap_or_default();
+        Ok((
+            parts,
+            ImageEntry {
+                name,
+                kind: EntryKind::File,
+            },
+        ))
+    }
+
+    fn entry_full_path(path: &[String], entry: &ImageEntry) -> String {
+        if path.is_empty() {
+            entry.name.clone()
+        } else {
+            format!("{}/{}", path.join("/"), entry.name)
         }
     }
 
-    fn open_index(&mut self, index: usize) {
-        let Some(action) = self.home.open_index(index) else {
+    fn open_path(&mut self, full_path: &str) -> Result<(), ImageError> {
+        let (path, entry) = Self::split_entry_path(full_path)?;
+        if is_prc(&entry.name) {
+            self.open_prc_path(full_path)
+        } else {
+            self.open_file_entry(path, entry);
+            Ok(())
+        }
+    }
+
+    fn open_neighbor_file(&mut self, delta: i32) {
+        let Some(current) = self.current_entry.clone() else {
             return;
         };
-        match action {
-            HomeOpen::EnterDir => {}
-            HomeOpen::OpenFile(entry) => self.open_file_entry(entry),
+        let Ok((path, entry)) = Self::split_entry_path(&current) else {
+            return;
+        };
+        let Ok(entries) = self.source.refresh(&path) else {
+            return;
+        };
+        let Some(index) = entries.iter().position(|candidate| candidate.name == entry.name) else {
+            return;
+        };
+        let next = (index as i32 + delta).clamp(0, entries.len().saturating_sub(1) as i32) as usize;
+        let Some(next_entry) = entries.get(next).cloned() else {
+            return;
+        };
+        if next_entry.kind == EntryKind::File {
+            self.open_file_entry(path, next_entry);
         }
     }
 
-    fn open_file_entry(&mut self, entry: ImageEntry) {
+    fn open_file_entry(&mut self, path: Vec<String>, entry: ImageEntry) {
         if is_trbk(&entry.name) {
-            self.open_book_entry(entry);
+            self.open_book_entry(path, entry);
             return;
         }
         if is_epub(&entry.name) {
@@ -1079,17 +1222,17 @@ impl<'a, S: AppSource> Application<'a, S> {
             return;
         }
         if is_prc(&entry.name) {
-            self.open_prc_entry(entry);
+            self.open_prc_entry(path, entry);
             return;
         }
-        self.open_image_entry(entry);
+        self.open_image_entry(path, entry);
     }
 
-    fn open_book_entry(&mut self, entry: ImageEntry) {
-        let entry_name = self.home.entry_path_string(&entry);
+    fn open_book_entry(&mut self, path: Vec<String>, entry: ImageEntry) {
+        let entry_name = Self::entry_full_path(&path, &entry);
         match self.book_reader.open(
             self.source,
-            &self.home.path,
+            &path,
             &entry,
             &entry_name,
             &self.system.book_positions,
@@ -1105,10 +1248,10 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
     }
 
-    fn open_image_entry(&mut self, entry: ImageEntry) {
-        match self.image_viewer.open(self.source, &self.home.path, &entry) {
+    fn open_image_entry(&mut self, path: Vec<String>, entry: ImageEntry) {
+        match self.image_viewer.open(self.source, &path, &entry) {
             Ok(()) => {
-                let entry_name = self.home.entry_path_string(&entry);
+                let entry_name = Self::entry_full_path(&path, &entry);
                 self.current_entry = Some(entry_name.clone());
                 self.last_viewed_entry = Some(entry_name.clone());
                 self.mark_recent_now(entry_name);
@@ -1122,20 +1265,20 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
     }
 
-    fn open_prc_entry(&mut self, entry: ImageEntry) {
-        match self.source.load_prc_info(&self.home.path, &entry) {
+    fn open_prc_entry(&mut self, path: Vec<String>, entry: ImageEntry) {
+        match self.source.load_prc_info(&path, &entry) {
             Ok(info) => {
-                let entry_name = self.home.entry_path_string(&entry);
+                let entry_name = Self::entry_full_path(&path, &entry);
                 self.current_entry = Some(entry_name.clone());
                 self.last_viewed_entry = Some(entry_name.clone());
                 self.mark_recent_now(entry_name);
-                self.prc_return_to_start_menu = matches!(self.state, AppState::StartMenu);
+                self.prc_return_to_start_menu = true;
                 self.prc_active_entry = Some(entry.clone());
                 self.prc_session = None;
                 self.prc_blocked_timeout_ticks = 0;
                 self.prc_blocked_elapsed_ms = 0;
                 self.prc_lines = palm::format_info_lines(&info);
-                let runtime_snapshot = self.log_prc_info(&entry, &info);
+                let runtime_snapshot = self.log_prc_info(&path, &entry, &info);
                 self.prc_runtime_form_id = runtime_snapshot.form_id;
                 self.prc_runtime_underlay_form_id = runtime_snapshot.underlay_form_id;
                 self.prc_runtime_focused_field_id = runtime_snapshot.focused_field_id;
@@ -1155,10 +1298,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_forms.clear();
                 self.prc_bitmaps.clear();
                 self.prc_menu_controller.set_menu_bar(None);
-                if let Ok(prc_raw) = self.source.load_prc_bytes(&self.home.path, &entry) {
+                if let Ok(prc_raw) = self.source.load_prc_bytes(&path, &entry) {
                     let mut merged_resources =
                         self.source
-                            .load_prc_app_resources(&self.home.path, &entry, &info);
+                            .load_prc_app_resources(&path, &entry, &info);
                     merged_resources.extend(palm::parse_prc_resource_blobs(&prc_raw));
                     self.prc_forms =
                         palm::form_preview::parse_form_previews_from_resource_blobs(
@@ -1194,7 +1337,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
                 if let Ok(session) = palm::runner::PrcRuntimeSession::from_source(
                     self.source,
-                    &self.home.path,
+                    &path,
                     &entry,
                     &info,
                     0,
@@ -1244,7 +1387,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_blocked_timeout_ticks = 0;
                 self.prc_blocked_elapsed_ms = 0;
                 self.prc_lines = palm::format_info_lines(&info);
-                let runtime_snapshot = self.log_prc_info(&entry, &info);
+                let runtime_snapshot = self.log_prc_info(&path, &entry, &info);
                 self.prc_runtime_form_id = runtime_snapshot.form_id;
                 self.prc_runtime_underlay_form_id = runtime_snapshot.underlay_form_id;
                 self.prc_runtime_focused_field_id = runtime_snapshot.focused_field_id;
@@ -1375,6 +1518,7 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn log_prc_info(
         &mut self,
+        path: &[String],
         entry: &ImageEntry,
         info: &palm::PrcInfo,
     ) -> palm::runner::RuntimeUiSnapshot {
@@ -1603,7 +1747,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         if Self::prc_verbose_logs() {
             palm::runner::log_prc_runtime_first_trap(
                 self.source,
-                &self.home.path,
+                path,
                 entry,
                 info,
                 true,
@@ -1631,21 +1775,6 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.system.save_book_positions_now(self.source);
         self.system.save_recent_entries_now(self.source);
         self.book_reader.close(self.source);
-    }
-
-    fn refresh_entries(&mut self) {
-        match self.home.refresh_entries(self.source) {
-            Ok(()) => {
-                self.image_viewer.clear();
-                self.book_reader.clear();
-                if self.state != AppState::StartMenu {
-                    self.set_state_menu();
-                }
-                self.error_message = None;
-                self.dirty = true;
-            }
-            Err(err) => self.set_error(err),
-        }
     }
 
     fn set_error(&mut self, err: ImageError) {
@@ -1695,26 +1824,10 @@ impl<'a, S: AppSource> Application<'a, S> {
     }
 
     fn exit_prc_viewer_to_origin(&mut self) {
-        let to_start_menu = self.prc_return_to_start_menu;
         self.prc_return_to_start_menu = false;
         self.release_prc_resources();
         self.system.full_refresh = true;
-        if to_start_menu {
-            self.set_state_start_menu(true);
-        } else {
-            self.state = AppState::Menu;
-            self.dirty = true;
-        }
-    }
-
-    fn set_state_menu(&mut self) {
-        if matches!(self.state, AppState::PrcViewing) {
-            self.release_prc_resources();
-            self.prc_return_to_start_menu = false;
-            self.system.full_refresh = true;
-        }
-        self.state = AppState::Menu;
-        self.dirty = true;
+        self.set_state_start_menu(true);
     }
 
     fn set_state_viewing(&mut self) {
@@ -1780,33 +1893,6 @@ impl<'a, S: AppSource> Application<'a, S> {
             draw_trbk_image,
         };
         self.home.draw_start_menu(&mut ctx, display, &recents);
-    }
-
-
-
-    fn draw_menu(&mut self, display: &mut impl crate::display::Display) {
-        let icons = HomeIcons {
-            icon_size: generated_icons::ICON_SIZE as i32,
-            folder_dark: generated_icons::ICON_FOLDER_DARK_MASK,
-            folder_light: generated_icons::ICON_FOLDER_LIGHT_MASK,
-            gear_dark: generated_icons::ICON_GEAR_DARK_MASK,
-            gear_light: generated_icons::ICON_GEAR_LIGHT_MASK,
-            battery_dark: generated_icons::ICON_BATTERY_DARK_MASK,
-            battery_light: generated_icons::ICON_BATTERY_LIGHT_MASK,
-        };
-        let mut ctx = HomeRenderContext {
-            display_buffers: self.display_buffers,
-            gray2_lsb: self.gray2_lsb.as_mut_slice(),
-            gray2_msb: self.gray2_msb.as_mut_slice(),
-            source: self.source,
-            full_refresh: self.system.full_refresh,
-            battery_percent: self.system.battery_percent,
-            render_policy: self.render_policy,
-            palm_fonts: self.prc_system_fonts.as_slice(),
-            icons,
-            draw_trbk_image,
-        };
-        self.home.draw_menu(&mut ctx, display);
     }
 
 
@@ -2252,25 +2338,23 @@ impl<'a, S: AppSource> Application<'a, S> {
         let outcome = self.system.try_resume();
         let outcome = self
             .system
-            .apply_resume(outcome, &mut self.home, self.source);
+            .apply_resume(outcome, self.source);
         match outcome {
             ApplyResumeOutcome::None => {}
             ApplyResumeOutcome::Missing => {}
             ApplyResumeOutcome::Ready {
-                entry,
+                path,
                 page,
                 refreshed,
             } => {
                 if refreshed {
                     self.image_viewer.clear();
                     self.book_reader.clear();
-                    if self.state != AppState::StartMenu {
-                        self.state = AppState::Menu;
-                    }
+                    self.state = AppState::StartMenu;
                     self.error_message = None;
                     self.dirty = true;
                 }
-                self.open_file_entry(entry);
+                let _ = self.open_path(&path);
                 if let Some(page) = page {
                     if let Some(book) = &self.book_reader.current_book {
                         if page < book.page_count {

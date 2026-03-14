@@ -3,17 +3,22 @@ use embedded_graphics::{
     geometry::Size,
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
     pixelcolor::BinaryColor,
-    prelude::{Point, Primitive},
+    prelude::{Point as EgPoint, Primitive},
     primitives::{PrimitiveStyle, Rectangle},
     text::Text,
     Drawable,
 };
 
-use super::geom::Rect;
+use super::geom::{Point as UiPoint, Rect};
 use super::view::{RenderQueue, UiContext, View};
 
 pub struct ListItem<'a> {
     pub label: &'a str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ListHit {
+    pub index: usize,
 }
 
 pub struct ListView<'a> {
@@ -44,6 +49,27 @@ impl<'a> ListView<'a> {
             clear: true,
         }
     }
+
+    pub fn hit_test(&self, rect: Rect, point: UiPoint) -> Option<ListHit> {
+        if self.items.is_empty() || !rect.contains(point) || point.y < self.list_top {
+            return None;
+        }
+
+        let max_lines = ((rect.h - self.list_top - 40) / self.line_height).max(1) as usize;
+        let start = self.selected.saturating_sub(max_lines / 2);
+        let end = (start + max_lines).min(self.items.len());
+        let visible_count = end.saturating_sub(start);
+        if visible_count == 0 {
+            return None;
+        }
+
+        let row = ((point.y - self.list_top) / self.line_height) as usize;
+        if row >= visible_count {
+            return None;
+        }
+
+        Some(ListHit { index: start + row })
+    }
 }
 
 impl View for ListView<'_> {
@@ -54,14 +80,14 @@ impl View for ListView<'_> {
 
         let header_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
         if let Some(title) = self.title {
-            Text::new(title, Point::new(self.margin_x, self.header_y), header_style)
+            Text::new(title, EgPoint::new(self.margin_x, self.header_y), header_style)
                 .draw(ctx.buffers)
                 .ok();
         }
 
         if let Some(footer) = self.footer {
             let y = rect.y + rect.h - 16;
-            Text::new(footer, Point::new(self.margin_x, y), header_style)
+            Text::new(footer, EgPoint::new(self.margin_x, y), header_style)
                 .draw(ctx.buffers)
                 .ok();
         }
@@ -69,7 +95,7 @@ impl View for ListView<'_> {
         if self.items.is_empty() {
             Text::new(
                 self.empty_label.unwrap_or("No items"),
-                Point::new(self.margin_x, self.list_top),
+                EgPoint::new(self.margin_x, self.list_top),
                 header_style,
             )
             .draw(ctx.buffers)
@@ -84,18 +110,18 @@ impl View for ListView<'_> {
                 let y = self.list_top + (idx as i32 * self.line_height);
                 if actual_idx == self.selected {
                     Rectangle::new(
-                        Point::new(rect.x, y - 18),
+                        EgPoint::new(rect.x, y - 18),
                         Size::new(rect.w as u32, self.line_height as u32),
                     )
                     .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
                     .draw(ctx.buffers)
                     .ok();
                     let selected_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
-                    Text::new(item.label, Point::new(self.margin_x, y), selected_style)
+                    Text::new(item.label, EgPoint::new(self.margin_x, y), selected_style)
                         .draw(ctx.buffers)
                         .ok();
                 } else {
-                    Text::new(item.label, Point::new(self.margin_x, y), header_style)
+                    Text::new(item.label, EgPoint::new(self.margin_x, y), header_style)
                         .draw(ctx.buffers)
                         .ok();
                 }

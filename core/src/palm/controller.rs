@@ -290,6 +290,35 @@ impl PrcMenuController {
         self.item_index = None;
     }
 
+    pub fn select_menu(&mut self, index: usize) -> bool {
+        if !self.active {
+            return false;
+        }
+        let count = self.menu_count();
+        if index >= count {
+            return false;
+        }
+        let changed = self.menu_index != index || self.item_index.is_some();
+        self.menu_index = index;
+        self.item_index = None;
+        changed
+    }
+
+    pub fn select_item(&mut self, index: usize) -> bool {
+        if !self.active {
+            return false;
+        }
+        let Some(menu) = self.menu_bar.as_ref().and_then(|b| b.menus.get(self.menu_index)) else {
+            return false;
+        };
+        if index >= menu.items.len() {
+            return false;
+        }
+        let changed = self.item_index != Some(index);
+        self.item_index = Some(index);
+        changed
+    }
+
     pub fn move_menu(&mut self, delta: i32) -> bool {
         let count = self.menu_count();
         if !self.active || count == 0 {

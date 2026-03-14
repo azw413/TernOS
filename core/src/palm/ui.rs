@@ -22,7 +22,20 @@ use crate::palm::{
     runner::{RuntimeBitmapDraw, RuntimeFieldDraw, RuntimeHelpDialog, RuntimeTableDraw},
     runtime::PalmFont,
 };
-use crate::ternos::ui::{prc_alert, prc_components};
+use crate::ternos::ui::{prc_alert, prc_components, Point as UiPoint};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MenuOverlayHit {
+    Title(usize),
+    Item { menu_index: usize, item_index: usize },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HelpOverlayHit {
+    Done,
+    ScrollUp,
+    ScrollDown,
+}
 
 fn find_font(fonts: &[PalmFont], font_id: u8) -> Option<&PalmFont> {
     fonts.iter().find(|f| f.font_id == font_id as u16)
@@ -583,6 +596,115 @@ fn draw_menu_overlay_on_canvas(
             }
         }
     }
+}
+
+pub fn hit_test_menu_overlay(
+    menu: &MenuBarPreview,
+    active_menu_index: usize,
+    fonts: &[PalmFont],
+    point: UiPoint,
+) -> Option<MenuOverlayHit> {
+    if menu.menus.is_empty() {
+        return None;
+    }
+
+    let top_h = 15i32;
+    let menu_font = 1u8;
+    let mut x = 6i32;
+    let mut active_title_bounds: Option<(i32, i32)> = None;
+    for (idx, m) in menu.menus.iter().enumerate() {
+        let (tw, _) = text_metrics(&m.title, menu_font, fonts, 1);
+        let pad = 3i32;
+        let w = (tw + pad * 2).clamp(10, 70);
+        if point.x >= x && point.x < x + w && point.y >= 2 && point.y < top_h - 1 {
+            return Some(MenuOverlayHit::Title(idx));
+        }
+        if idx == active_menu_index {
+            active_title_bounds = Some((x, w));
+        }
+        x += w + 1;
+        if x >= 156 {
+            break;
+        }
+    }
+
+    let menu_idx = active_menu_index.min(menu.menus.len().saturating_sub(1));
+    let pull = &menu.menus[menu_idx];
+    if pull.items.is_empty() {
+        return None;
+    }
+
+    let mut max_w = 56i32;
+    for item in &pull.items {
+        let (tw, _) = text_metrics(&item.text, menu_font, fonts, 1);
+        max_w = max_w.max(tw + 28);
+    }
+    max_w = max_w.min(150);
+    let row_h = 12i32;
+    let h = (pull.items.len() as i32 * row_h + 2).min(150 - top_h);
+    let preferred_x = active_title_bounds.map(|(x, _)| x).unwrap_or(0);
+    let x0 = preferred_x.clamp(0, 159 - max_w);
+    let y0 = top_h - 1;
+
+    if point.x >= x0 && point.x < x0 + max_w && point.y >= y0 && point.y < y0 + h {
+        let rel_y = point.y - (y0 + 1);
+        if rel_y >= 0 {
+            let idx = (rel_y / row_h) as usize;
+            if idx < pull.items.len() {
+                return Some(MenuOverlayHit::Item {
+                    menu_index: menu_idx,
+                    item_index: idx,
+                });
+            }
+        }
+    }
+
+    None
+}
+
+pub fn hit_test_help_overlay(dialog: &RuntimeHelpDialog, fonts: &[PalmFont], point: UiPoint) -> Option<HelpOverlayHit> {
+    let x = 1i32;
+    let y = 1i32;
+    let w = 158i32;
+    let h = 158i32;
+    let header_h = 14i32;
+
+    let (done_tw, done_th) = text_metrics("Done", 1, fonts, 1);
+    let btn_x = x + 8;
+    let layout =
+        prc_components::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 36, 10, 7, 2);
+    let btn_y = y + h - layout.h - 4;
+    if point.x >= btn_x
+        && point.x < btn_x + layout.w
+        && point.y >= btn_y
+        && point.y < btn_y + layout.h
+    {
+        return Some(HelpOverlayHit::Done);
+    }
+
+    let body_h = h - header_h - 26;
+    let line_h = 12i32;
+    let visible = (body_h / line_h).max(1) as usize;
+    let body_w = w - 14;
+    let lines = wrap_text_lines(&dialog.text, 1, body_w, fonts);
+    let max_scroll = lines.len().saturating_sub(visible);
+    if max_scroll == 0 {
+        return None;
+    }
+
+    let ind_x = x + w - 11;
+    let ind_y = y + h - 17;
+    let ind_w = 7i32;
+    let ind_h = 14i32;
+    if point.x >= ind_x && point.x < ind_x + ind_w && point.y >= ind_y && point.y < ind_y + ind_h {
+        let mid_y = ind_y + ind_h / 2;
+        if point.y < mid_y {
+            return Some(HelpOverlayHit::ScrollUp);
+        }
+        return Some(HelpOverlayHit::ScrollDown);
+    }
+
+    None
 }
 
 fn wrap_text_lines(text: &str, font_id: u8, max_w: i32, fonts: &[PalmFont]) -> alloc::vec::Vec<alloc::string::String> {
