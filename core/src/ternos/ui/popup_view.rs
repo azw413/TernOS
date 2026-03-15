@@ -16,7 +16,7 @@ use crate::palm::runtime::PalmFont;
 use super::{
     geom::{Point, Rect},
     prc_components::{draw_palm_pull_down_box, draw_palm_text_scaled, palm_text_height_scaled, palm_text_width_scaled},
-    view::{RenderQueue, UiContext, View},
+    view::{RenderLayer, RenderQueue, UiContext, View},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,6 +30,7 @@ pub struct PopupMenuView<'a> {
     pub items: &'a [&'a str],
     pub selected: usize,
     pub open: bool,
+    pub trigger_focused: bool,
     pub trigger_label: &'a str,
     pub trigger_rect: Rect,
     pub popup_rect: Rect,
@@ -88,6 +89,7 @@ impl<'a> PopupMenuView<'a> {
             items,
             selected,
             open,
+            trigger_focused: false,
             trigger_label,
             trigger_rect,
             popup_rect: Rect::new(menu_x, menu_y, menu_w, menu_h),
@@ -212,11 +214,15 @@ impl<'a> PopupMenuView<'a> {
 }
 
 impl View for PopupMenuView<'_> {
+    fn layer(&self) -> RenderLayer {
+        RenderLayer::Overlay
+    }
+
     fn render(&mut self, ctx: &mut UiContext<'_>, _rect: Rect, rq: &mut RenderQueue) {
         let item_font_id = 0u8;
         let item_scale_num = 6;
         let item_scale_den = 5;
-        self.render_category_trigger(ctx.buffers, false);
+        self.render_category_trigger(ctx.buffers, self.trigger_focused);
         if !self.open {
             rq.push(self.trigger_rect, crate::display::RefreshMode::Fast);
             return;

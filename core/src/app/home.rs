@@ -17,7 +17,7 @@ use crate::image_viewer::{AppSource, ImageData, ImageEntry, InstalledAppEntry};
 use crate::platform::ButtonId;
 use crate::platform::PlatformInputEvent;
 use crate::render_policy::RenderPolicy;
-use crate::ternos::ui::{flush_queue_tracked, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, FormResource, ObjectId, ObjectResource, PopupHit, PopupMenuView, Rect, RenderQueue, TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
+use crate::ternos::ui::{flush_queue_tracked, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, render_positioned_views, FormResource, ObjectId, ObjectResource, PopupHit, PopupMenuView, PositionedView, Rect, RenderQueue, TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
 
 const START_MENU_MARGIN: i32 = 16;
 const START_MENU_RECENT_THUMB: i32 = 74;
@@ -1362,17 +1362,35 @@ impl HomeState {
             return;
         }
 
-        let (gray2_used, draw_count) = self.render_start_menu_contents(
-            ctx,
-            false,
-            width,
-            mid_y,
-            list_top,
-            max_items,
-            list_width,
-            item_height,
-            thumb_size,
-        );
+        let partial_rects = self.ui_runtime.invalidation.dirty_rects.clone();
+        let (gray2_used, draw_count) = if !self.ui_runtime.invalidation.full_redraw
+            && !partial_rects.is_empty()
+        {
+            (
+                false,
+                self.render_start_menu_partial(
+                    ctx,
+                    width,
+                    mid_y,
+                    list_top,
+                    list_width,
+                    thumb_size,
+                    partial_rects.as_slice(),
+                ),
+            )
+        } else {
+            self.render_start_menu_contents(
+                ctx,
+                false,
+                width,
+                mid_y,
+                list_top,
+                max_items,
+                list_width,
+                item_height,
+                thumb_size,
+            )
+        };
         log::info!(
             "Start menu render: recents={}, cache={}",
             draw_count,
@@ -1574,7 +1592,7 @@ impl HomeState {
             LauncherCategory::Books => "Books",
             LauncherCategory::Images => "Images",
         };
-        let popup = PopupMenuView::category_menu(
+        let mut popup = PopupMenuView::category_menu(
             width,
             category_label,
             &["Recents", "Apps", "Books", "Images"],
@@ -1582,14 +1600,15 @@ impl HomeState {
             self.category_menu_open,
             ctx.palm_fonts,
         );
+        popup.trigger_focused = self.action_trigger_focused();
         self.last_category_trigger_rect = Some(popup.trigger_rect);
         if self.category_menu_open {
             self.last_category_popup_rect = Some(popup.popup_rect);
             self.sync_category_popup_bounds_from_view(&popup);
         }
-        popup.render_category_trigger(ctx.display_buffers, self.action_trigger_focused());
 
         let mut draw_count = 0usize;
+        let mut popup_rendered = false;
         if matches!(
             self.launcher_category,
             LauncherCategory::Recents
@@ -1658,7 +1677,37 @@ impl HomeState {
                         draw_trbk_image: ctx.draw_trbk_image,
                     };
                     table.renderer = Some(&renderer);
-                    table.render(&mut ui, table_rect, &mut RenderQueue::default());
+                    if has_scrollbar {
+                        let total_rows =
+                            self.launcher_total_rows_for_category(&self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>(), self.launcher_category);
+                        let visible_rows = Self::launcher_visible_rows_for_category(self.launcher_category)
+                            .min(total_rows.max(1));
+                        let top_row = self.launcher_top_row_for_category(self.launcher_category);
+                        if total_rows > visible_rows {
+                            let mut scrollbar = TableScrollBarView::new(top_row, visible_rows, total_rows);
+                            let mut views = [
+                                PositionedView { rect: table_rect, view: &mut table },
+                                PositionedView { rect: scrollbar_rect, view: &mut scrollbar },
+                                PositionedView { rect: popup.popup_rect, view: &mut popup },
+                            ];
+                            render_positioned_views(&mut ui, &mut RenderQueue::default(), &mut views);
+                            popup_rendered = true;
+                        } else {
+                            let mut views = [
+                                PositionedView { rect: table_rect, view: &mut table },
+                                PositionedView { rect: popup.popup_rect, view: &mut popup },
+                            ];
+                            render_positioned_views(&mut ui, &mut RenderQueue::default(), &mut views);
+                            popup_rendered = true;
+                        }
+                    } else {
+                        let mut views = [
+                            PositionedView { rect: table_rect, view: &mut table },
+                            PositionedView { rect: popup.popup_rect, view: &mut popup },
+                        ];
+                        render_positioned_views(&mut ui, &mut RenderQueue::default(), &mut views);
+                        popup_rendered = true;
+                    }
                 } else {
                     let renderer = AppsTableRenderer {
                         apps: &self.installed_apps,
@@ -1667,17 +1716,36 @@ impl HomeState {
                         draw_trbk_image: ctx.draw_trbk_image,
                     };
                     table.renderer = Some(&renderer);
-                    table.render(&mut ui, table_rect, &mut RenderQueue::default());
-                }
-                if has_scrollbar {
-                    let total_rows =
-                        self.launcher_total_rows_for_category(&self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>(), self.launcher_category);
-                    let visible_rows = Self::launcher_visible_rows_for_category(self.launcher_category)
-                        .min(total_rows.max(1));
-                    let top_row = self.launcher_top_row_for_category(self.launcher_category);
-                    if total_rows > visible_rows {
-                        let mut scrollbar = TableScrollBarView::new(top_row, visible_rows, total_rows);
-                        scrollbar.render(&mut ui, scrollbar_rect, &mut RenderQueue::default());
+                    if has_scrollbar {
+                        let total_rows =
+                            self.launcher_total_rows_for_category(&self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>(), self.launcher_category);
+                        let visible_rows = Self::launcher_visible_rows_for_category(self.launcher_category)
+                            .min(total_rows.max(1));
+                        let top_row = self.launcher_top_row_for_category(self.launcher_category);
+                        if total_rows > visible_rows {
+                            let mut scrollbar = TableScrollBarView::new(top_row, visible_rows, total_rows);
+                            let mut views = [
+                                PositionedView { rect: table_rect, view: &mut table },
+                                PositionedView { rect: scrollbar_rect, view: &mut scrollbar },
+                                PositionedView { rect: popup.popup_rect, view: &mut popup },
+                            ];
+                            render_positioned_views(&mut ui, &mut RenderQueue::default(), &mut views);
+                            popup_rendered = true;
+                        } else {
+                            let mut views = [
+                                PositionedView { rect: table_rect, view: &mut table },
+                                PositionedView { rect: popup.popup_rect, view: &mut popup },
+                            ];
+                            render_positioned_views(&mut ui, &mut RenderQueue::default(), &mut views);
+                            popup_rendered = true;
+                        }
+                    } else {
+                        let mut views = [
+                            PositionedView { rect: table_rect, view: &mut table },
+                            PositionedView { rect: popup.popup_rect, view: &mut popup },
+                        ];
+                        render_positioned_views(&mut ui, &mut RenderQueue::default(), &mut views);
+                        popup_rendered = true;
                     }
                 }
             }
@@ -1693,29 +1761,16 @@ impl HomeState {
                 .ok();
         }
 
-        if self.category_menu_open {
-            let label = match self.launcher_category {
-                LauncherCategory::Recents => "Recents",
-                LauncherCategory::Apps => "Apps",
-                LauncherCategory::Books => "Books",
-                LauncherCategory::Images => "Images",
-            };
-            let mut popup = PopupMenuView::category_menu(
-                width,
-                label,
-                &["Recents", "Apps", "Books", "Images"],
-                self.selected_category_menu_index().unwrap_or(self.category_menu_index),
-                true,
-                ctx.palm_fonts,
-            );
-            self.last_category_trigger_rect = Some(popup.trigger_rect);
-            self.last_category_popup_rect = Some(popup.popup_rect);
-            self.sync_category_popup_bounds_from_view(&popup);
+        if !popup_rendered {
             let mut popup_ui = UiContext {
                 buffers: ctx.display_buffers,
                 render_policy: ctx.render_policy,
             };
-            popup.render(&mut popup_ui, popup.popup_rect, &mut RenderQueue::default());
+            let mut views = [PositionedView {
+                rect: popup.popup_rect,
+                view: &mut popup,
+            }];
+            render_positioned_views(&mut popup_ui, &mut RenderQueue::default(), &mut views);
         }
 
         if let Some(dialog) = self.install_dialog.as_ref() {
@@ -1723,6 +1778,137 @@ impl HomeState {
         }
 
         (gray2_used, draw_count)
+    }
+
+    fn render_start_menu_partial<S: AppSource>(
+        &mut self,
+        ctx: &mut HomeRenderContext<'_, S>,
+        width: i32,
+        mid_y: i32,
+        list_top: i32,
+        list_width: i32,
+        thumb_size: i32,
+        dirty_rects: &[Rect],
+    ) -> usize {
+        let inactive = *ctx.display_buffers.get_inactive_buffer();
+        ctx.display_buffers
+            .get_active_buffer_mut()
+            .copy_from_slice(&inactive);
+
+        let category_label = match self.launcher_category {
+            LauncherCategory::Recents => "Recents",
+            LauncherCategory::Apps => "Apps",
+            LauncherCategory::Books => "Books",
+            LauncherCategory::Images => "Images",
+        };
+        let popup = PopupMenuView::category_menu(
+            width,
+            category_label,
+            &["Recents", "Apps", "Books", "Images"],
+            self.selected_category_menu_index().unwrap_or(self.category_menu_index),
+            self.category_menu_open,
+            ctx.palm_fonts,
+        );
+
+        let repaint_trigger = dirty_rects.iter().any(|rect| rect.intersects(popup.trigger_rect));
+        let repaint_popup =
+            self.category_menu_open && dirty_rects.iter().any(|rect| rect.intersects(popup.popup_rect));
+
+        let content_h = (mid_y - list_top).max(1);
+        let has_scrollbar = matches!(
+            self.launcher_category,
+            LauncherCategory::Apps | LauncherCategory::Books | LauncherCategory::Images
+        );
+        let scrollbar_w = if has_scrollbar { 12 } else { 0 };
+        let table_rect = Rect::new(
+            START_MENU_MARGIN - 4,
+            list_top - 4,
+            list_width + 8 - scrollbar_w,
+            content_h,
+        );
+        let scrollbar_rect = Rect::new(
+            table_rect.x + table_rect.w + 1,
+            list_top,
+            scrollbar_w.saturating_sub(1),
+            content_h - 8,
+        );
+        let model = self.build_launcher_table_model(&self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>());
+        let draw_count = model.rows.len();
+        if draw_count == 0 {
+            return 0;
+        }
+        let mut ui = UiContext {
+            buffers: ctx.display_buffers,
+            render_policy: ctx.render_policy,
+        };
+        let mut table = TableView::new(&model);
+        table.clear = false;
+        if matches!(
+            self.launcher_category,
+            LauncherCategory::Recents | LauncherCategory::Books | LauncherCategory::Images
+        ) {
+            let previews = match self.launcher_category {
+                LauncherCategory::Recents => &self.start_menu_cache,
+                LauncherCategory::Books => &self.books_cache,
+                LauncherCategory::Images => &self.images_cache,
+                LauncherCategory::Apps => &self.start_menu_cache,
+            };
+            let renderer = RecentTableRenderer {
+                previews,
+                thumb_size,
+                palm_fonts: ctx.palm_fonts,
+                render_policy: ctx.render_policy,
+                draw_trbk_image: ctx.draw_trbk_image,
+            };
+            table.renderer = Some(&renderer);
+            for row_index in model.top_row as usize..model.rows.len() {
+                let Some(row_rect) = table.row_rect(table_rect, row_index) else {
+                    break;
+                };
+                if dirty_rects.iter().any(|rect| rect.intersects(row_rect)) {
+                    table.render_row(&mut ui, table_rect, row_index);
+                }
+            }
+        } else {
+            let renderer = AppsTableRenderer {
+                apps: &self.installed_apps,
+                palm_fonts: ctx.palm_fonts,
+                render_policy: ctx.render_policy,
+                draw_trbk_image: ctx.draw_trbk_image,
+            };
+            table.renderer = Some(&renderer);
+            for row_index in model.top_row as usize..model.rows.len() {
+                let Some(row_rect) = table.row_rect(table_rect, row_index) else {
+                    break;
+                };
+                if dirty_rects.iter().any(|rect| rect.intersects(row_rect)) {
+                    table.render_row(&mut ui, table_rect, row_index);
+                }
+            }
+        }
+        if has_scrollbar && dirty_rects.iter().any(|rect| rect.intersects(scrollbar_rect)) {
+            let total_rows =
+                self.launcher_total_rows_for_category(&self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>(), self.launcher_category);
+            let visible_rows = Self::launcher_visible_rows_for_category(self.launcher_category)
+                .min(total_rows.max(1));
+            let top_row = self.launcher_top_row_for_category(self.launcher_category);
+            if total_rows > visible_rows {
+                let mut scrollbar = TableScrollBarView::new(top_row, visible_rows, total_rows);
+                scrollbar.render(&mut ui, scrollbar_rect, &mut RenderQueue::default());
+            }
+        }
+        if repaint_trigger {
+            popup.render_category_trigger(ctx.display_buffers, self.action_trigger_focused());
+        }
+        if repaint_popup {
+            let mut popup_ui = UiContext {
+                buffers: ctx.display_buffers,
+                render_policy: ctx.render_policy,
+            };
+            let mut popup_view = popup;
+            popup_view.render(&mut popup_ui, popup_view.popup_rect, &mut RenderQueue::default());
+        }
+        draw_count
     }
 
     fn draw_install_dialog(
@@ -2201,6 +2387,9 @@ pub fn draw_icon_gray2(
     light_mask: &[u8],
 ) {
     if width <= 0 || height <= 0 {
+        return;
+    }
+    if gray2_lsb.len() < BUFFER_SIZE || gray2_msb.len() < BUFFER_SIZE {
         return;
     }
     let width_u = width as usize;

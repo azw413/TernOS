@@ -24,4 +24,7 @@ pub use runtime::{
 };
 pub use table_view::{TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView};
 pub use text_view::TextView;
-pub use view::{flush_queue, flush_queue_tracked, FlushSummary, RenderQueue, UiContext, View};
+pub use view::{
+    flush_queue, flush_queue_tracked, render_positioned_views, FlushSummary, PositionedView,
+    RenderLayer, RenderQueue, UiContext, View,
+};

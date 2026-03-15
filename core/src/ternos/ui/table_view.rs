@@ -165,6 +165,74 @@ impl<'a> TableView<'a> {
         }
         x_positions
     }
+
+    pub fn render_row(&self, ctx: &mut UiContext<'_>, rect: Rect, row_index: usize) {
+        if rect.w <= 0 || rect.h <= 0 {
+            return;
+        }
+        let Some(row) = self.model.rows.get(row_index) else {
+            return;
+        };
+        let Some(row_rect) = self.row_rect(rect, row_index) else {
+            return;
+        };
+        let col_count = self.model.cols.max(1) as usize;
+        let x_positions = self.column_edges(rect);
+        let header_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
+        let row_top = row_rect.y;
+        let row_bottom = row_rect.y + row_rect.h - 1;
+        let selected_row = self.model.selected_row == Some(row_index as u16);
+
+        let _ = Rectangle::new(
+            EgPoint::new(row_rect.x, row_top),
+            Size::new(row_rect.w as u32, row_rect.h.max(1) as u32),
+        )
+        .into_styled(PrimitiveStyle::with_fill(if selected_row {
+            BinaryColor::Off
+        } else {
+            BinaryColor::On
+        }))
+        .draw(ctx.buffers);
+
+        for col_index in 0..col_count {
+            let cell_left = x_positions[col_index];
+            let cell_right = x_positions[col_index + 1] - 1;
+            let cell_rect = Rect::new(
+                cell_left,
+                row_top,
+                (cell_right - cell_left + 1).max(1),
+                row_rect.h.max(1),
+            );
+            let selected = selected_row && self.model.selected_col == Some(col_index as u16);
+            let fallback_cell = UiTableCell {
+                text: String::new(),
+            };
+            let cell = row.cells.get(col_index).unwrap_or(&fallback_cell);
+            if let Some(renderer) = self.renderer {
+                renderer.render_cell(ctx, cell_rect, row, cell, row_index, col_index, selected);
+            } else {
+                let style = MonoTextStyle::new(
+                    &FONT_10X20,
+                    if selected_row { BinaryColor::On } else { BinaryColor::Off },
+                );
+                Text::new(
+                    &cell.text,
+                    EgPoint::new(cell_left + 4, row_top + 14),
+                    if row.cells.is_empty() { header_style } else { style },
+                )
+                .draw(ctx.buffers)
+                .ok();
+            }
+
+            if self.draw_grid && col_index + 1 < col_count {
+                draw_dotted_vline(ctx.buffers, cell_right, row_top, row_bottom, BinaryColor::Off);
+            }
+        }
+
+        if self.draw_grid && row_index + 1 < self.model.rows.len() {
+            draw_dotted_hline(ctx.buffers, rect.x, rect.x + rect.w - 1, row_bottom, BinaryColor::Off);
+        }
+    }
 }
 
 pub struct TableScrollBarView {
@@ -231,67 +299,13 @@ impl View for TableView<'_> {
             return;
         }
 
-        let col_count = self.model.cols.max(1) as usize;
-        let x_positions = self.column_edges(rect);
-
-        let header_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
-        let mut y = rect.y;
         let top_row = self.model.top_row as usize;
-        for (row_index, row) in self.model.rows.iter().enumerate().skip(top_row) {
-            let row_h = (row.height as i32).max(1);
-            let row_top = y;
-            let row_bottom = (y + row_h - 1).min(rect.y + rect.h - 1);
-            let selected_row = self.model.selected_row == Some(row_index as u16);
-
-            if selected_row {
-                let _ = Rectangle::new(
-                    EgPoint::new(rect.x, row_top),
-                    Size::new(rect.w as u32, (row_bottom - row_top + 1).max(1) as u32),
-                )
-                .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
-                .draw(ctx.buffers);
-            }
-
-            for col_index in 0..col_count {
-                let cell_left = x_positions[col_index];
-                let cell_right = x_positions[col_index + 1] - 1;
-                let cell_rect = Rect::new(
-                    cell_left,
-                    row_top,
-                    (cell_right - cell_left + 1).max(1),
-                    (row_bottom - row_top + 1).max(1),
-                );
-                let selected = selected_row && self.model.selected_col == Some(col_index as u16);
-                let fallback_cell = UiTableCell {
-                    text: String::new(),
-                };
-                let cell = row.cells.get(col_index).unwrap_or(&fallback_cell);
-                if let Some(renderer) = self.renderer {
-                    renderer.render_cell(ctx, cell_rect, row, cell, row_index, col_index, selected);
-                } else {
-                    let style = MonoTextStyle::new(
-                        &FONT_10X20,
-                        if selected_row { BinaryColor::On } else { BinaryColor::Off },
-                    );
-                    Text::new(
-                        &cell.text,
-                        EgPoint::new(cell_left + 4, row_top + 14),
-                        if row.cells.is_empty() { header_style } else { style },
-                    )
-                    .draw(ctx.buffers)
-                    .ok();
-                }
-
-                if self.draw_grid && col_index + 1 < col_count {
-                    draw_dotted_vline(ctx.buffers, cell_right, row_top, row_bottom, BinaryColor::Off);
-                }
-            }
-
-            if self.draw_grid && row_index + 1 < self.model.rows.len() {
-                draw_dotted_hline(ctx.buffers, rect.x, rect.x + rect.w - 1, row_bottom, BinaryColor::Off);
-            }
-            y += row_h;
-            if y >= rect.y + rect.h {
+        for row_index in top_row..self.model.rows.len() {
+            let Some(row_rect) = self.row_rect(rect, row_index) else {
+                break;
+            };
+            self.render_row(ctx, rect, row_index);
+            if row_rect.y + row_rect.h >= rect.y + rect.h {
                 break;
             }
         }

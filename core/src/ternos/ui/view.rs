@@ -47,8 +47,37 @@ pub struct UiContext<'a> {
     pub render_policy: RenderPolicy,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RenderLayer {
+    Base,
+    Overlay,
+}
+
 pub trait View {
     fn render(&mut self, ctx: &mut UiContext<'_>, rect: Rect, rq: &mut RenderQueue);
+
+    fn layer(&self) -> RenderLayer {
+        RenderLayer::Base
+    }
+}
+
+pub struct PositionedView<'a> {
+    pub rect: Rect,
+    pub view: &'a mut dyn View,
+}
+
+pub fn render_positioned_views(
+    ctx: &mut UiContext<'_>,
+    rq: &mut RenderQueue,
+    views: &mut [PositionedView<'_>],
+) {
+    for layer in [RenderLayer::Base, RenderLayer::Overlay] {
+        for positioned in views.iter_mut() {
+            if positioned.view.layer() == layer {
+                positioned.view.render(ctx, positioned.rect, rq);
+            }
+        }
+    }
 }
 
 pub fn flush_queue(

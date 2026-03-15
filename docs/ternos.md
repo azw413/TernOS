@@ -240,6 +240,137 @@ It should own:
 - invalidation/redraw state
 - event queue
 
+### UI Golden Rules
+
+The UI boundary must remain strict.
+
+Native Tern apps should be authored at the same level of abstraction as Palm OS apps:
+
+- forms
+- menus
+- alerts
+- controls
+- fields
+- lists
+- tables
+
+Native apps must not have lower-level rendering control than a Palm app.
+
+That means a native app may:
+
+- declare forms, menus, alerts, and control trees
+- choose layout within the UI resource/model APIs
+- respond to high-level UI events
+- update business state and request application actions
+
+A native app must not:
+
+- choose framebuffer update rectangles directly
+- choose child paint order directly
+- perform widget hit-testing directly
+- own focus traversal rules
+- own popup/menu z-order rules
+- translate hardware button or touch input itself
+- depend on device-specific presentation behavior
+
+The ownership split is:
+
+- app layer
+  - declarative screen structure
+  - business state
+  - response to high-level UI events such as activate/select/scroll/dismiss
+- `ternos::ui`
+  - widget state
+  - layout
+  - focus and selection
+  - hit-testing
+  - event routing
+  - invalidation and damage tracking
+  - composition order
+  - rendering
+- platform/hardware layer
+  - convert buttons/touchscreen input into platform events
+  - present rendered regions to the physical display
+  - expose device capabilities such as size, DPI, BPP, and refresh constraints
+
+### Declarative Parity With Palm
+
+The native UI API should be equivalent in spirit to Palm resource-driven UI, not a lower-level retained drawing API.
+
+In practice this means:
+
+- if a Palm app would define a form, menu, table, field, or alert, a native app should define the equivalent through `ternos::ui`
+- if a Palm app would wait for an event and handle it in form/menu/control logic, a native app should do the same through `ternos::ui`
+- if a Palm app could not manually decide z-order or partial refresh rectangles, a native Tern app should not be able to do so either
+
+The intent is that native apps and Palm apps meet in the same canonical UI runtime, with Palm traps acting only as compatibility adapters.
+
+### Composition And Layering Rules
+
+Composition order is a UI-runtime concern, not an app concern.
+
+The default layer model should be:
+
+- base form content
+- transient controls such as scrollbars and pull-down triggers
+- overlays such as popup menus, alerts, and help dialogs
+
+Overlays must render after base content so they appear on top.
+
+Apps should not manually sequence:
+
+- table before popup
+- control before alert
+- content before help overlay
+
+If a future case needs non-default ordering, that should be introduced as a relative layering API in `ternos::ui`, not by app-side draw order.
+
+### Input And Event Rules
+
+The platform layer produces low-level platform events.
+
+`ternos::ui` must convert those into canonical UI behavior:
+
+- touch or pointer hit-testing
+- button and directional navigation
+- focus movement
+- control activation
+- scrolling
+- popup/menu interaction
+
+Apps should receive high-level UI events and callbacks, not raw hardware input.
+
+Palm compatibility follows the same rule:
+
+- Palm ABI/trap code decodes Palm events and memory structures
+- Palm compatibility code translates them into canonical `ternos::ui` operations
+- `ternos::ui` owns the actual widget behavior
+
+### Damage And Presentation Rules
+
+Apps should not think in terms of partial refresh rectangles.
+
+Damage tracking must be derived from canonical UI state transitions:
+
+- old bounds
+- new bounds
+- exposed regions
+- overlay open/close
+- focus/selection changes
+- scroll viewport changes
+
+`ternos::ui` decides what regions are dirty.
+
+The platform layer decides how to present those regions on the target display.
+
+This keeps device-specific display behavior out of apps while still allowing:
+
+- desktop blitting
+- X4 partial e-ink refresh
+- M5Paper region update strategies
+
+without changing application code.
+
 ### Core Types
 
 Suggested public types:
