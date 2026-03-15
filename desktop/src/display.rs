@@ -4,7 +4,7 @@ use tern_core::platform::{
     PlatformInputEvent,
 };
 use tern_core::{
-    display::{GrayscaleMode, HEIGHT, RefreshMode, WIDTH},
+    display::{DamageOverlayKind, DamageOverlayRect, GrayscaleMode, HEIGHT, RefreshMode, WIDTH},
     framebuffer::DisplayBuffers,
     input::{ButtonState, Buttons},
 };
@@ -25,6 +25,8 @@ pub struct MinifbDisplay {
     mouse_down: bool,
     mouse_pos: Option<(i32, i32)>,
     cursor_restore: Vec<(usize, u32)>,
+    damage_overlay: Vec<DamageOverlayRect>,
+    damage_restore: Vec<(usize, u32)>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -53,6 +55,8 @@ impl MinifbDisplay {
             mouse_down: false,
             mouse_pos: None,
             cursor_restore: Vec::new(),
+            damage_overlay: Vec::new(),
+            damage_restore: Vec::new(),
         };
 
         ret.display_buffer.fill(0xFFFFFFFF);
@@ -65,6 +69,8 @@ impl MinifbDisplay {
     }
 
     pub fn update_display(&mut self /*, window: &mut minifb::Window */) {
+        self.restore_damage_overlay();
+        self.draw_damage_overlay();
         self.restore_cursor_overlay();
         self.draw_cursor_overlay();
         self.window
@@ -317,6 +323,14 @@ impl MinifbDisplay {
         }
     }
 
+    fn restore_damage_overlay(&mut self) {
+        for (idx, color) in self.damage_restore.drain(..) {
+            if idx < self.display_buffer.len() {
+                self.display_buffer[idx] = color;
+            }
+        }
+    }
+
     fn draw_cursor_overlay(&mut self) {
         let Some((x, y)) = self.mouse_pos else {
             return;
@@ -339,6 +353,74 @@ impl MinifbDisplay {
             return;
         }
         self.cursor_restore.push((idx, self.display_buffer[idx]));
+        self.display_buffer[idx] = color;
+    }
+
+    fn draw_damage_overlay(&mut self) {
+        let overlay = self.damage_overlay.clone();
+        for item in overlay {
+            self.draw_damage_rect(item);
+        }
+    }
+
+    fn draw_damage_rect(&mut self, overlay: DamageOverlayRect) {
+        let color = match overlay.kind {
+            DamageOverlayKind::Old => 0xFFFF0000,
+            DamageOverlayKind::New => 0xFF00AA00,
+            DamageOverlayKind::Exposed => 0xFF0000FF,
+            DamageOverlayKind::Presented => 0xFFFFA500,
+        };
+        let pattern = match overlay.kind {
+            DamageOverlayKind::Old => 3,
+            DamageOverlayKind::New => 1,
+            DamageOverlayKind::Exposed => 2,
+            DamageOverlayKind::Presented => 4,
+        };
+        let rect = overlay.rect;
+        if rect.w <= 0 || rect.h <= 0 {
+            return;
+        }
+        let x0 = rect.x;
+        let y0 = rect.y;
+        let x1 = rect.x + rect.w - 1;
+        let y1 = rect.y + rect.h - 1;
+        for x in x0..=x1 {
+            if (x - x0) % pattern == 0 {
+                self.draw_damage_pixel(x, y0, color);
+                self.draw_damage_pixel(x, y1, color);
+            }
+        }
+        for y in y0..=y1 {
+            if (y - y0) % pattern == 0 {
+                self.draw_damage_pixel(x0, y, color);
+                self.draw_damage_pixel(x1, y, color);
+            }
+        }
+        if matches!(overlay.kind, DamageOverlayKind::Presented) && rect.w > 2 && rect.h > 2 {
+            for x in (x0 + 1)..=(x1 - 1) {
+                if (x - x0) % pattern == 0 {
+                    self.draw_damage_pixel(x, y0 + 1, color);
+                    self.draw_damage_pixel(x, y1 - 1, color);
+                }
+            }
+            for y in (y0 + 1)..=(y1 - 1) {
+                if (y - y0) % pattern == 0 {
+                    self.draw_damage_pixel(x0 + 1, y, color);
+                    self.draw_damage_pixel(x1 - 1, y, color);
+                }
+            }
+        }
+    }
+
+    fn draw_damage_pixel(&mut self, x: i32, y: i32, color: u32) {
+        if x < 0 || y < 0 || x >= HEIGHT as i32 || y >= WIDTH as i32 {
+            return;
+        }
+        let idx = y as usize * HEIGHT + x as usize;
+        if idx >= self.display_buffer.len() {
+            return;
+        }
+        self.damage_restore.push((idx, self.display_buffer[idx]));
         self.display_buffer[idx] = color;
     }
 }
@@ -417,6 +499,10 @@ impl tern_core::display::Display for MinifbDisplay {
             self.blit_internal(BlitMode::Full);
         }
         buffers.swap_buffers();
+    }
+    fn set_damage_overlay(&mut self, overlay: &[DamageOverlayRect]) {
+        self.damage_overlay.clear();
+        self.damage_overlay.extend_from_slice(overlay);
     }
     fn copy_to_lsb(&mut self, buffers: &[u8; BUFFER_SIZE]) {
         self.lsb_buffer.copy_from_slice(buffers);

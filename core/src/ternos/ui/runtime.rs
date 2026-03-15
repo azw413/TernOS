@@ -3,7 +3,7 @@ extern crate alloc;
 use alloc::{collections::VecDeque, vec::Vec};
 
 use crate::{
-    display::RefreshMode,
+    display::{DamageOverlayKind, DamageOverlayRect, RefreshMode},
     platform::{DisplayCaps, DisplayRotation, LogicalStyle},
     ternos::ui::{event::UiEvent, geom::Rect},
 };
@@ -68,6 +68,28 @@ pub struct InvalidationState {
     pub full_redraw: bool,
     pub dirty_rects: Vec<Rect>,
     pub preferred_refresh: Option<RefreshMode>,
+    pub damage: DamageFrame,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct DamageFrame {
+    pub overlay_rects: Vec<DamageOverlayRect>,
+    pub presented_rects: Vec<Rect>,
+    pub presented_union: Option<Rect>,
+    pub presented_refresh: Option<RefreshMode>,
+}
+
+impl DamageFrame {
+    pub fn clear(&mut self) {
+        self.overlay_rects.clear();
+        self.clear_presented();
+    }
+
+    pub fn clear_presented(&mut self) {
+        self.presented_rects.clear();
+        self.presented_union = None;
+        self.presented_refresh = None;
+    }
 }
 
 impl InvalidationState {
@@ -78,6 +100,9 @@ impl InvalidationState {
     }
 
     pub fn push_rect(&mut self, rect: Rect, refresh: RefreshMode) {
+        if !is_valid_rect(rect) {
+            return;
+        }
         if !self.full_redraw {
             self.dirty_rects.push(rect);
         }
@@ -91,6 +116,66 @@ impl InvalidationState {
         self.full_redraw = false;
         self.dirty_rects.clear();
         self.preferred_refresh = None;
+        self.damage.clear();
+    }
+
+    pub fn record_rect(&mut self, kind: DamageOverlayKind, rect: Rect) {
+        if !is_valid_rect(rect) {
+            return;
+        }
+        self.damage.overlay_rects.push(DamageOverlayRect { kind, rect });
+    }
+
+    pub fn record_old_rect(&mut self, rect: Rect, refresh: RefreshMode) {
+        self.record_rect(DamageOverlayKind::Old, rect);
+        self.push_rect(rect, refresh);
+    }
+
+    pub fn record_new_rect(&mut self, rect: Rect, refresh: RefreshMode) {
+        self.record_rect(DamageOverlayKind::New, rect);
+        self.push_rect(rect, refresh);
+    }
+
+    pub fn record_exposed_rect(&mut self, rect: Rect, refresh: RefreshMode) {
+        self.record_rect(DamageOverlayKind::Exposed, rect);
+        self.push_rect(rect, refresh);
+    }
+
+    pub fn record_transition(
+        &mut self,
+        old_rect: Option<Rect>,
+        new_rect: Option<Rect>,
+        refresh: RefreshMode,
+    ) {
+        if let Some(rect) = old_rect {
+            self.record_old_rect(rect, refresh);
+        }
+        if let Some(rect) = new_rect {
+            self.record_new_rect(rect, refresh);
+        }
+    }
+
+    pub fn record_presented_rect(&mut self, rect: Rect, refresh: RefreshMode) {
+        if !is_valid_rect(rect) {
+            return;
+        }
+        self.damage.presented_rects.push(rect);
+        self.damage.presented_union = Some(match self.damage.presented_union {
+            Some(current) => union_rect(current, rect),
+            None => rect,
+        });
+        self.damage.presented_refresh = Some(match self.damage.presented_refresh {
+            Some(current) => max_refresh(current, refresh),
+            None => refresh,
+        });
+        self.damage.overlay_rects.push(DamageOverlayRect {
+            kind: DamageOverlayKind::Presented,
+            rect,
+        });
+    }
+
+    pub fn finish_frame(&mut self) {
+        self.clear();
     }
 }
 
@@ -113,7 +198,7 @@ impl EventQueue {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UiObject {
     Label { id: ObjectId, bounds: Rect },
     Button { id: ObjectId, bounds: Rect },
@@ -153,7 +238,7 @@ impl UiObject {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct UiForm {
     pub form_id: FormId,
     pub title: Option<alloc::string::String>,
@@ -174,11 +259,17 @@ pub struct UiRuntime {
 
 impl UiRuntime {
     pub fn set_active_form(&mut self, form_id: FormId) {
+        if self.active_form == Some(form_id) {
+            return;
+        }
+        let old_bounds = self.active_form().and_then(form_bounds);
         self.active_form = Some(form_id);
         if self.form_stack.last().copied() != Some(form_id) {
             self.form_stack.push(form_id);
         }
-        self.invalidation.request_full(RefreshMode::Full);
+        let new_bounds = self.active_form().and_then(form_bounds);
+        self.invalidation
+            .record_transition(old_bounds, new_bounds, RefreshMode::Full);
     }
 
     pub fn active_form(&self) -> Option<&UiForm> {
@@ -193,18 +284,56 @@ impl UiRuntime {
 
     pub fn upsert_form(&mut self, form: UiForm) {
         if let Some(existing) = self.forms.iter_mut().find(|entry| entry.form_id == form.form_id) {
+            if existing.title == form.title && existing.objects == form.objects {
+                return;
+            }
+            for old_object in &existing.objects {
+                match form.objects.iter().find(|object| object.id() == old_object.id()) {
+                    Some(new_object) => {
+                        if old_object.bounds() != new_object.bounds() {
+                            self.invalidation.record_transition(
+                                Some(old_object.bounds()),
+                                Some(new_object.bounds()),
+                                RefreshMode::Full,
+                            );
+                        }
+                    }
+                    None => {
+                        self.invalidation
+                            .record_old_rect(old_object.bounds(), RefreshMode::Full);
+                    }
+                }
+            }
+            for new_object in &form.objects {
+                if existing
+                    .objects
+                    .iter()
+                    .all(|object| object.id() != new_object.id())
+                {
+                    self.invalidation
+                        .record_new_rect(new_object.bounds(), RefreshMode::Full);
+                }
+            }
             *existing = form;
         } else {
+            for object in &form.objects {
+                self.invalidation
+                    .record_new_rect(object.bounds(), RefreshMode::Full);
+            }
             self.forms.push(form);
         }
-        self.invalidation.request_full(RefreshMode::Full);
     }
 
     pub fn set_focus(&mut self, form_id: FormId, object_id: Option<ObjectId>) {
+        if self.focus.form_id == Some(form_id) && self.focus.object_id == object_id {
+            return;
+        }
+        let old_bounds = self.focused_object().map(UiObject::bounds);
+        let new_bounds = self.object_bounds(form_id, object_id);
         self.focus.form_id = Some(form_id);
         self.focus.object_id = object_id;
         self.invalidation
-            .request_full(self.invalidation.preferred_refresh.unwrap_or(RefreshMode::Fast));
+            .record_transition(old_bounds, new_bounds, RefreshMode::Fast);
     }
 
     pub fn focused_object(&self) -> Option<&UiObject> {
@@ -222,6 +351,15 @@ impl UiRuntime {
             .find(|form| form.form_id == form_id)
             .map(|form| form.objects.iter().any(|object| object.id() == object_id))
             .unwrap_or(false)
+    }
+
+    pub fn object_bounds(&self, form_id: FormId, object_id: Option<ObjectId>) -> Option<Rect> {
+        let object_id = object_id?;
+        self.forms
+            .iter()
+            .find(|form| form.form_id == form_id)
+            .and_then(|form| form.objects.iter().find(|object| object.id() == object_id))
+            .map(UiObject::bounds)
     }
 }
 
@@ -257,4 +395,31 @@ fn max_refresh(a: RefreshMode, b: RefreshMode) -> RefreshMode {
         (Half, _) | (_, Half) => Half,
         _ => Fast,
     }
+}
+
+fn union_rect(a: Rect, b: Rect) -> Rect {
+    let x0 = a.x.min(b.x);
+    let y0 = a.y.min(b.y);
+    let x1 = (a.x + a.w).max(b.x + b.w);
+    let y1 = (a.y + a.h).max(b.y + b.h);
+    Rect::new(x0, y0, x1 - x0, y1 - y0)
+}
+
+fn is_valid_rect(rect: Rect) -> bool {
+    rect.w > 0 && rect.h > 0
+}
+
+fn form_bounds(form: &UiForm) -> Option<Rect> {
+    let mut bounds = None;
+    for object in &form.objects {
+        let rect = object.bounds();
+        if !is_valid_rect(rect) {
+            continue;
+        }
+        bounds = Some(match bounds {
+            Some(current) => union_rect(current, rect),
+            None => rect,
+        });
+    }
+    bounds
 }

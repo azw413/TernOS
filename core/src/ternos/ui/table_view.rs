@@ -83,6 +83,69 @@ impl<'a> TableView<'a> {
         }
 
         let col_count = self.model.cols.max(1) as usize;
+        for row_index in self.model.top_row as usize..self.model.rows.len() {
+            let Some(row_rect) = self.row_rect(rect, row_index) else {
+                continue;
+            };
+            if point.y >= row_rect.y && point.y < row_rect.y + row_rect.h {
+                for col_index in 0..col_count {
+                    let Some(cell_rect) = self.cell_rect(rect, row_index, col_index) else {
+                        continue;
+                    };
+                    if cell_rect.contains(point) {
+                        return Some(TableHit::Cell { row: row_index, col: col_index });
+                    }
+                }
+                return None;
+            }
+        }
+
+        None
+    }
+
+    pub fn row_rect(&self, rect: Rect, row_index: usize) -> Option<Rect> {
+        if rect.w <= 0 || rect.h <= 0 || row_index < self.model.top_row as usize {
+            return None;
+        }
+        let mut y = rect.y;
+        for (idx, row) in self
+            .model
+            .rows
+            .iter()
+            .enumerate()
+            .skip(self.model.top_row as usize)
+        {
+            let row_h = (row.height as i32).max(1);
+            let row_rect = Rect::new(rect.x, y, rect.w, row_h);
+            if idx == row_index {
+                return (row_rect.y < rect.y + rect.h).then_some(row_rect);
+            }
+            y += row_h;
+            if y >= rect.y + rect.h {
+                break;
+            }
+        }
+        None
+    }
+
+    pub fn cell_rect(&self, rect: Rect, row_index: usize, col_index: usize) -> Option<Rect> {
+        let row_rect = self.row_rect(rect, row_index)?;
+        let x_positions = self.column_edges(rect);
+        if col_index + 1 >= x_positions.len() {
+            return None;
+        }
+        let cell_left = x_positions[col_index];
+        let cell_right = x_positions[col_index + 1] - 1;
+        Some(Rect::new(
+            cell_left,
+            row_rect.y,
+            (cell_right - cell_left + 1).max(1),
+            row_rect.h,
+        ))
+    }
+
+    fn column_edges(&self, rect: Rect) -> Vec<i32> {
+        let col_count = self.model.cols.max(1) as usize;
         let mut x_positions = Vec::with_capacity(col_count + 1);
         x_positions.push(rect.x);
         let mut remaining_w = rect.w;
@@ -100,31 +163,7 @@ impl<'a> TableView<'a> {
             remaining_w -= width;
             remaining_cols -= 1;
         }
-
-        let mut y = rect.y;
-        for (row_index, row) in self.model.rows.iter().enumerate().skip(self.model.top_row as usize) {
-            let row_h = (row.height as i32).max(1);
-            let row_rect = Rect::new(rect.x, y, rect.w, row_h);
-            if point.y >= row_rect.y && point.y < row_rect.y + row_rect.h {
-                for col_index in 0..col_count {
-                    let cell_left = x_positions[col_index];
-                    let cell_right = x_positions[col_index + 1];
-                    if point.x >= cell_left && point.x < cell_right {
-                        return Some(TableHit::Cell {
-                            row: row_index,
-                            col: col_index,
-                        });
-                    }
-                }
-                return None;
-            }
-            y += row_h;
-            if y >= rect.y + rect.h {
-                break;
-            }
-        }
-
-        None
+        x_positions
     }
 }
 
@@ -193,23 +232,7 @@ impl View for TableView<'_> {
         }
 
         let col_count = self.model.cols.max(1) as usize;
-        let mut x_positions = Vec::with_capacity(col_count + 1);
-        x_positions.push(rect.x);
-        let mut remaining_w = rect.w;
-        let mut remaining_cols = col_count as i32;
-        for col_idx in 0..col_count {
-            let explicit = self
-                .model
-                .columns
-                .get(col_idx)
-                .map(|c| c.width as i32)
-                .filter(|w| *w > 0);
-            let width = explicit.unwrap_or_else(|| (remaining_w / remaining_cols.max(1)).max(1));
-            let last_x = *x_positions.last().unwrap_or(&rect.x);
-            x_positions.push(last_x + width);
-            remaining_w -= width;
-            remaining_cols -= 1;
-        }
+        let x_positions = self.column_edges(rect);
 
         let header_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
         let mut y = rect.y;

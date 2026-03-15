@@ -2,6 +2,7 @@ use crate::display::RefreshMode;
 use crate::framebuffer::DisplayBuffers;
 use crate::render_policy::RenderPolicy;
 
+use super::runtime::InvalidationState;
 use super::geom::Rect;
 
 extern crate alloc;
@@ -17,6 +18,14 @@ pub struct RenderRequest {
 #[derive(Default, Debug)]
 pub struct RenderQueue {
     requests: Vec<RenderRequest>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FlushSummary {
+    pub request_count: usize,
+    pub request_rects: Vec<Rect>,
+    pub final_rect: Option<Rect>,
+    pub refresh: Option<RefreshMode>,
 }
 
 impl RenderQueue {
@@ -47,10 +56,23 @@ pub fn flush_queue(
     buffers: &mut DisplayBuffers,
     rq: &mut RenderQueue,
     fallback: RefreshMode,
-) {
+) -> FlushSummary {
+    flush_queue_tracked(display, buffers, rq, fallback, None)
+}
+
+pub fn flush_queue_tracked(
+    display: &mut impl crate::display::Display,
+    buffers: &mut DisplayBuffers,
+    rq: &mut RenderQueue,
+    fallback: RefreshMode,
+    invalidation: Option<&mut InvalidationState>,
+) -> FlushSummary {
     let mut mode = None;
     let mut rect = None;
+    let mut summary = FlushSummary::default();
     for request in rq.drain() {
+        summary.request_count += 1;
+        summary.request_rects.push(request.rect);
         mode = Some(match mode {
             Some(current) => max_refresh(current, request.refresh),
             None => request.refresh,
@@ -60,10 +82,29 @@ pub fn flush_queue(
             None => request.rect,
         });
     }
+    summary.final_rect = rect;
+    summary.refresh = Some(mode.unwrap_or(fallback));
+    if let Some(invalidation) = invalidation {
+        invalidation.damage.clear_presented();
+        for request in &summary.request_rects {
+            invalidation.record_presented_rect(*request, summary.refresh.unwrap_or(fallback));
+        }
+        log::info!(
+            "damage present requests={} semantic={} final={:?} refresh={:?}",
+            summary.request_count,
+            invalidation.damage.overlay_rects.len().saturating_sub(summary.request_count),
+            summary.final_rect,
+            summary.refresh
+        );
+        display.set_damage_overlay(invalidation.damage.overlay_rects.as_slice());
+    } else {
+        display.set_damage_overlay(&[]);
+    }
     match rect {
         Some(rect) => display.display_region(buffers, rect, mode.unwrap_or(fallback)),
         None => display.display(buffers, mode.unwrap_or(fallback)),
     }
+    summary
 }
 
 fn union_rect(a: Rect, b: Rect) -> Rect {
