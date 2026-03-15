@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 
 use embedded_io::{Read, Seek, SeekFrom, Write};
 use tern_core::fs::{DirEntry, Directory, File, Filesystem, Mode};
-use tern_core::palm::{self, PrcCodeScan, PrcDbKind, PrcInfo, PrcResourceEntry, PrcSectionStat};
+use tern_core::palm::{PrcCodeScan, PrcDbKind, PrcInfo, PrcResourceEntry, PrcSectionStat};
 use tern_core::ternos::services::db::{
     DbKind, InstallDecision, InstallInboxEntry, InstallPlanner, InstallSummary,
     InstalledDbIdentity, InstalledDbMeta,
