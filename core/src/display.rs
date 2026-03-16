@@ -46,6 +46,20 @@ pub trait Display {
     fn copy_to_lsb(&mut self, buffers: &[u8; BUFFER_SIZE]);
     fn copy_to_msb(&mut self, buffers: &[u8; BUFFER_SIZE]);
     fn copy_grayscale_buffers(&mut self, lsb: &[u8; BUFFER_SIZE], msb: &[u8; BUFFER_SIZE]);
+    fn copy_grayscale_region(
+        &mut self,
+        lsb: &[u8; BUFFER_SIZE],
+        msb: &[u8; BUFFER_SIZE],
+        _rect: Rect,
+    ) {
+        self.copy_grayscale_buffers(lsb, msb);
+    }
     fn display_differential_grayscale(&mut self, turn_off_screen: bool);
+    fn display_differential_grayscale_region(&mut self, _rect: Rect, turn_off_screen: bool) {
+        self.display_differential_grayscale(turn_off_screen);
+    }
     fn display_absolute_grayscale(&mut self, mode: GrayscaleMode);
+    fn display_absolute_grayscale_region(&mut self, _rect: Rect, mode: GrayscaleMode) {
+        self.display_absolute_grayscale(mode);
+    }
 }

@@ -183,6 +183,7 @@ impl ImageViewerState {
                 let mut ctx_ui = UiContext {
                     buffers: ctx.display_buffers,
                     render_policy: ctx.render_policy,
+                    gray2: None,
                 };
                 let mut reader = ReaderView::new(&image);
                 reader.refresh = RefreshMode::Full;

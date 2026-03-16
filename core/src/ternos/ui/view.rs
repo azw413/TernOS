@@ -45,6 +45,13 @@ impl RenderQueue {
 pub struct UiContext<'a> {
     pub buffers: &'a mut DisplayBuffers,
     pub render_policy: RenderPolicy,
+    pub gray2: Option<Gray2Context<'a>>,
+}
+
+pub struct Gray2Context<'a> {
+    pub lsb: &'a mut [u8],
+    pub msb: &'a mut [u8],
+    pub used: &'a mut bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

@@ -29,6 +29,43 @@ impl PrcUiController {
         self.focus_chain.selected_id()
     }
 
+    pub fn first_control_id(&self, form: Option<&FormPreview>) -> Option<u16> {
+        let controls = focusable_controls(form);
+        if controls.is_empty() {
+            None
+        } else {
+            Some(first_reading_order_id(&controls))
+        }
+    }
+
+    pub fn first_button_id(&self, form: Option<&FormPreview>) -> Option<u16> {
+        let form = form?;
+        form.objects
+            .iter()
+            .filter_map(|obj| match obj {
+                FormPreviewObject::Button { id, x, y, .. } => Some((*id, *y as i32, *x as i32)),
+                _ => None,
+            })
+            .min_by_key(|(id, y, x)| (*y, *x, *id))
+            .map(|(id, _, _)| id)
+    }
+
+    pub fn button_order_debug(&self, form: Option<&FormPreview>) -> Vec<(u16, i32, i32)> {
+        let Some(form) = form else {
+            return Vec::new();
+        };
+        let mut buttons: Vec<(u16, i32, i32)> = form
+            .objects
+            .iter()
+            .filter_map(|obj| match obj {
+                FormPreviewObject::Button { id, x, y, .. } => Some((*id, *y as i32, *x as i32)),
+                _ => None,
+            })
+            .collect();
+        buttons.sort_by_key(|(id, y, x)| (*y, *x, *id));
+        buttons
+    }
+
     pub fn sync_with_form(&mut self, form: Option<&FormPreview>) -> bool {
         let previous = self.focus_chain.selected_id();
         let controls = focusable_controls(form);

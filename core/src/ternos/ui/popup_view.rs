@@ -16,6 +16,7 @@ use crate::palm::runtime::PalmFont;
 use super::{
     geom::{Point, Rect},
     prc_components::{draw_palm_pull_down_box, draw_palm_text_scaled, palm_text_height_scaled, palm_text_width_scaled},
+    status_bar_view::StatusBarView,
     view::{RenderLayer, RenderQueue, UiContext, View},
 };
 
@@ -39,6 +40,37 @@ pub struct PopupMenuView<'a> {
 }
 
 impl<'a> PopupMenuView<'a> {
+    fn trigger_highlight_rect(&self) -> Rect {
+        let category_font_id = 0u8;
+        let ui_scale_num = 6;
+        let ui_scale_den = 5;
+        let cat_w = if !self.palm_fonts.is_empty() {
+            palm_text_width_scaled(
+                self.trigger_label,
+                category_font_id,
+                self.palm_fonts,
+                ui_scale_num,
+                ui_scale_den,
+            )
+        } else {
+            (self.trigger_label.len() as i32) * 10
+        };
+        let cat_h = if !self.palm_fonts.is_empty() {
+            palm_text_height_scaled(
+                category_font_id,
+                self.palm_fonts,
+                ui_scale_num,
+                ui_scale_den,
+            )
+        } else {
+            20
+        };
+        let right_edge = self.trigger_rect.x + self.trigger_rect.w - 2;
+        let arrow_x = right_edge - cat_w - 14;
+        let trigger_y = self.trigger_rect.y + 1;
+        Rect::new(arrow_x - 4, trigger_y - 1, cat_w + 18, cat_h + 2)
+    }
+
     pub fn category_menu(
         width: i32,
         trigger_label: &'a str,
@@ -78,7 +110,7 @@ impl<'a> PopupMenuView<'a> {
         };
         let item_height = item_text_h + 6;
         let form_x = 2;
-        let form_y = 36;
+        let form_y = StatusBarView::HEIGHT + 5;
         let form_w = (width - 4).max(1);
         let menu_w = (max_text_w + 14).max(48);
         let menu_x = form_x + form_w - menu_w - 4;
@@ -165,14 +197,36 @@ impl<'a> PopupMenuView<'a> {
         } else {
             20
         };
+        let clear_rect = {
+            let highlight = self.trigger_highlight_rect();
+            let x0 = self.trigger_rect.x.min(highlight.x);
+            let y0 = self.trigger_rect.y.min(highlight.y);
+            let x1 = (self.trigger_rect.x + self.trigger_rect.w).max(highlight.x + highlight.w);
+            let y1 = (self.trigger_rect.y + self.trigger_rect.h).max(highlight.y + highlight.h);
+            Rect::new(x0, y0, x1 - x0, y1 - y0)
+        };
+        Rectangle::new(
+            EgPoint::new(clear_rect.x, clear_rect.y),
+            embedded_graphics::geometry::Size::new(
+                clear_rect.w.max(1) as u32,
+                clear_rect.h.max(1) as u32,
+            ),
+        )
+        .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+        .draw(target)
+        .ok();
         let right_edge = self.trigger_rect.x + self.trigger_rect.w - 2;
         let arrow_x = right_edge - cat_w - 14;
         let text_x = right_edge - cat_w;
         let trigger_y = self.trigger_rect.y + 1;
         if focused {
+            let highlight = self.trigger_highlight_rect();
             Rectangle::new(
-                EgPoint::new(arrow_x - 4, trigger_y - 1),
-                embedded_graphics::geometry::Size::new((cat_w + 18) as u32, (cat_h + 2) as u32),
+                EgPoint::new(highlight.x, highlight.y),
+                embedded_graphics::geometry::Size::new(
+                    highlight.w.max(1) as u32,
+                    highlight.h.max(1) as u32,
+                ),
             )
             .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
             .draw(target)

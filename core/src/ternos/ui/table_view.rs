@@ -187,11 +187,7 @@ impl<'a> TableView<'a> {
             EgPoint::new(row_rect.x, row_top),
             Size::new(row_rect.w as u32, row_rect.h.max(1) as u32),
         )
-        .into_styled(PrimitiveStyle::with_fill(if selected_row {
-            BinaryColor::Off
-        } else {
-            BinaryColor::On
-        }))
+        .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
         .draw(ctx.buffers);
 
         for col_index in 0..col_count {
@@ -204,6 +200,16 @@ impl<'a> TableView<'a> {
                 row_rect.h.max(1),
             );
             let selected = selected_row && self.model.selected_col == Some(col_index as u16);
+            let _ = Rectangle::new(
+                EgPoint::new(cell_rect.x, cell_rect.y),
+                Size::new(cell_rect.w.max(1) as u32, cell_rect.h.max(1) as u32),
+            )
+            .into_styled(PrimitiveStyle::with_fill(if selected {
+                BinaryColor::Off
+            } else {
+                BinaryColor::On
+            }))
+            .draw(ctx.buffers);
             let fallback_cell = UiTableCell {
                 text: String::new(),
             };
@@ -213,7 +219,7 @@ impl<'a> TableView<'a> {
             } else {
                 let style = MonoTextStyle::new(
                     &FONT_10X20,
-                    if selected_row { BinaryColor::On } else { BinaryColor::Off },
+                    if selected { BinaryColor::On } else { BinaryColor::Off },
                 );
                 Text::new(
                     &cell.text,

@@ -301,6 +301,7 @@ impl BookReaderState {
         let mut ui = UiContext {
             buffers: ctx.display_buffers,
             render_policy: ctx.render_policy,
+            gray2: None,
         };
         list.render(&mut ui, rect, &mut rq);
         let refresh = ctx.render_policy.refresh_mode(*ctx.full_refresh);
@@ -674,6 +675,9 @@ pub(crate) fn draw_trbk_image(
             let Some((gray2_lsb, gray2_msb, gray2_used)) = gray2.as_mut() else {
                 return;
             };
+            if gray2_lsb.len() < BUFFER_SIZE || gray2_msb.len() < BUFFER_SIZE {
+                return;
+            }
             **gray2_used = true;
             let src_w = *width as i32;
             let src_h = *height as i32;
@@ -829,6 +833,9 @@ fn draw_glyph(
                 (glyph.bitmap_lsb.as_ref(), glyph.bitmap_msb.as_ref())
             {
                 if let Some((gray2_lsb, gray2_msb, gray2_used)) = gray2.as_mut() {
+                    if gray2_lsb.len() < BUFFER_SIZE || gray2_msb.len() < BUFFER_SIZE {
+                        continue;
+                    }
                     **gray2_used = true;
                     if byte < lsb.len() && (lsb[byte] & (1 << bit)) != 0 {
                         if let Some((fx, fy)) =

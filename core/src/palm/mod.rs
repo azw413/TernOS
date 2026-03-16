@@ -9,6 +9,7 @@ pub mod menu_preview;
 pub mod prc;
 pub mod runner;
 pub mod runtime;
+pub mod shell;
 pub mod traps;
 mod trap_stub;
 pub mod ui;

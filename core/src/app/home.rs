@@ -17,15 +17,16 @@ use crate::image_viewer::{AppSource, ImageData, ImageEntry, InstalledAppEntry};
 use crate::platform::ButtonId;
 use crate::platform::PlatformInputEvent;
 use crate::render_policy::RenderPolicy;
-use crate::ternos::ui::{flush_queue_tracked, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, render_positioned_views, FormResource, ObjectId, ObjectResource, PopupHit, PopupMenuView, PositionedView, Rect, RenderQueue, TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
+use crate::ternos::ui::{flush_queue_tracked, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, render_positioned_views, FormResource, Gray2Context, ObjectId, ObjectResource, PopupHit, PopupMenuView, PositionedView, Rect, RenderQueue, StatusBarActionState, StatusBarView, TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
 
 const START_MENU_MARGIN: i32 = 16;
 const START_MENU_RECENT_THUMB: i32 = 74;
-const START_MENU_STATUS_H: i32 = 34;
-const START_MENU_FORM_Y: i32 = START_MENU_STATUS_H + 2;
+const START_MENU_STATUS_H: i32 = StatusBarView::HEIGHT;
+const START_MENU_FORM_Y: i32 = START_MENU_STATUS_H + 5;
 const HEADER_Y: i32 = START_MENU_FORM_Y + 22;
 const APP_GRID_COLS: usize = 3;
 const HOME_FORM_ID: u16 = 1;
+const HOME_OBJ_STATUS_MENU: ObjectId = 90;
 const HOME_OBJ_CATEGORY_TRIGGER: ObjectId = 100;
 const HOME_OBJ_RECENTS_TABLE: ObjectId = 110;
 const HOME_OBJ_APPS_TABLE: ObjectId = 111;
@@ -50,6 +51,7 @@ impl PalmChromeMetrics {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StartMenuSection {
+    Shell,
     Recents,
     Actions,
 }
@@ -137,6 +139,10 @@ pub struct HomeRenderContext<'a, S: AppSource> {
     pub draw_trbk_image: DrawTrbkImageFn,
 }
 
+fn home_grayscale_enabled(render_policy: RenderPolicy) -> bool {
+    !(render_policy.gray_levels == 4 && render_policy.bits_per_pixel == 2)
+}
+
 struct RecentTableRenderer<'a> {
     previews: &'a [RecentPreview],
     thumb_size: i32,
@@ -172,7 +178,11 @@ impl TableCellRenderer for RecentTableRenderer<'_> {
         .draw(ctx.buffers)
         .ok();
         if let Some(image) = preview.image.as_ref() {
-            let mut gray2_ctx = None;
+            let mut gray2_ctx = if let Some(gray2) = ctx.gray2.as_mut() {
+                Some((&mut *gray2.lsb, &mut *gray2.msb, &mut *gray2.used))
+            } else {
+                None
+            };
             (self.draw_trbk_image)(
                 ctx.buffers,
                 image,
@@ -252,7 +262,11 @@ impl TableCellRenderer for AppsTableRenderer<'_> {
         let icon_x = cell_rect.x + ((cell_rect.w - icon_size) / 2).max(0);
         let icon_y = cell_rect.y + 2;
         if let Some(image) = app.icon.as_ref() {
-            let mut gray2_ctx = None;
+            let mut gray2_ctx = if let Some(gray2) = ctx.gray2.as_mut() {
+                Some((&mut *gray2.lsb, &mut *gray2.msb, &mut *gray2.used))
+            } else {
+                None
+            };
             (self.draw_trbk_image)(
                 ctx.buffers,
                 image,
@@ -774,16 +788,23 @@ impl HomeState {
         let (table_rect, _) = Self::launcher_table_layout(self.launcher_category, width, height);
         let table_model = self.build_launcher_table_model(recents);
         let table_view = TableView::new(&table_model);
+        let status_menu_rect = StatusBarView::menu_rect(Rect::new(0, 0, width, START_MENU_STATUS_H));
         let trigger_rect = self.current_category_trigger_rect();
         let popup_rect = self.current_category_popup_rect();
         let mut popup_view = self.category_popup_view();
         popup_view.trigger_rect = trigger_rect;
         popup_view.popup_rect = popup_rect;
         popup_view.item_height = ((popup_rect.h - 4) / popup_view.items.len() as i32).max(1);
-        let mut objects = vec![ObjectResource::Button {
-            id: HOME_OBJ_CATEGORY_TRIGGER,
-            bounds: trigger_rect,
-        }];
+        let mut objects = vec![
+            ObjectResource::Button {
+                id: HOME_OBJ_STATUS_MENU,
+                bounds: status_menu_rect,
+            },
+            ObjectResource::Button {
+                id: HOME_OBJ_CATEGORY_TRIGGER,
+                bounds: trigger_rect,
+            },
+        ];
         if self.install_dialog.is_some() {
             objects.push(ObjectResource::Button {
                 id: HOME_OBJ_DIALOG_DISMISS,
@@ -967,6 +988,8 @@ impl HomeState {
             Some(HOME_OBJ_DIALOG_DISMISS)
         } else if self.category_menu_open {
             Some(Self::category_menu_object_id(self.category_menu_index.min(3)))
+        } else if self.start_menu_section == StartMenuSection::Shell {
+            Some(HOME_OBJ_STATUS_MENU)
         } else if self.start_menu_section == StartMenuSection::Actions {
             Some(HOME_OBJ_CATEGORY_TRIGGER)
         } else if self.start_menu_content_len(recents) > 0 {
@@ -986,6 +1009,10 @@ impl HomeState {
             return;
         };
         if object_id == HOME_OBJ_DIALOG_DISMISS {
+            return;
+        }
+        if object_id == HOME_OBJ_STATUS_MENU {
+            self.start_menu_section = StartMenuSection::Shell;
             return;
         }
         if object_id == HOME_OBJ_CATEGORY_TRIGGER {
@@ -1022,6 +1049,13 @@ impl HomeState {
         self.prev_focus_object_id = self.ui_runtime.focus.object_id;
         self.ui_runtime
             .set_focus(HOME_FORM_ID, Some(HOME_OBJ_CATEGORY_TRIGGER));
+    }
+
+    fn set_shell_focus(&mut self) {
+        self.start_menu_section = StartMenuSection::Shell;
+        self.prev_focus_object_id = self.ui_runtime.focus.object_id;
+        self.ui_runtime
+            .set_focus(HOME_FORM_ID, Some(HOME_OBJ_STATUS_MENU));
     }
 
     fn focused_object_id(&self) -> Option<ObjectId> {
@@ -1159,13 +1193,17 @@ impl HomeState {
                 } else {
                     self.set_actions_focus();
                 }
+            } else if self.start_menu_section == StartMenuSection::Actions {
+                self.set_shell_focus();
             }
             self.start_menu_nav_pending = true;
             return HomeAction::None;
         }
 
         if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Down })) {
-            if self.start_menu_section == StartMenuSection::Actions {
+            if self.start_menu_section == StartMenuSection::Shell {
+                self.set_actions_focus();
+            } else if self.start_menu_section == StartMenuSection::Actions {
                 self.set_content_focus(recents, 0);
             } else if self.launcher_category == LauncherCategory::Apps {
                 if content_len > 0 {
@@ -1218,7 +1256,19 @@ impl HomeState {
         }
 
         if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Confirm })) {
-            if self.start_menu_section == StartMenuSection::Actions {
+            if self.start_menu_section == StartMenuSection::Shell {
+                self.category_menu_open = true;
+                self.category_menu_index = categories
+                    .iter()
+                    .position(|c| *c == self.launcher_category)
+                    .unwrap_or(0);
+                self.ui_runtime
+                    .invalidation
+                    .record_new_rect(self.current_category_popup_rect(), RefreshMode::Fast);
+                self.sync_start_menu_ui(recents);
+                self.start_menu_nav_pending = true;
+                return HomeAction::None;
+            } else if self.start_menu_section == StartMenuSection::Actions {
                 self.category_menu_open = true;
                 self.category_menu_index = categories
                     .iter()
@@ -1282,6 +1332,7 @@ impl HomeState {
         }
         self.ensure_installed_apps_cache(ctx);
         self.clamp_launcher_top_row_for_category(recents, self.launcher_category);
+        self.warm_visible_launcher_previews(ctx, recents);
         self.sync_start_menu_ui(recents);
 
         let list_top = HEADER_Y + 28;
@@ -1292,6 +1343,7 @@ impl HomeState {
         let menu_refresh_rect = Rect::new(0, 0, width, mid_y.max(1));
 
         if self.start_menu_need_base_refresh {
+            let gray_allowed = home_grayscale_enabled(ctx.render_policy);
             let (gray2_used, draw_count) = self.render_start_menu_contents(
                 ctx,
                 true,
@@ -1308,7 +1360,7 @@ impl HomeState {
                 draw_count,
                 self.start_menu_cache.len()
             );
-            if gray2_used {
+            if gray2_used && gray_allowed {
                 merge_bw_into_gray2(ctx.display_buffers, ctx.gray2_lsb, ctx.gray2_msb);
                 let lsb: &[u8; BUFFER_SIZE] = ctx.gray2_lsb.as_ref().try_into().unwrap();
                 let msb: &[u8; BUFFER_SIZE] = ctx.gray2_msb.as_ref().try_into().unwrap();
@@ -1363,20 +1415,18 @@ impl HomeState {
         }
 
         let partial_rects = self.ui_runtime.invalidation.dirty_rects.clone();
+        let gray_allowed = home_grayscale_enabled(ctx.render_policy);
         let (gray2_used, draw_count) = if !self.ui_runtime.invalidation.full_redraw
             && !partial_rects.is_empty()
         {
-            (
-                false,
-                self.render_start_menu_partial(
-                    ctx,
-                    width,
-                    mid_y,
-                    list_top,
-                    list_width,
-                    thumb_size,
-                    partial_rects.as_slice(),
-                ),
+            self.render_start_menu_partial(
+                ctx,
+                width,
+                mid_y,
+                list_top,
+                list_width,
+                thumb_size,
+                partial_rects.as_slice(),
             )
         } else {
             self.render_start_menu_contents(
@@ -1396,6 +1446,7 @@ impl HomeState {
             draw_count,
             self.start_menu_cache.len()
         );
+        let gray2_used = gray2_used && gray_allowed;
         let mut rq = RenderQueue::default();
         if self.ui_runtime.invalidation.full_redraw {
             rq.push(menu_refresh_rect, ctx.render_policy.refresh_mode(ctx.full_refresh));
@@ -1412,14 +1463,49 @@ impl HomeState {
             }
         }
         if gray2_used {
-            if !rq.is_empty() {
-                flush_queue_tracked(
-                    display,
-                    ctx.display_buffers,
-                    &mut rq,
-                    ctx.render_policy.partial_refresh_mode(),
-                    Some(&mut self.ui_runtime.invalidation),
+            merge_bw_into_gray2(ctx.display_buffers, ctx.gray2_lsb, ctx.gray2_msb);
+            let mode = if self.ui_runtime.invalidation.full_redraw {
+                ctx.render_policy.refresh_mode(ctx.full_refresh)
+            } else {
+                ctx.render_policy.partial_refresh_mode()
+            };
+            let gray_rect = if self.ui_runtime.invalidation.full_redraw {
+                menu_refresh_rect
+            } else {
+                self.ui_runtime
+                    .invalidation
+                    .dirty_rects
+                    .iter()
+                    .copied()
+                    .reduce(|a, b| Rect::new(
+                        a.x.min(b.x),
+                        a.y.min(b.y),
+                        (a.x + a.w).max(b.x + b.w) - a.x.min(b.x),
+                        (a.y + a.h).max(b.y + b.h) - a.y.min(b.y),
+                    ))
+                    .unwrap_or(menu_refresh_rect)
+            };
+            display.display_region(ctx.display_buffers, gray_rect, mode);
+            let lsb: &[u8; BUFFER_SIZE] = ctx.gray2_lsb.as_ref().try_into().unwrap();
+            let msb: &[u8; BUFFER_SIZE] = ctx.gray2_msb.as_ref().try_into().unwrap();
+            display.copy_grayscale_region(lsb, msb, gray_rect);
+            if self.ui_runtime.invalidation.full_redraw {
+                display.display_absolute_grayscale_region(
+                    gray_rect,
+                    ctx.render_policy.absolute_grayscale_mode,
                 );
+            } else {
+                display.display_differential_grayscale_region(gray_rect, false);
+            }
+            if !rq.is_empty() {
+                let presented_rects = self.ui_runtime.invalidation.dirty_rects.clone();
+                self.ui_runtime.invalidation.damage.clear_presented();
+                for rect in presented_rects {
+                    self.ui_runtime
+                        .invalidation
+                        .record_presented_rect(rect, mode);
+                }
+                display.set_damage_overlay(self.ui_runtime.invalidation.damage.overlay_rects.as_slice());
             } else {
                 self.ui_runtime.invalidation.damage.clear_presented();
                 display.set_damage_overlay(self.ui_runtime.invalidation.damage.overlay_rects.as_slice());
@@ -1459,75 +1545,32 @@ impl HomeState {
         ctx.display_buffers.clear(BinaryColor::On).ok();
         ctx.gray2_lsb.fill(0);
         ctx.gray2_msb.fill(0);
-        let gray2_used = false;
+        let mut gray2_used = false;
 
-        Rectangle::new(
-            Point::new(0, 0),
-            Size::new(width as u32, START_MENU_STATUS_H as u32),
-        )
-        .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
-            BinaryColor::On,
-        ))
-        .draw(ctx.display_buffers)
-        .ok();
-        let battery = ctx.battery_percent.unwrap_or(100);
-        let battery_text = format!("{}%", battery);
-        let batt_w = chrome.px(34);
-        let batt_h = chrome.px(8);
-        let cap_w = chrome.px(2);
-        let cap_h = chrome.px(4);
-        let batt_total_w = batt_w + cap_w;
-        let batt_x = (width - batt_total_w) / 2;
-        let batt_y = ((START_MENU_STATUS_H - batt_h) / 2) + 2;
-        Rectangle::new(
-            Point::new(batt_x, batt_y),
-            Size::new(batt_w as u32, batt_h as u32),
-        )
-        .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
-            BinaryColor::Off,
-        ))
-        .draw(ctx.display_buffers)
-        .ok();
-        Rectangle::new(
-            Point::new(batt_x + batt_w, batt_y + (batt_h - cap_h) / 2),
-            Size::new(cap_w as u32, cap_h as u32),
-        )
-        .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
-            BinaryColor::Off,
-        ))
-        .draw(ctx.display_buffers)
-        .ok();
-        if !ctx.palm_fonts.is_empty() {
-            let battery_font_id = 0u8; // Palm standard
-            let battery_scale = 1;
-            let battery_text_w =
-                palm_text_width(&battery_text, battery_font_id, ctx.palm_fonts, battery_scale);
-            let battery_text_h =
-                palm_text_height(battery_font_id, ctx.palm_fonts, battery_scale);
-            let battery_text_x = batt_x + (batt_w - battery_text_w) / 2;
-            let battery_text_y = batt_y + (batt_h - battery_text_h) / 2;
-            draw_palm_text(
-                ctx.display_buffers,
-                &battery_text,
-                battery_text_x,
-                battery_text_y,
-                battery_font_id,
-                ctx.palm_fonts,
-                battery_scale,
-                BinaryColor::On,
-            );
-        } else {
-            let status_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
-            let battery_text_x = batt_x + (batt_w - (battery_text.len() as i32 * 10)) / 2;
-            let battery_text_y = batt_y + batt_h - 7;
-            Text::new(
-                &battery_text,
-                Point::new(battery_text_x, battery_text_y),
-                status_style,
-            )
-            .draw(ctx.display_buffers)
-            .ok();
-        }
+        let mut shell_ui = UiContext {
+            buffers: ctx.display_buffers,
+            render_policy: ctx.render_policy,
+            gray2: Some(Gray2Context {
+                lsb: ctx.gray2_lsb,
+                msb: ctx.gray2_msb,
+                used: &mut gray2_used,
+            }),
+        };
+        let mut status_bar = StatusBarView::new(ctx.palm_fonts);
+        status_bar.battery_percent = ctx.battery_percent;
+        status_bar.home = StatusBarActionState {
+            enabled: false,
+            focused: false,
+        };
+        status_bar.menu = StatusBarActionState {
+            enabled: true,
+            focused: self.start_menu_section == StartMenuSection::Shell,
+        };
+        status_bar.render(
+            &mut shell_ui,
+            Rect::new(0, 0, width, START_MENU_STATUS_H),
+            &mut RenderQueue::default(),
+        );
 
         let form_x = 2;
         let form_y = START_MENU_FORM_Y;
@@ -1656,6 +1699,11 @@ impl HomeState {
                 let mut ui = UiContext {
                     buffers: ctx.display_buffers,
                     render_policy: ctx.render_policy,
+                    gray2: Some(Gray2Context {
+                        lsb: ctx.gray2_lsb,
+                        msb: ctx.gray2_msb,
+                        used: &mut gray2_used,
+                    }),
                 };
                 let mut table = TableView::new(&model);
                 table.clear = false;
@@ -1765,6 +1813,7 @@ impl HomeState {
             let mut popup_ui = UiContext {
                 buffers: ctx.display_buffers,
                 render_policy: ctx.render_policy,
+                gray2: None,
             };
             let mut views = [PositionedView {
                 rect: popup.popup_rect,
@@ -1789,7 +1838,7 @@ impl HomeState {
         list_width: i32,
         thumb_size: i32,
         dirty_rects: &[Rect],
-    ) -> usize {
+    ) -> (bool, usize) {
         let inactive = *ctx.display_buffers.get_inactive_buffer();
         ctx.display_buffers
             .get_active_buffer_mut()
@@ -1835,11 +1884,46 @@ impl HomeState {
         let model = self.build_launcher_table_model(&self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>());
         let draw_count = model.rows.len();
         if draw_count == 0 {
-            return 0;
+            return (false, 0);
+        }
+        let mut gray2_used = false;
+        if dirty_rects
+            .iter()
+            .any(|rect| rect.intersects(Rect::new(0, 0, width, START_MENU_STATUS_H)))
+        {
+            let mut status_bar = StatusBarView::new(ctx.palm_fonts);
+            status_bar.battery_percent = ctx.battery_percent;
+            status_bar.home = StatusBarActionState {
+                enabled: false,
+                focused: false,
+            };
+            status_bar.menu = StatusBarActionState {
+                enabled: true,
+                focused: self.start_menu_section == StartMenuSection::Shell,
+            };
+            let mut shell_ui = UiContext {
+                buffers: ctx.display_buffers,
+                render_policy: ctx.render_policy,
+                gray2: Some(Gray2Context {
+                    lsb: ctx.gray2_lsb,
+                    msb: ctx.gray2_msb,
+                    used: &mut gray2_used,
+                }),
+            };
+            status_bar.render(
+                &mut shell_ui,
+                Rect::new(0, 0, width, START_MENU_STATUS_H),
+                &mut RenderQueue::default(),
+            );
         }
         let mut ui = UiContext {
             buffers: ctx.display_buffers,
             render_policy: ctx.render_policy,
+            gray2: Some(Gray2Context {
+                lsb: ctx.gray2_lsb,
+                msb: ctx.gray2_msb,
+                used: &mut gray2_used,
+            }),
         };
         let mut table = TableView::new(&model);
         table.clear = false;
@@ -1904,11 +1988,12 @@ impl HomeState {
             let mut popup_ui = UiContext {
                 buffers: ctx.display_buffers,
                 render_policy: ctx.render_policy,
+                gray2: None,
             };
             let mut popup_view = popup;
             popup_view.render(&mut popup_ui, popup_view.popup_rect, &mut RenderQueue::default());
         }
-        draw_count
+        (gray2_used, draw_count)
     }
 
     fn draw_install_dialog(
@@ -2105,8 +2190,7 @@ impl HomeState {
         let mut catalog_entries = Vec::with_capacity(paths.len());
         for path in paths {
             let (title, image) = if let Some(title) = cached_titles.get(&path) {
-                let image = ctx.source.load_thumbnail(&path);
-                (title.clone(), image)
+                (title.clone(), ctx.source.load_thumbnail(&path))
             } else {
                 self.load_recent_preview(ctx, &path)
             };
@@ -2173,15 +2257,18 @@ impl HomeState {
         let mut images = Vec::with_capacity(paths.len());
         let mut catalog_entries = Vec::with_capacity(paths.len());
         for path in paths {
-            let label = cached_labels
-                .get(&path)
-                .cloned()
-                .unwrap_or_else(|| basename_from_path(&path));
-            let image = if let Some(image) = ctx.source.load_thumbnail(&path) {
-                Some(image)
+            let cached_label = cached_labels.get(&path).cloned();
+            let image = ctx.source.load_thumbnail(&path);
+            let (label, image) = if image.is_some() {
+                (cached_label.unwrap_or_else(|| basename_from_path(&path)), image)
             } else {
-                let (_, image) = self.load_recent_preview(ctx, &path);
-                image
+                match cached_label {
+                    Some(label) => (label, None),
+                    None => {
+                        let (title, image) = self.load_recent_preview(ctx, &path);
+                        (title, image)
+                    }
+                }
             };
             catalog_entries.push((path.clone(), label.clone()));
             images.push(RecentPreview {
@@ -2205,6 +2292,71 @@ impl HomeState {
             self.images_cache = images;
             self.start_menu_need_base_refresh = true;
         }
+    }
+
+    fn warm_visible_launcher_previews<S: AppSource>(
+        &mut self,
+        ctx: &mut HomeRenderContext<'_, S>,
+        recents: &[String],
+    ) {
+        let category = self.launcher_category;
+        let (target_index, path) = match category {
+            LauncherCategory::Books => {
+                let top_row = self.books_top_row;
+                let visible_rows = Self::launcher_visible_rows_for_category(category);
+                let end = (top_row + visible_rows).min(self.books_cache.len());
+                let idx = (top_row..end).find(|&idx| self.books_cache[idx].image.is_none());
+                let Some(idx) = idx else {
+                    return;
+                };
+                (idx, self.books_cache[idx].path.clone())
+            }
+            LauncherCategory::Images => {
+                let top_row = self.images_top_row;
+                let visible_rows = Self::launcher_visible_rows_for_category(category);
+                let end = (top_row + visible_rows).min(self.images_cache.len());
+                let idx = (top_row..end).find(|&idx| self.images_cache[idx].image.is_none());
+                let Some(idx) = idx else {
+                    return;
+                };
+                (idx, self.images_cache[idx].path.clone())
+            }
+            LauncherCategory::Recents => {
+                let visible_rows = recents
+                    .len()
+                    .min(Self::launcher_visible_rows_for_category(category));
+                let idx = (0..visible_rows).find(|&idx| self.start_menu_cache[idx].image.is_none());
+                let Some(idx) = idx else {
+                    return;
+                };
+                (idx, self.start_menu_cache[idx].path.clone())
+            }
+            LauncherCategory::Apps => return,
+        };
+
+        let (title, image) = self.load_recent_preview(ctx, &path);
+        match category {
+            LauncherCategory::Books => {
+                if let Some(preview) = self.books_cache.get_mut(target_index) {
+                    preview.title = title;
+                    preview.image = image;
+                }
+            }
+            LauncherCategory::Images => {
+                if let Some(preview) = self.images_cache.get_mut(target_index) {
+                    preview.title = title;
+                    preview.image = image;
+                }
+            }
+            LauncherCategory::Recents => {
+                if let Some(preview) = self.start_menu_cache.get_mut(target_index) {
+                    preview.title = title;
+                    preview.image = image;
+                }
+            }
+            LauncherCategory::Apps => {}
+        }
+        self.start_menu_need_base_refresh = true;
     }
 
     fn load_recent_preview<S: AppSource>(
@@ -2240,12 +2392,6 @@ impl HomeState {
                         ctx.source.close_trbk();
                     }
                 }
-            }
-            if let Some(mono) = thumbnail_to_mono(&image) {
-                if !matches!(image, ImageData::Mono1 { .. }) {
-                    ctx.source.save_thumbnail(path, &mono);
-                }
-                return (title, Some(mono));
             }
             let needs_resize = match &image {
                 ImageData::Mono1 { width, height, .. }
@@ -2481,7 +2627,10 @@ fn thumbnail_from_image(image: &ImageData, size: u32) -> Option<ImageData> {
     let dst_w = size;
     let dst_h = size;
     let dst_len = ((dst_w as usize * dst_h as usize) + 7) / 8;
-    let mut bits = vec![0xFF; dst_len];
+    let grayscale_src = !matches!(image, ImageData::Mono1 { .. });
+    let mut base = vec![0xFF; dst_len];
+    let mut lsb = vec![0u8; dst_len];
+    let mut msb = vec![0u8; dst_len];
     for y in 0..dst_h {
         for x in 0..dst_w {
             let sx = (x * src_w) / dst_w;
@@ -2523,76 +2672,50 @@ fn thumbnail_from_image(image: &ImageData, size: u32) -> Option<ImageData> {
             let dst_byte = dst_idx / 8;
             let dst_bit = 7 - (dst_idx % 8);
             let lum = adjust_thumbnail_luma(lum);
-            if lum >= 128 {
-                bits[dst_byte] |= 1 << dst_bit;
+            if grayscale_src {
+                let (base_white, lsb_on, msb_on) = if lum >= 224 {
+                    (true, false, false)
+                } else if lum >= 160 {
+                    (true, true, false)
+                } else if lum >= 96 {
+                    (false, false, true)
+                } else {
+                    (false, false, false)
+                };
+                if base_white {
+                    base[dst_byte] |= 1 << dst_bit;
+                } else {
+                    base[dst_byte] &= !(1 << dst_bit);
+                }
+                if lsb_on {
+                    lsb[dst_byte] |= 1 << dst_bit;
+                }
+                if msb_on {
+                    msb[dst_byte] |= 1 << dst_bit;
+                }
+            } else if lum >= 128 {
+                base[dst_byte] |= 1 << dst_bit;
             } else {
-                bits[dst_byte] &= !(1 << dst_bit);
+                base[dst_byte] &= !(1 << dst_bit);
             }
         }
     }
-    Some(ImageData::Mono1 {
-        width: dst_w,
-        height: dst_h,
-        bits,
-    })
-}
-
-fn thumbnail_to_mono(image: &ImageData) -> Option<ImageData> {
-    match image {
-        ImageData::Mono1 { .. } => Some(image.clone()),
-        ImageData::Gray8 { width, height, pixels } => {
-            let plane = ((*width as usize * *height as usize) + 7) / 8;
-            let mut bits = vec![0xFF; plane];
-            for idx in 0..(*width as usize * *height as usize) {
-                let byte = idx / 8;
-                let bit = 7 - (idx % 8);
-                let lum = pixels.get(idx).copied().unwrap_or(255);
-                let lum = adjust_thumbnail_luma(lum);
-                if lum >= 128 {
-                    bits[byte] |= 1 << bit;
-                } else {
-                    bits[byte] &= !(1 << bit);
-                }
-            }
-            Some(ImageData::Mono1 {
-                width: *width,
-                height: *height,
-                bits,
-            })
-        }
-        ImageData::Gray2 { width, height, data } => {
-            let plane = ((*width as usize * *height as usize) + 7) / 8;
-            if data.len() < plane * 3 {
-                return None;
-            }
-            let mut bits = vec![0xFF; plane];
-            for idx in 0..(*width as usize * *height as usize) {
-                let byte = idx / 8;
-                let bit = 7 - (idx % 8);
-                let bw = (data[byte] >> bit) & 1;
-                let l = (data[plane + byte] >> bit) & 1;
-                let m = (data[plane * 2 + byte] >> bit) & 1;
-                let lum = match (m, l, bw) {
-                    (0, 0, 1) => 255,
-                    (0, 1, 1) => 192,
-                    (1, 0, 0) => 128,
-                    (1, 1, 0) => 64,
-                    _ => 0,
-                };
-                let lum = adjust_thumbnail_luma(lum);
-                if lum >= 128 {
-                    bits[byte] |= 1 << bit;
-                } else {
-                    bits[byte] &= !(1 << bit);
-                }
-            }
-            Some(ImageData::Mono1 {
-                width: *width,
-                height: *height,
-                bits,
-            })
-        }
-        ImageData::Gray2Stream { .. } => None,
+    if grayscale_src {
+        let mut data = Vec::with_capacity(dst_len * 3);
+        data.extend_from_slice(&base);
+        data.extend_from_slice(&lsb);
+        data.extend_from_slice(&msb);
+        Some(ImageData::Gray2 {
+            width: dst_w,
+            height: dst_h,
+            data,
+        })
+    } else {
+        Some(ImageData::Mono1 {
+            width: dst_w,
+            height: dst_h,
+            bits: base,
+        })
     }
 }
 

@@ -221,11 +221,60 @@ impl Display for M5PaperDisplay {
         self.gray_msb.as_mut().unwrap().copy_from_slice(msb);
     }
 
+    fn copy_grayscale_region(
+        &mut self,
+        lsb: &[u8; BUFFER_SIZE],
+        msb: &[u8; BUFFER_SIZE],
+        rect: Rect,
+    ) {
+        self.ensure_gray_buffers();
+        let Some((x0, y0, w, h)) = Self::map_rect_to_device(rect) else {
+            return;
+        };
+        let gray_lsb = self.gray_lsb.as_mut().unwrap();
+        let gray_msb = self.gray_msb.as_mut().unwrap();
+        let rotation = Rotation::Rotate90;
+        for out_y in y0..(y0 + h) {
+            let src_y = (out_y * FB_WIDTH) / DEVICE_H;
+            for out_x in x0..(x0 + w) {
+                let src_x = (out_x * FB_HEIGHT) / DEVICE_W;
+                let (fx, fy) = match rotation {
+                    Rotation::Rotate0 => (src_x, src_y),
+                    Rotation::Rotate90 => (src_y, FB_HEIGHT - 1 - src_x),
+                    Rotation::Rotate180 => (FB_WIDTH - 1 - src_x, FB_HEIGHT - 1 - src_y),
+                    Rotation::Rotate270 => (FB_WIDTH - 1 - src_y, src_x),
+                };
+                let idx = fy * FB_WIDTH + fx;
+                let byte = idx / 8;
+                let bit = 7 - (idx % 8);
+                let mask = 1 << bit;
+                if (lsb[byte] & mask) != 0 {
+                    gray_lsb[byte] |= mask;
+                } else {
+                    gray_lsb[byte] &= !mask;
+                }
+                if (msb[byte] & mask) != 0 {
+                    gray_msb[byte] |= mask;
+                } else {
+                    gray_msb[byte] &= !mask;
+                }
+            }
+        }
+    }
+
     fn display_differential_grayscale(&mut self, _turn_off_screen: bool) {
         self.present_grayscale_region(Rect::new(0, 0, FB_HEIGHT as i32, FB_WIDTH as i32), RefreshMode::Fast);
     }
 
+    fn display_differential_grayscale_region(&mut self, rect: Rect, _turn_off_screen: bool) {
+        self.present_grayscale_region(rect, RefreshMode::Fast);
+    }
+
     fn display_absolute_grayscale(&mut self, _mode: GrayscaleMode) {
         self.present_grayscale_region(Rect::new(0, 0, FB_HEIGHT as i32, FB_WIDTH as i32), RefreshMode::Fast);
+    }
+
+    fn display_absolute_grayscale_region(&mut self, rect: Rect, _mode: GrayscaleMode) {
+        self.present_grayscale_region(rect, RefreshMode::Fast);
     }
 }

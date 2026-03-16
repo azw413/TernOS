@@ -91,6 +91,7 @@ fn render_icon_fit(svg_path: &Path, target_w: u32, target_h: u32) -> (Vec<u8>, V
 fn write_icons(out_dir: &Path) {
     let icon_dir = Path::new("icons");
     let size = 80u32;
+    let status_icon_size = 20u32;
     let logo_path = Path::new("../ternreader_logo_4color.svg");
     let logo_w = 600u32;
     let logo_h = 180u32;
@@ -98,10 +99,15 @@ fn write_icons(out_dir: &Path) {
     let (folder_dark, folder_light) = render_icon(&icon_dir.join("folder.svg"), size);
     let (gear_dark, gear_light) = render_icon(&icon_dir.join("gear.svg"), size);
     let (battery_dark, battery_light) = render_icon(&icon_dir.join("battery.svg"), size);
+    let (status_battery_dark, status_battery_light) =
+        render_icon(&icon_dir.join("battery.svg"), status_icon_size);
+    let (home_dark, home_light) = render_icon(&icon_dir.join("home.svg"), status_icon_size);
+    let (menu_dark, menu_light) = render_icon(&icon_dir.join("menu.svg"), status_icon_size);
     let (logo_dark, logo_light) = render_icon_fit(logo_path, logo_w, logo_h);
 
     let mut output = String::new();
     output.push_str(&format!("pub const ICON_SIZE: usize = {size};\n"));
+    output.push_str(&format!("pub const STATUS_ICON_SIZE: usize = {status_icon_size};\n"));
     output.push_str(&format!("pub const LOGO_WIDTH: usize = {logo_w};\n"));
     output.push_str(&format!("pub const LOGO_HEIGHT: usize = {logo_h};\n"));
 
@@ -123,6 +129,12 @@ fn write_icons(out_dir: &Path) {
     emit(&mut output, "ICON_GEAR_LIGHT_MASK", &gear_light);
     emit(&mut output, "ICON_BATTERY_DARK_MASK", &battery_dark);
     emit(&mut output, "ICON_BATTERY_LIGHT_MASK", &battery_light);
+    emit(&mut output, "STATUS_BATTERY_DARK_MASK", &status_battery_dark);
+    emit(&mut output, "STATUS_BATTERY_LIGHT_MASK", &status_battery_light);
+    emit(&mut output, "ICON_HOME_DARK_MASK", &home_dark);
+    emit(&mut output, "ICON_HOME_LIGHT_MASK", &home_light);
+    emit(&mut output, "ICON_MENU_DARK_MASK", &menu_dark);
+    emit(&mut output, "ICON_MENU_LIGHT_MASK", &menu_light);
     emit(&mut output, "LOGO_DARK_MASK", &logo_dark);
     emit(&mut output, "LOGO_LIGHT_MASK", &logo_light);
 

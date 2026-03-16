@@ -7,6 +7,7 @@ pub mod popup_view;
 pub mod reader_view;
 pub mod resource;
 pub mod runtime;
+pub mod status_bar_view;
 pub mod text_view;
 pub mod table_view;
 pub mod view;
@@ -22,9 +23,10 @@ pub use runtime::{
     MenuState, ObjectId, ObjectIndex, UiForm, UiObject, UiRuntime, UiTableCell, UiTableColumn,
     UiTableModel, UiTableRow,
 };
+pub use status_bar_view::{StatusBarActionState, StatusBarView};
 pub use table_view::{TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView};
 pub use text_view::TextView;
 pub use view::{
-    flush_queue, flush_queue_tracked, render_positioned_views, FlushSummary, PositionedView,
-    RenderLayer, RenderQueue, UiContext, View,
+    flush_queue, flush_queue_tracked, render_positioned_views, FlushSummary, Gray2Context,
+    PositionedView, RenderLayer, RenderQueue, UiContext, View,
 };

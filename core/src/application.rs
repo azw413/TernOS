@@ -53,7 +53,7 @@ use crate::{
     platform::PlatformInputEvent,
     palm,
     render_policy::RenderPolicy,
-    ternos::ui::{flush_queue, Rect, RenderQueue},
+    ternos::ui::{flush_queue, Rect, RenderQueue, StatusBarActionState, StatusBarView, UiContext, View},
 };
 
 const LIST_MARGIN_X: i32 = 16;
@@ -94,6 +94,8 @@ pub struct Application<'a, S: AppSource> {
     prc_blocked_elapsed_ms: u32,
     prc_soft_menu_focused: bool,
     prc_soft_menu_last_control: Option<u16>,
+    prc_status_bar_focus: Option<PrcStatusBarFocus>,
+    prc_status_bar_last_control: Option<u16>,
     prc_return_to_start_menu: bool,
     prc_reserved_gray_initialized: bool,
     install_scan_elapsed_ms: u32,
@@ -123,6 +125,12 @@ enum AppState {
 enum ExitFrom {
     Image,
     Book,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PrcStatusBarFocus {
+    Home,
+    Menu,
 }
 
 impl<'a, S: AppSource> Application<'a, S> {
@@ -516,6 +524,8 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_blocked_elapsed_ms: 0,
             prc_soft_menu_focused: false,
             prc_soft_menu_last_control: None,
+            prc_status_bar_focus: None,
+            prc_status_bar_last_control: None,
             prc_return_to_start_menu: false,
             prc_reserved_gray_initialized: false,
             install_scan_elapsed_ms: 0,
@@ -866,7 +876,11 @@ impl<'a, S: AppSource> Application<'a, S> {
                     return;
                 }
                 if buttons.is_pressed(input::Buttons::Left) {
-                    if !self.prc_soft_menu_focused {
+                    if self.prc_status_bar_focus == Some(PrcStatusBarFocus::Menu) {
+                        self.prc_status_bar_focus = Some(PrcStatusBarFocus::Home);
+                        self.dirty = true;
+                        return;
+                    } else if self.prc_status_bar_focus.is_none() {
                         let form = self.runtime_prc_form();
                         if self.prc_ui_controller.move_focus_direction(
                             form.as_ref(),
@@ -886,7 +900,13 @@ impl<'a, S: AppSource> Application<'a, S> {
                         }
                     }
                 } else if buttons.is_pressed(input::Buttons::Right) {
-                    if !self.prc_soft_menu_focused {
+                    if self.prc_status_bar_focus == Some(PrcStatusBarFocus::Home)
+                        && self.prc_menu_controller.menu_count() > 0
+                    {
+                        self.prc_status_bar_focus = Some(PrcStatusBarFocus::Menu);
+                        self.dirty = true;
+                        return;
+                    } else if self.prc_status_bar_focus.is_none() {
                         let form = self.runtime_prc_form();
                         if self.prc_ui_controller.move_focus_direction(
                             form.as_ref(),
@@ -907,29 +927,20 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 } else if buttons.is_pressed(input::Buttons::Up) {
                     let form = self.runtime_prc_form();
-                    if self.prc_soft_menu_focused {
-                        self.prc_soft_menu_focused = false;
-                        let restored = self
-                            .prc_soft_menu_last_control
-                            .and_then(|id| {
-                                if self.prc_ui_controller.select_control_id(form.as_ref(), id) {
-                                    Some(())
-                                } else {
-                                    None
-                                }
-                            })
-                            .is_some();
-                        if !restored {
-                            let _ = self.prc_ui_controller.move_focus_direction(
-                                form.as_ref(),
-                                palm::controller::FocusDirection::Up,
-                            );
-                        }
-                        self.dirty = true;
+                    if self.prc_status_bar_focus.is_some() {
                     } else if self.prc_ui_controller.move_focus_direction(
                         form.as_ref(),
                         palm::controller::FocusDirection::Up,
                     ) {
+                        self.dirty = true;
+                    } else if self.prc_status_bar_focus.is_none() {
+                        self.prc_status_bar_last_control =
+                            self.prc_ui_controller.focused_control_id();
+                        self.prc_status_bar_focus = if self.prc_menu_controller.menu_count() > 0 {
+                            Some(PrcStatusBarFocus::Menu)
+                        } else {
+                            Some(PrcStatusBarFocus::Home)
+                        };
                         self.dirty = true;
                     } else if let Some(session) = self.prc_session.as_mut() {
                         session.inject_event_now(
@@ -944,20 +955,32 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 } else if buttons.is_pressed(input::Buttons::Down) {
                     let form = self.runtime_prc_form();
-                    if self.prc_soft_menu_focused {
-                        // Single soft button in this bar; nothing further down.
+                    if self.prc_status_bar_focus.is_some() {
+                        let target_id = self
+                            .prc_ui_controller
+                            .first_button_id(form.as_ref())
+                            .or_else(|| self.prc_ui_controller.first_control_id(form.as_ref()));
+                        let restored = if let Some(id) = target_id {
+                            let _ = self.prc_ui_controller.select_control_id(form.as_ref(), id);
+                            self.prc_ui_controller.focused_control_id() == Some(id)
+                        } else {
+                            false
+                        };
+                        self.prc_status_bar_focus = None;
+                        if !restored {
+                            let _ = self.prc_ui_controller.move_focus_direction(
+                                form.as_ref(),
+                                palm::controller::FocusDirection::Down,
+                            );
+                        }
+                        self.dirty = true;
+                        return;
                     } else if self.prc_ui_controller.move_focus_direction(
                         form.as_ref(),
                         palm::controller::FocusDirection::Down,
                     ) {
                         self.dirty = true;
                     } else {
-                        if self.prc_menu_controller.menu_count() > 0 {
-                            self.prc_soft_menu_last_control = self.prc_ui_controller.focused_control_id();
-                            self.prc_soft_menu_focused = true;
-                            self.dirty = true;
-                            return;
-                        }
                         if let Some(session) = self.prc_session.as_mut() {
                             session.inject_event_now(
                                 palm::runtime::EVT_KEY_DOWN,
@@ -971,10 +994,18 @@ impl<'a, S: AppSource> Application<'a, S> {
                         }
                     }
                 } else if buttons.is_pressed(input::Buttons::Confirm) {
-                    if self.prc_soft_menu_focused {
-                        if self.prc_menu_controller.open() {
-                            self.dirty = true;
+                    if let Some(shell_focus) = self.prc_status_bar_focus {
+                        match shell_focus {
+                            PrcStatusBarFocus::Home => {
+                                self.exit_prc_viewer_to_origin();
+                            }
+                            PrcStatusBarFocus::Menu => {
+                                if self.prc_menu_controller.open() {
+                                    self.dirty = true;
+                                }
+                            }
                         }
+                        return;
                     } else {
                         let form = self.runtime_prc_form();
                         if let (Some(control_id), Some(session)) =
@@ -1019,8 +1050,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                             }
                         }
                     }
-                } else if buttons.is_pressed(input::Buttons::Back) {
-                    self.exit_prc_viewer_to_origin();
                 } else if self.system.add_idle(elapsed_ms) {
                     self.start_sleep_request();
                 }
@@ -1809,6 +1838,8 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_blocked_elapsed_ms = 0;
         self.prc_soft_menu_focused = false;
         self.prc_soft_menu_last_control = None;
+        self.prc_status_bar_focus = None;
+        self.prc_status_bar_last_control = None;
         self.prc_scroll = 0;
         self.prc_form_index = 0;
         self.prc_ui_controller.reset();
@@ -1851,6 +1882,8 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.state = AppState::PrcViewing;
         self.prc_soft_menu_focused = false;
         self.prc_soft_menu_last_control = None;
+        self.prc_status_bar_focus = None;
+        self.prc_status_bar_last_control = None;
         self.prc_reserved_gray_initialized = false;
         self.system.full_refresh = true;
         self.dirty = true;
@@ -1925,64 +1958,29 @@ impl<'a, S: AppSource> Application<'a, S> {
     }
 
     fn draw_prc_viewer(&mut self, display: &mut impl crate::display::Display) {
-        const STATUS_H: i32 = 34;
+        const STATUS_H: i32 = StatusBarView::HEIGHT;
         self.display_buffers.clear(BinaryColor::On).ok();
         let size = self.display_buffers.size();
-        Rectangle::new(
-            Point::new(0, 0),
-            Size::new(size.width, STATUS_H as u32),
-        )
-        .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
-        .draw(self.display_buffers)
-        .ok();
-        let battery = self.system.battery_percent.unwrap_or(100);
-        let battery_text = format!("{}%", battery);
-        let batt_w = 34 * 3;
-        let batt_h = 8 * 3;
-        let cap_w = 2 * 3;
-        let cap_h = 4 * 3;
-        let batt_total_w = batt_w + cap_w;
-        let batt_x = (size.width as i32 - batt_total_w) / 2;
-        let batt_y = ((STATUS_H - batt_h) / 2) + 2;
-        Rectangle::new(
-            Point::new(batt_x, batt_y),
-            Size::new(batt_w as u32, batt_h as u32),
-        )
-        .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
-        .draw(self.display_buffers)
-        .ok();
-        Rectangle::new(
-            Point::new(batt_x + batt_w, batt_y + (batt_h - cap_h) / 2),
-            Size::new(cap_w as u32, cap_h as u32),
-        )
-        .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
-        .draw(self.display_buffers)
-        .ok();
-        if !self.home_system_fonts.is_empty() {
-            let tw = crate::ternos::ui::prc_components::palm_text_width(
-                &battery_text,
-                0,
-                self.home_system_fonts.as_slice(),
-                1,
-            );
-            let th = crate::ternos::ui::prc_components::palm_text_height(
-                0,
-                self.home_system_fonts.as_slice(),
-                1,
-            );
-            let tx = batt_x + (batt_w - tw) / 2;
-            let ty = batt_y + (batt_h - th) / 2;
-            crate::ternos::ui::prc_components::draw_palm_text(
-                self.display_buffers,
-                &battery_text,
-                tx,
-                ty,
-                0,
-                self.home_system_fonts.as_slice(),
-                1,
-                BinaryColor::On,
-            );
-        }
+        let mut shell_ui = UiContext {
+            buffers: self.display_buffers,
+            render_policy: self.render_policy,
+            gray2: None,
+        };
+        let mut status_bar = StatusBarView::new(self.home_system_fonts.as_slice());
+        status_bar.battery_percent = self.system.battery_percent;
+        status_bar.home = StatusBarActionState {
+            enabled: true,
+            focused: self.prc_status_bar_focus == Some(PrcStatusBarFocus::Home),
+        };
+        status_bar.menu = StatusBarActionState {
+            enabled: self.prc_menu_controller.menu_count() > 0,
+            focused: self.prc_status_bar_focus == Some(PrcStatusBarFocus::Menu),
+        };
+        status_bar.render(
+            &mut shell_ui,
+            Rect::new(0, 0, size.width as i32, STATUS_H),
+            &mut RenderQueue::default(),
+        );
 
         let active_form = self
             .runtime_prc_form()
@@ -1992,7 +1990,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             let outline = PrimitiveStyle::with_stroke(BinaryColor::Off, 1);
             let clear = PrimitiveStyle::with_fill(BinaryColor::On);
             let max_scale_w = ((size.width as i32) / 160).max(1);
-            let content_top = STATUS_H + 2;
+            let content_top = STATUS_H + 5;
             let content_h = (size.height as i32 - content_top).max(1);
             let max_scale_h = (content_h / 160).max(1);
             let max_scale = max_scale_w.min(max_scale_h).max(1);
@@ -2043,7 +2041,11 @@ impl<'a, S: AppSource> Application<'a, S> {
                 &self.prc_runtime_bitmap_draws,
                 &self.prc_runtime_field_draws,
                 &self.prc_runtime_table_draws,
-                self.prc_ui_controller.focused_control_id(),
+                if self.prc_status_bar_focus.is_some() {
+                    None
+                } else {
+                    self.prc_ui_controller.focused_control_id()
+                },
                 self.prc_runtime_focused_field_id,
                 self.prc_menu_controller.overlay(),
                 self.prc_session
@@ -2060,66 +2062,16 @@ impl<'a, S: AppSource> Application<'a, S> {
             );
         }
 
-        let content_top = STATUS_H + 2;
+        let content_top = STATUS_H + 5;
         let max_scale_w = ((size.width as i32) / 160).max(1);
         let max_scale_h = ((size.height as i32 - content_top) / 160).max(1);
         let max_scale = max_scale_w.min(max_scale_h).max(1);
         let scale = if max_scale >= 3 { 3 } else { max_scale };
-        let pane_h = 160 * scale;
-        let strip_top = (content_top + pane_h).clamp(0, size.height as i32);
-        let strip_h = (size.height as i32 - strip_top).max(0);
-        let soft_menu_rect = if strip_h > 0 {
-            Some(self.prc_soft_menu_button_rect(strip_top, strip_h))
-        } else {
-            None
-        };
-
-        if let Some(rect) = soft_menu_rect {
-            self.draw_prc_soft_menu_button(rect);
-        }
-
-        if strip_h > 0 && !self.prc_reserved_gray_initialized {
-            self.ensure_gray2_buffers();
-            self.gray2_lsb.fill(0);
-            self.gray2_msb.fill(0);
-            fill_gray2_rect(
-                self.display_buffers.rotation(),
-                self.gray2_lsb.as_mut_slice(),
-                self.gray2_msb.as_mut_slice(),
-                0,
-                strip_top,
-                size.width as i32,
-                strip_h,
-                true,
-                false,
-            );
-            crate::app::home::merge_bw_into_gray2(
-                self.display_buffers,
-                self.gray2_lsb.as_mut_slice(),
-                self.gray2_msb.as_mut_slice(),
-            );
-            let lsb: &[u8; crate::framebuffer::BUFFER_SIZE] =
-                self.gray2_lsb.as_slice().try_into().unwrap();
-            let msb: &[u8; crate::framebuffer::BUFFER_SIZE] =
-                self.gray2_msb.as_slice().try_into().unwrap();
-            display.copy_grayscale_buffers(lsb, msb);
-            display.display_absolute_grayscale(self.render_policy.absolute_grayscale_mode);
-            self.display_buffers.copy_active_to_inactive();
-            self.prc_reserved_gray_initialized = true;
-            return;
-        }
-
         let mode = self.render_policy.refresh_mode(self.system.full_refresh);
         let mut rq = RenderQueue::default();
-        let update_h = if strip_h > 0 {
-            strip_top
-        } else {
-            size.height as i32
-        };
+        let pane_h = 160 * scale;
+        let update_h = (content_top + pane_h).clamp(0, size.height as i32);
         rq.push(Rect::new(0, 0, size.width as i32, update_h), mode);
-        if let Some(rect) = soft_menu_rect {
-            rq.push(rect, mode);
-        }
         flush_queue(display, self.display_buffers, &mut rq, mode);
     }
 
