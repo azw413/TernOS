@@ -14,7 +14,7 @@ use embedded_graphics::{
 use crate::framebuffer::{Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
 
 use super::{
-    prc_components::{draw_palm_text, palm_text_height, palm_text_width},
+    text::{draw_palm_text, palm_text_height, palm_text_width},
     view::{RenderQueue, UiContext, View},
     Rect,
 };
@@ -48,6 +48,7 @@ impl<'a> StatusBarView<'a> {
     const PADDING_X: i32 = 8;
     const ACTION_SIZE: i32 = 30;
     const ACTION_GAP: i32 = 6;
+    const RIGHT_TEXT_FONT: u8 = 1;
 
     pub fn new(palm_fonts: &'a [crate::palm::runtime::PalmFont]) -> Self {
         Self {
@@ -272,14 +273,14 @@ impl<'a> StatusBarView<'a> {
         };
         let right_rect = Self::right_text_rect(rect);
         if !self.palm_fonts.is_empty() {
-            let tw = palm_text_width(text, 0, self.palm_fonts, 1);
-            let th = palm_text_height(0, self.palm_fonts, 1);
+            let tw = palm_text_width(text, Self::RIGHT_TEXT_FONT, self.palm_fonts, 1);
+            let th = palm_text_height(Self::RIGHT_TEXT_FONT, self.palm_fonts, 1);
             draw_palm_text(
                 ctx.buffers,
                 text,
                 right_rect.x + right_rect.w - tw,
-                right_rect.y + (right_rect.h - th) / 2,
-                0,
+                right_rect.y + (right_rect.h - th) / 2 + 2,
+                Self::RIGHT_TEXT_FONT,
                 self.palm_fonts,
                 1,
                 BinaryColor::Off,

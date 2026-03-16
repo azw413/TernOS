@@ -17,7 +17,7 @@ use crate::image_viewer::{AppSource, ImageData, ImageEntry, InstalledAppEntry};
 use crate::platform::ButtonId;
 use crate::platform::PlatformInputEvent;
 use crate::render_policy::RenderPolicy;
-use crate::ternos::ui::{flush_queue_tracked, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, render_positioned_views, FormResource, Gray2Context, ObjectId, ObjectResource, PopupHit, PopupMenuView, PositionedView, Rect, RenderQueue, StatusBarActionState, StatusBarHit, StatusBarView, TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
+use crate::ternos::ui::{auto_button_layout_for_label, draw_form_title_bar_hi, draw_palm_text, draw_palm_text_scaled, flush_queue_tracked, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled, prc_alert, render_positioned_views, FormResource, Gray2Context, ObjectId, ObjectResource, PopupHit, PopupMenuView, PositionedView, Rect, RenderQueue, StatusBarActionState, StatusBarHit, StatusBarView, TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
 
 const START_MENU_MARGIN: i32 = 16;
 const START_MENU_RECENT_THUMB: i32 = 74;
@@ -1635,7 +1635,7 @@ impl HomeState {
         let title_pad_bottom = 5;
         let tab_w = home_text_w + title_pad_x * 2;
         let tab_h = home_text_h + title_pad_top + title_pad_bottom;
-        let title_layout = draw_form_title_bar(
+        let title_layout = draw_form_title_bar_hi(
             ctx.display_buffers,
             form_x,
             form_y,

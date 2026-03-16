@@ -22,7 +22,7 @@ use crate::palm::{
     runner::{RuntimeBitmapDraw, RuntimeFieldDraw, RuntimeHelpDialog, RuntimeTableDraw},
     runtime::PalmFont,
 };
-use crate::ternos::ui::{prc_alert, prc_components, Point as UiPoint};
+use crate::ternos::ui::{chrome, form, prc_alert, text, Point as UiPoint};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuOverlayHit {
@@ -35,6 +35,161 @@ pub enum HelpOverlayHit {
     Done,
     ScrollUp,
     ScrollDown,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FormControlHit {
+    pub id: u16,
+    pub is_field: bool,
+}
+
+fn form_preview_coord_mapper(form: &FormPreview) -> (bool, impl Fn(i16) -> i32 + '_, impl Fn(i16) -> i32 + '_) {
+    let mut max_right = 0i16;
+    let mut max_bottom = 0i16;
+    for obj in form.objects.iter() {
+        match obj {
+            FormPreviewObject::Title { x, y, .. } | FormPreviewObject::Label { x, y, .. } => {
+                if *x > max_right {
+                    max_right = *x;
+                }
+                if *y > max_bottom {
+                    max_bottom = *y;
+                }
+            }
+            FormPreviewObject::Button { x, y, w, h, .. }
+            | FormPreviewObject::Field { x, y, w, h, .. }
+            | FormPreviewObject::Table { x, y, w, h, .. } => {
+                max_right = max_right.max(x.saturating_add(*w));
+                max_bottom = max_bottom.max(y.saturating_add(*h));
+            }
+            FormPreviewObject::Bitmap { x, y, .. } => {
+                if *x > max_right {
+                    max_right = *x;
+                }
+                if *y > max_bottom {
+                    max_bottom = *y;
+                }
+            }
+        }
+    }
+    let coords_are_form_relative =
+        (form.x != 0 || form.y != 0)
+            && max_right <= form.w.saturating_add(4)
+            && max_bottom <= form.h.saturating_add(4);
+    let map_x = move |x: i16| {
+        if coords_are_form_relative {
+            x.saturating_add(form.x).max(0) as i32
+        } else {
+            x.max(0) as i32
+        }
+    };
+    let map_y = move |y: i16| {
+        if coords_are_form_relative {
+            y.saturating_add(form.y).max(0) as i32
+        } else {
+            y.max(0) as i32
+        }
+    };
+    (coords_are_form_relative, map_x, map_y)
+}
+
+pub fn hit_test_form_preview(form: &FormPreview, point: UiPoint) -> Option<FormControlHit> {
+    let (_, map_x, map_y) = form_preview_coord_mapper(form);
+
+    struct PushRow {
+        y: i32,
+        h: i32,
+        items: Vec<(usize, i32, i32)>,
+    }
+    let mut push_rows: Vec<PushRow> = Vec::new();
+    for (obj_idx, obj) in form.objects.iter().take(48).enumerate() {
+        let FormPreviewObject::Button {
+            x, y, w, h, style, ..
+        } = obj
+        else {
+            continue;
+        };
+        if *style != 1 {
+            continue;
+        }
+        let bx = map_x(*x);
+        let mut by = map_y(*y);
+        let mut bw = (*w).max(8) as i32;
+        let mut bh = (*h).max(8) as i32;
+        by -= 1;
+        bw += 2;
+        bh += 2;
+        if bw <= 0 || bh <= 0 {
+            continue;
+        }
+        if let Some(row) = push_rows
+            .iter_mut()
+            .find(|r| (r.y - by).abs() <= 1 && (r.h - bh).abs() <= 2)
+        {
+            row.items.push((obj_idx, bx, bw));
+        } else {
+            push_rows.push(PushRow {
+                y: by,
+                h: bh,
+                items: vec![(obj_idx, bx, bw)],
+            });
+        }
+    }
+    let mut push_button_x: Vec<(usize, i32)> = Vec::new();
+    for row in push_rows.iter_mut() {
+        row.items.sort_by_key(|(_, x, _)| *x);
+        let mut prev_right: Option<i32> = None;
+        for (obj_idx, x, w) in row.items.iter() {
+            let mut adj_x = *x;
+            if let Some(pr) = prev_right {
+                adj_x = pr;
+            }
+            prev_right = Some(adj_x + *w - 1);
+            push_button_x.push((*obj_idx, adj_x));
+        }
+    }
+
+    for (obj_idx, obj) in form.objects.iter().take(48).enumerate().rev() {
+        match obj {
+            FormPreviewObject::Button {
+                id, x, y, w, h, style, ..
+            } => {
+                let mut bx = map_x(*x);
+                let mut by = map_y(*y);
+                let mut bw = (*w).max(8) as i32;
+                let mut bh = (*h).max(8) as i32;
+                if *style == 1 {
+                    by -= 1;
+                    bw += 2;
+                    bh += 2;
+                    if let Some((_, adj_x)) = push_button_x.iter().find(|(idx, _)| *idx == obj_idx) {
+                        bx = *adj_x;
+                    }
+                }
+                if point.x >= bx && point.x < bx + bw && point.y >= by && point.y < by + bh {
+                    return Some(FormControlHit {
+                        id: *id,
+                        is_field: false,
+                    });
+                }
+            }
+            FormPreviewObject::Field { id, x, y, w, h, .. } => {
+                let bx = map_x(*x);
+                let by = map_y(*y);
+                let bw = (*w).max(8) as i32;
+                let bh = (*h).max(8) as i32;
+                if point.x >= bx && point.x < bx + bw && point.y >= by && point.y < by + bh {
+                    return Some(FormControlHit {
+                        id: *id,
+                        is_field: true,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
 }
 
 pub fn help_overlay_control_rects(
@@ -50,7 +205,7 @@ pub fn help_overlay_control_rects(
     let (done_tw, done_th) = text_metrics("Done", 1, fonts, 1);
     let btn_x = x + 8;
     let layout =
-        prc_components::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 36, 10, 7, 2);
+        form::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 36, 10, 7, 2);
     let btn_y = y + h - layout.h - 4;
     controls.push((
         HelpOverlayHit::Done,
@@ -69,6 +224,50 @@ pub fn help_overlay_control_rects(
         let ind_h = 16i32;
         let ind_x = x + w - ind_w - 6;
         let ind_y = y + h - ind_h - 3;
+        controls.push((
+            HelpOverlayHit::ScrollUp,
+            crate::ternos::ui::Rect::new(ind_x, ind_y, ind_w, ind_h / 2),
+        ));
+        controls.push((
+            HelpOverlayHit::ScrollDown,
+            crate::ternos::ui::Rect::new(ind_x, ind_y + ind_h / 2, ind_w, ind_h - ind_h / 2),
+        ));
+    }
+
+    controls
+}
+
+pub fn help_overlay_control_rects_native(
+    dialog: &RuntimeHelpDialog,
+    fonts: &[PalmFont],
+    rect: crate::ternos::ui::Rect,
+) -> alloc::vec::Vec<(HelpOverlayHit, crate::ternos::ui::Rect)> {
+    let mut controls = alloc::vec::Vec::new();
+    let title_font = 1u8;
+    let scale_num = 6i32;
+    let scale_den = 5i32;
+    let header_h = (text::palm_text_height_scaled(title_font, fonts, scale_num, scale_den) + 12).max(24);
+    let done_tw = text::palm_text_width_scaled("Done", title_font, fonts, scale_num, scale_den);
+    let done_th = text::palm_text_height_scaled(title_font, fonts, scale_num, scale_den);
+    let btn_x = rect.x + 12;
+    let layout = form::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 56, 22, 10, 4);
+    let btn_y = rect.y + rect.h - layout.h - 12;
+    controls.push((
+        HelpOverlayHit::Done,
+        crate::ternos::ui::Rect::new(btn_x, btn_y, layout.w, layout.h),
+    ));
+
+    let body_h = (btn_y - 12) - (rect.y + header_h + 8);
+    let line_h = (text::palm_text_height_scaled(1, fonts, scale_num, scale_den) + 4).max(16);
+    let visible = (body_h / line_h).max(1) as usize;
+    let body_w = rect.w - 24;
+    let lines = wrap_text_lines_scaled(&dialog.text, 1, body_w - 18, fonts, scale_num, scale_den);
+    let max_scroll = lines.len().saturating_sub(visible);
+    if max_scroll > 0 {
+        let ind_w = 20i32;
+        let ind_h = 28i32;
+        let ind_x = rect.x + rect.w - ind_w - 12;
+        let ind_y = rect.y + rect.h - ind_h - 9;
         controls.push((
             HelpOverlayHit::ScrollUp,
             crate::ternos::ui::Rect::new(ind_x, ind_y, ind_w, ind_h / 2),
@@ -212,7 +411,11 @@ fn draw_button_outline<T: DrawTarget<Color = BinaryColor>>(
             .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
             .draw(target);
     } else {
-        prc_components::draw_button_frame(target, bx, by, bw, bh, BinaryColor::Off);
+        if bw >= 40 || bh >= 20 {
+            form::draw_button_frame_hi(target, bx, by, bw, bh, BinaryColor::Off);
+        } else {
+            form::draw_button_frame(target, bx, by, bw, bh, BinaryColor::Off);
+        }
     }
 }
 
@@ -257,10 +460,13 @@ fn draw_form_button_like<T: DrawTarget<Color = BinaryColor>>(
     focused: bool,
     outline: PrimitiveStyle<BinaryColor>,
 ) {
-    let mut bx = x;
+    let bx = x;
     let mut by = y;
     let mut bw = w.max(8);
     let mut bh = h.max(8);
+    let hi = bw >= 40 || bh >= 20;
+    let focus_inset = if hi { 2 } else { 1 };
+    let focus_stroke = if hi { 2 } else { 1 };
     if style == 1 {
         by -= 1;
         bw += 2;
@@ -275,13 +481,13 @@ fn draw_form_button_like<T: DrawTarget<Color = BinaryColor>>(
                 Point::new(bx.max(0), by.max(0)),
                 Size::new(bw.max(1) as u32, bh.max(1) as u32),
             )
-            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, focus_stroke))
             .draw(target);
         }
-        if focused && bw > 2 && bh > 2 {
+        if focused && bw > focus_inset * 2 && bh > focus_inset * 2 {
             let _ = Rectangle::new(
-                Point::new((bx + 1).max(0), (by + 1).max(0)),
-                Size::new((bw - 2).max(1) as u32, (bh - 2).max(1) as u32),
+                Point::new((bx + focus_inset).max(0), (by + focus_inset).max(0)),
+                Size::new((bw - focus_inset * 2).max(1) as u32, (bh - focus_inset * 2).max(1) as u32),
             )
             .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
             .draw(target);
@@ -305,10 +511,10 @@ fn draw_form_button_like<T: DrawTarget<Color = BinaryColor>>(
     }
     if !no_frame {
         draw_button_outline(target, bx, by, bw, bh, style, outline);
-        if focused && bw > 4 && bh > 4 {
+        if focused && bw > focus_inset * 2 + 2 && bh > focus_inset * 2 + 2 {
             let _ = Rectangle::new(
-                Point::new(bx + 1, by + 1),
-                Size::new((bw - 2) as u32, (bh - 2) as u32),
+                Point::new(bx + focus_inset, by + focus_inset),
+                Size::new((bw - focus_inset * 2) as u32, (bh - focus_inset * 2) as u32),
             )
             .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
             .draw(target);
@@ -318,7 +524,7 @@ fn draw_form_button_like<T: DrawTarget<Color = BinaryColor>>(
             Point::new(bx.max(0), by.max(0)),
             Size::new(bw.max(1) as u32, bh.max(1) as u32),
         )
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
+        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, focus_stroke))
         .draw(target);
     }
     let (tw, th) = text_metrics(text, font_id, fonts, 1);
@@ -675,7 +881,6 @@ fn draw_menu_overlay_on_canvas(
     let mut active_title_bounds: Option<(i32, i32)> = None;
     for (idx, m) in menu.menus.iter().enumerate() {
         let (tw, _) = text_metrics(&m.title, menu_font, fonts, 1);
-        // Title sits 3px inside highlight; highlight extends 3px after text.
         let pad = 3i32;
         let w = (tw + pad * 2).clamp(10, 70);
         if idx == active_menu_index {
@@ -778,6 +983,236 @@ fn draw_menu_overlay_on_canvas(
     }
 }
 
+fn menu_overlay_bounds_160(
+    menu: &MenuBarPreview,
+    active_menu_index: usize,
+    fonts: &[PalmFont],
+) -> crate::ternos::ui::Rect {
+    if menu.menus.is_empty() {
+        return crate::ternos::ui::Rect::new(0, 0, 0, 0);
+    }
+
+    let top_h = 15i32;
+    let menu_font = 1u8;
+    let mut x = 6i32;
+    let mut active_title_bounds: Option<(i32, i32)> = None;
+    for (idx, m) in menu.menus.iter().enumerate() {
+        let (tw, _) = text_metrics(&m.title, menu_font, fonts, 1);
+        let pad = 3i32;
+        let w = (tw + pad * 2).clamp(10, 70);
+        if idx == active_menu_index {
+            active_title_bounds = Some((x, w));
+        }
+        x += w + 1;
+        if x >= 156 {
+            break;
+        }
+    }
+
+    let menu_idx = active_menu_index.min(menu.menus.len().saturating_sub(1));
+    let pull = &menu.menus[menu_idx];
+    if pull.items.is_empty() {
+        return crate::ternos::ui::Rect::new(0, 0, 160, top_h + 1);
+    }
+
+    let mut max_w = 56i32;
+    for item in &pull.items {
+        let (tw, _) = text_metrics(&item.text, menu_font, fonts, 1);
+        max_w = max_w.max(tw + 28);
+    }
+    max_w = max_w.min(150);
+    let row_h = 12i32;
+    let h = (pull.items.len() as i32 * row_h + 2).min(150 - top_h);
+    let preferred_x = active_title_bounds.map(|(x, _)| x).unwrap_or(0);
+    let x0 = preferred_x.clamp(0, 159 - max_w);
+    let y0 = top_h - 1;
+    let x1 = (x0 + max_w + 1).min(160);
+    let y1 = (y0 + h + 1).min(160);
+    crate::ternos::ui::Rect::new(0, 0, 160.max(x1), y1.max(top_h + 1))
+}
+
+pub fn draw_menu_overlay_scaled<T: DrawTarget<Color = BinaryColor>>(
+    target: &mut T,
+    menu: &MenuBarPreview,
+    active_menu_index: usize,
+    active_item_index: Option<usize>,
+    fonts: &[PalmFont],
+    pane_x: i32,
+    pane_y: i32,
+    scale: i32,
+) -> crate::ternos::ui::Rect {
+    let mut canvas = MonoCanvas160::new();
+    draw_menu_overlay_on_canvas(
+        &mut canvas,
+        menu,
+        active_menu_index,
+        active_item_index,
+        fonts,
+    );
+    let bounds = menu_overlay_bounds_160(menu, active_menu_index, fonts);
+    blit_scaled(target, &canvas, pane_x, pane_y, bounds.w, bounds.h, scale, None);
+    crate::ternos::ui::Rect::new(
+        pane_x,
+        pane_y,
+        bounds.w * scale.max(1),
+        bounds.h * scale.max(1),
+    )
+}
+
+pub fn draw_menu_overlay_native<T: DrawTarget<Color = BinaryColor>>(
+    target: &mut T,
+    menu: &MenuBarPreview,
+    active_menu_index: usize,
+    active_item_index: Option<usize>,
+    fonts: &[PalmFont],
+    x: i32,
+    y: i32,
+    w: i32,
+) -> crate::ternos::ui::Rect {
+    if menu.menus.is_empty() {
+        return crate::ternos::ui::Rect::new(x, y, 0, 0);
+    }
+
+    let title_font = 1u8;
+    let item_font = 1u8;
+    let scale_num = 6i32;
+    let scale_den = 5i32;
+    let title_h = text::palm_text_height_scaled(title_font, fonts, scale_num, scale_den);
+    let top_h = (title_h + 11).max(24);
+    let bar_rect = crate::ternos::ui::Rect::new(x, y, w, top_h);
+    let _ = Rectangle::new(Point::new(x, y), Size::new(w.max(1) as u32, top_h.max(1) as u32))
+        .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+        .draw(target);
+    chrome::draw_palm_box_hi(target, x + 1, y + 1, (w - 3).max(1), top_h - 1, true);
+
+    let mut title_x = x + 10;
+    let title_pad = 7;
+    let title_gap = 6;
+    let mut active_title_rect = crate::ternos::ui::Rect::new(title_x, y + 2, 48, (top_h - 3).max(1));
+    for (idx, m) in menu.menus.iter().enumerate() {
+        let tw = text::palm_text_width_scaled(
+            &m.title,
+            title_font,
+            fonts,
+            scale_num,
+            scale_den,
+        );
+        let item_w = (tw + title_pad * 2).clamp(30, 132);
+        let title_rect = crate::ternos::ui::Rect::new(title_x, y + 2, item_w, (top_h - 3).max(1));
+        if idx == active_menu_index {
+            active_title_rect = title_rect;
+        }
+        if idx == active_menu_index && active_item_index.is_none() {
+            let _ = Rectangle::new(
+                Point::new(title_rect.x, title_rect.y),
+                Size::new(title_rect.w.max(1) as u32, title_rect.h.max(1) as u32),
+            )
+            .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+            .draw(target);
+        }
+        text::draw_palm_text_scaled(
+            target,
+            &m.title,
+            title_rect.x + title_pad,
+            title_rect.y + 2,
+            title_font,
+            fonts,
+            scale_num,
+            scale_den,
+            if idx == active_menu_index && active_item_index.is_none() {
+                BinaryColor::On
+            } else {
+                BinaryColor::Off
+            },
+        );
+        title_x += item_w + title_gap;
+        if title_x >= x + w - 10 {
+            break;
+        }
+    }
+
+    let menu_idx = active_menu_index.min(menu.menus.len().saturating_sub(1));
+    let pull = &menu.menus[menu_idx];
+    if pull.items.is_empty() {
+        return bar_rect;
+    }
+
+    let row_h = (text::palm_text_height_scaled(item_font, fonts, scale_num, scale_den) + 10).max(20);
+    let mut max_w = active_title_rect.w + 22;
+    for item in &pull.items {
+        let tw = text::palm_text_width_scaled(
+            &item.text,
+            item_font,
+            fonts,
+            scale_num,
+            scale_den,
+        );
+        max_w = max_w.max(tw + 46);
+    }
+    max_w = max_w.min((w - 8).max(40));
+    let pull_h = (pull.items.len() as i32 * row_h + 2).max(row_h + 2);
+    let pull_x = active_title_rect.x.clamp(x, x + w - max_w - 2);
+    let pull_y = y + top_h - 1;
+    chrome::draw_palm_pull_down_box_hi(target, pull_x, pull_y, max_w, pull_h);
+    for (idx, item) in pull.items.iter().enumerate() {
+        let row_rect = crate::ternos::ui::Rect::new(pull_x + 1, pull_y + 1 + idx as i32 * row_h, max_w - 2, row_h);
+        if Some(idx) == active_item_index {
+            let _ = Rectangle::new(
+                Point::new(row_rect.x, row_rect.y),
+                Size::new(row_rect.w.max(1) as u32, row_rect.h.max(1) as u32),
+            )
+            .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+            .draw(target);
+        }
+        text::draw_palm_text_scaled(
+            target,
+            &item.text,
+            row_rect.x + 4,
+            row_rect.y + 3,
+            item_font,
+            fonts,
+            scale_num,
+            scale_den,
+            if Some(idx) == active_item_index {
+                BinaryColor::On
+            } else {
+                BinaryColor::Off
+            },
+        );
+        if let Some(ch) = item.shortcut {
+            let sc = alloc::format!("/{}", ch);
+            let sw = text::palm_text_width_scaled(
+                &sc,
+                item_font,
+                fonts,
+                scale_num,
+                scale_den,
+            );
+            text::draw_palm_text_scaled(
+                target,
+                &sc,
+                row_rect.x + row_rect.w - sw - 4,
+                row_rect.y + 3,
+                item_font,
+                fonts,
+                scale_num,
+                scale_den,
+                if Some(idx) == active_item_index {
+                    BinaryColor::On
+                } else {
+                    BinaryColor::Off
+                },
+            );
+        }
+    }
+
+    let x0 = bar_rect.x.min(pull_x);
+    let y0 = bar_rect.y;
+    let x1 = (bar_rect.x + bar_rect.w).max(pull_x + max_w + 1);
+    let y1 = (bar_rect.y + bar_rect.h).max(pull_y + pull_h + 1);
+    crate::ternos::ui::Rect::new(x0, y0, x1 - x0, y1 - y0)
+}
+
 pub fn hit_test_menu_overlay(
     menu: &MenuBarPreview,
     active_menu_index: usize,
@@ -842,6 +1277,83 @@ pub fn hit_test_menu_overlay(
     None
 }
 
+pub fn hit_test_menu_overlay_native(
+    menu: &MenuBarPreview,
+    active_menu_index: usize,
+    fonts: &[PalmFont],
+    x: i32,
+    y: i32,
+    w: i32,
+    point: UiPoint,
+) -> Option<MenuOverlayHit> {
+    if menu.menus.is_empty() {
+        return None;
+    }
+
+    let title_font = 1u8;
+    let item_font = 1u8;
+    let scale_num = 6i32;
+    let scale_den = 5i32;
+    let title_h = text::palm_text_height_scaled(title_font, fonts, scale_num, scale_den);
+    let top_h = (title_h + 11).max(24);
+
+    let mut title_x = x + 10;
+    let title_pad = 7;
+    let title_gap = 6;
+    let mut active_title_rect = crate::ternos::ui::Rect::new(title_x, y + 2, 48, (top_h - 3).max(1));
+    for (idx, m) in menu.menus.iter().enumerate() {
+        let tw = text::palm_text_width_scaled(&m.title, title_font, fonts, scale_num, scale_den);
+        let item_w = (tw + title_pad * 2).clamp(30, 132);
+        let title_rect = crate::ternos::ui::Rect::new(title_x, y + 2, item_w, (top_h - 3).max(1));
+        if point.x >= title_rect.x
+            && point.x < title_rect.x + title_rect.w
+            && point.y >= title_rect.y
+            && point.y < title_rect.y + title_rect.h
+        {
+            return Some(MenuOverlayHit::Title(idx));
+        }
+        if idx == active_menu_index {
+            active_title_rect = title_rect;
+        }
+        title_x += item_w + title_gap;
+        if title_x >= x + w - 10 {
+            break;
+        }
+    }
+
+    let menu_idx = active_menu_index.min(menu.menus.len().saturating_sub(1));
+    let pull = &menu.menus[menu_idx];
+    if pull.items.is_empty() {
+        return None;
+    }
+
+    let row_h = (text::palm_text_height_scaled(item_font, fonts, scale_num, scale_den) + 10).max(20);
+    let mut max_w = active_title_rect.w + 22;
+    for item in &pull.items {
+        let tw = text::palm_text_width_scaled(&item.text, item_font, fonts, scale_num, scale_den);
+        max_w = max_w.max(tw + 46);
+    }
+    max_w = max_w.min((w - 8).max(40));
+    let pull_h = (pull.items.len() as i32 * row_h + 2).max(row_h + 2);
+    let pull_x = active_title_rect.x.clamp(x, x + w - max_w - 2);
+    let pull_y = y + top_h - 1;
+
+    if point.x >= pull_x && point.x < pull_x + max_w && point.y >= pull_y && point.y < pull_y + pull_h {
+        let rel_y = point.y - (pull_y + 1);
+        if rel_y >= 0 {
+            let idx = (rel_y / row_h) as usize;
+            if idx < pull.items.len() {
+                return Some(MenuOverlayHit::Item {
+                    menu_index: menu_idx,
+                    item_index: idx,
+                });
+            }
+        }
+    }
+
+    None
+}
+
 pub fn hit_test_help_overlay(dialog: &RuntimeHelpDialog, fonts: &[PalmFont], point: UiPoint) -> Option<HelpOverlayHit> {
     for (hit, rect) in help_overlay_control_rects(dialog, fonts) {
         if point.x >= rect.x
@@ -853,6 +1365,24 @@ pub fn hit_test_help_overlay(dialog: &RuntimeHelpDialog, fonts: &[PalmFont], poi
         }
     }
 
+    None
+}
+
+pub fn hit_test_help_overlay_native(
+    dialog: &RuntimeHelpDialog,
+    fonts: &[PalmFont],
+    rect: crate::ternos::ui::Rect,
+    point: UiPoint,
+) -> Option<HelpOverlayHit> {
+    for (hit, hit_rect) in help_overlay_control_rects_native(dialog, fonts, rect) {
+        if point.x >= hit_rect.x
+            && point.x < hit_rect.x + hit_rect.w
+            && point.y >= hit_rect.y
+            && point.y < hit_rect.y + hit_rect.h
+        {
+            return Some(hit);
+        }
+    }
     None
 }
 
@@ -882,6 +1412,152 @@ fn wrap_text_lines(text: &str, font_id: u8, max_w: i32, fonts: &[PalmFont]) -> a
         lines.push(cur);
     }
     lines
+}
+
+fn wrap_text_lines_scaled(
+    text: &str,
+    font_id: u8,
+    max_w: i32,
+    fonts: &[PalmFont],
+    scale_num: i32,
+    scale_den: i32,
+) -> alloc::vec::Vec<alloc::string::String> {
+    let mut lines = alloc::vec::Vec::new();
+    for para in text.split('\n') {
+        let words: alloc::vec::Vec<&str> = para.split_whitespace().collect();
+        if words.is_empty() {
+            lines.push(alloc::string::String::new());
+            continue;
+        }
+        let mut cur = alloc::string::String::new();
+        for w in words {
+            let candidate = if cur.is_empty() {
+                alloc::format!("{}", w)
+            } else {
+                alloc::format!("{} {}", cur, w)
+            };
+            let cw = text::palm_text_width_scaled(&candidate, font_id, fonts, scale_num, scale_den);
+            if cw <= max_w || cur.is_empty() {
+                cur = candidate;
+            } else {
+                lines.push(cur);
+                cur = alloc::format!("{}", w);
+            }
+        }
+        lines.push(cur);
+    }
+    lines
+}
+
+pub fn draw_help_dialog_native<T: DrawTarget<Color = BinaryColor>>(
+    target: &mut T,
+    dialog: &RuntimeHelpDialog,
+    fonts: &[PalmFont],
+    focused: Option<HelpOverlayHit>,
+    rect: crate::ternos::ui::Rect,
+) -> crate::ternos::ui::Rect {
+    let title_font = 1u8;
+    let body_font = 1u8;
+    let scale_num = 6i32;
+    let scale_den = 5i32;
+    let header_h = (text::palm_text_height_scaled(title_font, fonts, scale_num, scale_den) + 12).max(24);
+    chrome::draw_alert_frame_hi(target, rect.x, rect.y, rect.w, rect.h, header_h);
+
+    let title = "Tips";
+    let tw = text::palm_text_width_scaled(title, title_font, fonts, scale_num, scale_den);
+    let th = text::palm_text_height_scaled(title_font, fonts, scale_num, scale_den);
+    text::draw_palm_text_scaled(
+        target,
+        title,
+        rect.x + ((rect.w - tw) / 2).max(0),
+        rect.y + ((header_h - th) / 2).max(2) - 1,
+        title_font,
+        fonts,
+        scale_num,
+        scale_den,
+        BinaryColor::On,
+    );
+
+    let controls = help_overlay_control_rects_native(dialog, fonts, rect);
+    let done_top = controls
+        .iter()
+        .find_map(|(hit, r)| (*hit == HelpOverlayHit::Done).then_some(r.y))
+        .unwrap_or(rect.y + rect.h - 32);
+    let body_x = rect.x + 12;
+    let body_y = rect.y + header_h + 8;
+    let body_w = rect.w - 24;
+    let body_h = (done_top - 18 - body_y).max(16);
+    let line_h = (text::palm_text_height_scaled(body_font, fonts, scale_num, scale_den) + 4).max(16);
+    let visible = (body_h / line_h).max(1) as usize;
+    let lines = wrap_text_lines_scaled(&dialog.text, body_font, body_w - 18, fonts, scale_num, scale_den);
+    let max_scroll = lines.len().saturating_sub(visible);
+    let scroll = dialog.scroll_line.min(max_scroll);
+    for row in 0..visible {
+        let idx = scroll + row;
+        let Some(line) = lines.get(idx) else { break };
+        text::draw_palm_text_scaled(
+            target,
+            line,
+            body_x,
+            body_y + row as i32 * line_h,
+            body_font,
+            fonts,
+            scale_num,
+            scale_den,
+            BinaryColor::Off,
+        );
+    }
+
+    for (hit, control_rect) in controls {
+        match hit {
+            HelpOverlayHit::Done => {
+                draw_form_button_like(
+                    target,
+                    fonts,
+                    control_rect.x,
+                    control_rect.y,
+                    control_rect.w,
+                    control_rect.h,
+                    1,
+                    0,
+                    false,
+                    "Done",
+                    focused == Some(HelpOverlayHit::Done),
+                    PrimitiveStyle::with_stroke(BinaryColor::Off, 1),
+                );
+            }
+            HelpOverlayHit::ScrollUp | HelpOverlayHit::ScrollDown => {
+                let enabled = match hit {
+                    HelpOverlayHit::ScrollUp => scroll > 0,
+                    HelpOverlayHit::ScrollDown => scroll < max_scroll,
+                    HelpOverlayHit::Done => false,
+                };
+                let label = match (hit, enabled) {
+                    (HelpOverlayHit::ScrollUp, true) => "^",
+                    (HelpOverlayHit::ScrollUp, false) => "~",
+                    (HelpOverlayHit::ScrollDown, true) => "v",
+                    (HelpOverlayHit::ScrollDown, false) => "V",
+                    _ => "",
+                };
+                draw_form_button_like(
+                    target,
+                    fonts,
+                    control_rect.x,
+                    control_rect.y,
+                    control_rect.w.max(16),
+                    control_rect.h.max(10),
+                    1,
+                    5,
+                    false,
+                    label,
+                    focused == Some(hit),
+                    PrimitiveStyle::with_stroke(BinaryColor::Off, 1),
+                );
+            }
+        }
+    }
+
+    rect
 }
 
 fn draw_help_dialog_on_canvas(
@@ -929,7 +1605,7 @@ fn draw_help_dialog_on_canvas(
     let (done_tw, done_th) = text_metrics("Done", 1, fonts, 1);
     let btn_x = x + 8;
     let layout =
-        prc_components::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 36, 10, 7, 2);
+        form::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 36, 10, 7, 2);
     let btn_y = y + h - layout.h - 4;
     draw_form_button_like(
         canvas,
@@ -1064,7 +1740,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
         let fy = form.y.max(0) as i32;
         let fw = form.w.max(20).min(160) as i32;
         let fh = form.h.max(20).min(160) as i32;
-        prc_components::draw_alert_frame(&mut canvas, fx, fy, fw, fh, 12);
+        chrome::draw_alert_frame(&mut canvas, fx, fy, fw, fh, 12);
     }
 
     // Snap adjacent push buttons (tPBN style=1) so neighboring buttons share
@@ -1149,7 +1825,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
             let pad_bottom = 0;
             let tab_w = (tw + pad_x * 2).clamp(24, src_w.max(24));
             let tab_h = (th + pad_top + pad_bottom).max(10);
-            let layout = prc_components::draw_form_title_bar(
+            let layout = form::draw_form_title_bar(
                 &mut canvas,
                 tx.clamp(0, src_w.saturating_sub(1)),
                 ty.clamp(0, src_h.saturating_sub(1)),

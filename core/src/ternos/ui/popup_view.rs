@@ -15,7 +15,8 @@ use crate::palm::runtime::PalmFont;
 
 use super::{
     geom::{Point, Rect},
-    prc_components::{draw_palm_pull_down_box, draw_palm_text_scaled, palm_text_height_scaled, palm_text_width_scaled},
+    chrome::draw_palm_pull_down_box_hi,
+    text::{draw_palm_text_scaled, palm_text_height_scaled, palm_text_width_scaled},
     status_bar_view::StatusBarView,
     view::{RenderLayer, RenderQueue, UiContext, View},
 };
@@ -281,7 +282,7 @@ impl View for PopupMenuView<'_> {
             rq.push(self.trigger_rect, crate::display::RefreshMode::Fast);
             return;
         }
-        draw_palm_pull_down_box(
+        draw_palm_pull_down_box_hi(
             ctx.buffers,
             self.popup_rect.x,
             self.popup_rect.y,

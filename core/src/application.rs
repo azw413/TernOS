@@ -34,7 +34,11 @@ fn is_prc(name: &str) -> bool {
 
 use crate::{
     app::{
-        book_reader::{draw_trbk_image, BookReaderContext, BookReaderState, PageTurnIndicator},
+        book_reader::{
+            draw_reader_menu_overlay, draw_reader_overlay, draw_trbk_image, reader_menu_bar,
+            reader_menu_command, BookReaderContext, BookReaderState, PageTurnIndicator,
+            ReaderMenuCommand,
+        },
         home::{
             HomeAction,
             HomeIcons,
@@ -87,7 +91,9 @@ pub struct Application<'a, S: AppSource> {
     prc_system_fonts: Vec<palm::runtime::PalmFont>,
     home_system_fonts: Vec<palm::runtime::PalmFont>,
     prc_menu_controller: palm::controller::PrcMenuController,
+    reader_menu_controller: palm::controller::PrcMenuController,
     prc_help_controller: palm::controller::PrcHelpDialogController,
+    reader_help_controller: palm::controller::PrcHelpDialogController,
     prc_active_entry: Option<ImageEntry>,
     prc_session: Option<palm::runner::PrcRuntimeSession>,
     prc_blocked_timeout_ticks: u32,
@@ -97,6 +103,11 @@ pub struct Application<'a, S: AppSource> {
     prc_status_bar_focus: Option<PrcStatusBarFocus>,
     prc_touch_pressed_status: Option<PrcStatusBarFocus>,
     prc_status_bar_last_control: Option<u16>,
+    reader_status_bar_focus: Option<ReaderStatusBarFocus>,
+    reader_touch_pressed_status: Option<ReaderStatusBarFocus>,
+    reader_touch_pressed_menu: Option<palm::ui::MenuOverlayHit>,
+    reader_touch_pressed_overlay: Option<crate::ternos::ui::ObjectId>,
+    reader_menu_last_rect: Option<Rect>,
     prc_return_to_start_menu: bool,
     prc_reserved_gray_initialized: bool,
     install_scan_elapsed_ms: u32,
@@ -130,6 +141,12 @@ enum ExitFrom {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PrcStatusBarFocus {
+    Home,
+    Menu,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReaderStatusBarFocus {
     Home,
     Menu,
 }
@@ -366,41 +383,28 @@ impl<'a, S: AppSource> Application<'a, S> {
             return false;
         }
 
-        for obj in &form.objects {
-            match obj {
-                palm::form_preview::FormPreviewObject::Button { id, x, y, w, h, .. }
-                | palm::form_preview::FormPreviewObject::Field { id, x, y, w, h, .. } => {
-                    let rx = *x as i32 * scale;
-                    let ry = *y as i32 * scale;
-                    let rw = *w as i32 * scale;
-                    let rh = *h as i32 * scale;
-                    if local_x >= rx && local_y >= ry && local_x < rx + rw && local_y < ry + rh {
-                        let is_field = matches!(
-                            obj,
-                            palm::form_preview::FormPreviewObject::Field { .. }
-                        );
-                        let _ = self.prc_ui_controller.select_control_id(Some(&form), *id);
-                        if let Some(session) = self.prc_session.as_mut() {
-                            if is_field {
-                                session.inject_event_now(
-                                    palm::runtime::EVT_FLD_ENTER,
-                                    *id,
-                                    "touchFldEnter",
-                                );
-                            } else {
-                                session.inject_control_select_now(*id);
-                            }
-                            self.prc_blocked_elapsed_ms = 0;
-                            self.prc_blocked_timeout_ticks = 0;
-                            self.resume_prc_runtime_session();
-                        }
-                        if is_down {
-                            self.dirty = true;
-                            return true;
-                        }
-                    }
+        if let Some(hit) = palm::ui::hit_test_form_preview(
+            &form,
+            crate::ternos::ui::Point::new(palm_x, palm_y),
+        ) {
+            let _ = self.prc_ui_controller.select_control_id(Some(&form), hit.id);
+            if let Some(session) = self.prc_session.as_mut() {
+                if hit.is_field {
+                    session.inject_event_now(
+                        palm::runtime::EVT_FLD_ENTER,
+                        hit.id,
+                        "touchFldEnter",
+                    );
+                } else {
+                    session.inject_control_select_now(hit.id);
                 }
-                _ => {}
+                self.prc_blocked_elapsed_ms = 0;
+                self.prc_blocked_timeout_ticks = 0;
+                self.resume_prc_runtime_session();
+            }
+            if is_down {
+                self.dirty = true;
+                return true;
             }
         }
 
@@ -447,6 +451,269 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.dirty = true;
                 true
             }
+        }
+    }
+
+    fn reader_handle_touch_event(&mut self, event: &PlatformInputEvent) -> bool {
+        let (x, y, is_down, is_up) = match *event {
+            PlatformInputEvent::TouchDown { x, y } => (x, y, true, false),
+            PlatformInputEvent::TouchUp { x, y } => (x, y, false, true),
+            _ => return false,
+        };
+
+        if let Some(dialog) = self.book_reader.help_dialog() {
+            let rect = Rect::new(18, StatusBarView::HEIGHT + 8, 448, 236);
+            if let Some(hit) = palm::ui::hit_test_help_overlay_native(
+                &dialog,
+                self.home_system_fonts.as_slice(),
+                rect,
+                crate::ternos::ui::Point::new(x, y),
+            ) {
+                self.reader_help_controller.focus_control(hit);
+                match hit {
+                    palm::ui::HelpOverlayHit::Done => {
+                        if is_up {
+                            let result = self
+                                .book_reader
+                                .apply_help_action(palm::controller::HelpDialogAction::Dismiss);
+                            if result.dirty {
+                                self.dirty = true;
+                            }
+                        } else {
+                            self.dirty = true;
+                        }
+                    }
+                    palm::ui::HelpOverlayHit::ScrollUp => {
+                        if is_down {
+                            let result = self.book_reader.apply_help_action(
+                                palm::controller::HelpDialogAction::Scroll(
+                                    -self.reader_help_controller.scroll_step_lines,
+                                ),
+                            );
+                            if result.dirty {
+                                self.dirty = true;
+                            }
+                        } else {
+                            self.dirty = true;
+                        }
+                    }
+                    palm::ui::HelpOverlayHit::ScrollDown => {
+                        if is_down {
+                            let result = self.book_reader.apply_help_action(
+                                palm::controller::HelpDialogAction::Scroll(
+                                    self.reader_help_controller.scroll_step_lines,
+                                ),
+                            );
+                            if result.dirty {
+                                self.dirty = true;
+                            }
+                        } else {
+                            self.dirty = true;
+                        }
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+
+        if self.book_reader.has_overlay() {
+            if let Some(spec) = self.book_reader.overlay_spec() {
+                let point = crate::ternos::ui::Point::new(x, y);
+                if let Some(id) = self.book_reader.overlay_form.hit_test(&spec, point) {
+                    let changed = self.book_reader.overlay_form.select_id(&spec, id);
+                    if is_down {
+                        self.reader_touch_pressed_overlay = Some(id);
+                        if changed {
+                            self.dirty = true;
+                        }
+                    } else if is_up {
+                        let pressed = self.reader_touch_pressed_overlay.take();
+                        if pressed == Some(id) {
+                            let action = self.book_reader.overlay_form.activate_id(&spec, id);
+                            let result = self.book_reader.apply_overlay_action(action);
+                            if result.jumped {
+                                self.set_state_book_viewing();
+                            } else if result.dirty || changed {
+                                self.dirty = true;
+                            }
+                        } else if changed {
+                            self.dirty = true;
+                        }
+                    }
+                    return true;
+                }
+                if is_up {
+                    self.reader_touch_pressed_overlay = None;
+                }
+                return true;
+            }
+        }
+
+        if self.reader_menu_controller.is_active() {
+            if let Some((menu, active_menu_index, _)) = self.reader_menu_controller.overlay() {
+                let hit = palm::ui::hit_test_menu_overlay_native(
+                    menu,
+                    active_menu_index,
+                    self.home_system_fonts.as_slice(),
+                    0,
+                    StatusBarView::HEIGHT + 5,
+                    self.display_buffers.size().width as i32,
+                    crate::ternos::ui::Point::new(x, y),
+                );
+                match hit {
+                    Some(palm::ui::MenuOverlayHit::Title(menu_index)) => {
+                        if is_down {
+                            self.reader_touch_pressed_menu =
+                                Some(palm::ui::MenuOverlayHit::Title(menu_index));
+                            if self.reader_menu_controller.select_menu(menu_index) {
+                                self.dirty = true;
+                            }
+                        } else if is_up {
+                            let _ = self.reader_menu_controller.select_menu(menu_index);
+                            self.reader_touch_pressed_menu = None;
+                            self.dirty = true;
+                        }
+                        return true;
+                    }
+                    Some(palm::ui::MenuOverlayHit::Item {
+                        menu_index,
+                        item_index,
+                    }) => {
+                        if is_down {
+                            self.reader_touch_pressed_menu = Some(palm::ui::MenuOverlayHit::Item {
+                                menu_index,
+                                item_index,
+                            });
+                            let mut changed = self.reader_menu_controller.select_menu(menu_index);
+                            changed |= self.reader_menu_controller.select_item(item_index);
+                            if changed {
+                                self.dirty = true;
+                            }
+                        } else if is_up {
+                            let mut changed = self.reader_menu_controller.select_menu(menu_index);
+                            changed |= self.reader_menu_controller.select_item(item_index);
+                            let pressed = self.reader_touch_pressed_menu.take();
+                            if pressed
+                                == Some(palm::ui::MenuOverlayHit::Item {
+                                    menu_index,
+                                    item_index,
+                                })
+                            {
+                                match self
+                                    .reader_menu_controller
+                                    .on_event(palm::ui_component::UiNavEvent::Confirm)
+                                {
+                                    palm::controller::MenuAction::Activate(item_id) => {
+                                        self.apply_reader_menu_command(item_id);
+                                    }
+                                    palm::controller::MenuAction::Redraw
+                                    | palm::controller::MenuAction::Closed => {
+                                        self.dirty = true;
+                                    }
+                                    palm::controller::MenuAction::None => {
+                                        if changed {
+                                            self.dirty = true;
+                                        }
+                                    }
+                                }
+                            } else if changed {
+                                self.dirty = true;
+                            }
+                        }
+                        return true;
+                    }
+                    None => {
+                        if is_down || is_up {
+                            self.reader_touch_pressed_menu = None;
+                            self.reader_menu_controller.close();
+                            self.dirty = true;
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        let status_rect = Rect::new(
+            0,
+            0,
+            self.display_buffers.size().width as i32,
+            StatusBarView::HEIGHT,
+        );
+        let Some(hit) = StatusBarView::hit_test(
+            status_rect,
+            crate::ternos::ui::Point::new(x, y),
+        ) else {
+            if is_up {
+                self.reader_touch_pressed_status = None;
+            }
+            return false;
+        };
+        match hit {
+            StatusBarHit::Home => {
+                if is_down {
+                    self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Home);
+                    self.reader_touch_pressed_status = Some(ReaderStatusBarFocus::Home);
+                    self.dirty = true;
+                } else if is_up
+                    && self.reader_touch_pressed_status == Some(ReaderStatusBarFocus::Home)
+                {
+                    self.reader_touch_pressed_status = None;
+                    self.exit_from = ExitFrom::Book;
+                    self.exit_overlay_drawn = false;
+                    self.state = AppState::ExitingPending;
+                    self.dirty = true;
+                }
+                true
+            }
+            StatusBarHit::Menu => {
+                if is_down {
+                    self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Menu);
+                    self.reader_touch_pressed_status = Some(ReaderStatusBarFocus::Menu);
+                    self.dirty = true;
+                } else if is_up
+                    && self.reader_touch_pressed_status == Some(ReaderStatusBarFocus::Menu)
+                {
+                    self.reader_touch_pressed_status = None;
+                    if self.reader_menu_controller.open() {
+                        self.dirty = true;
+                    }
+                }
+                true
+            }
+        }
+    }
+
+    fn apply_reader_menu_command(&mut self, item_id: u16) {
+        let Some(command) = reader_menu_command(item_id) else {
+            return;
+        };
+        self.reader_menu_controller.close();
+        self.reader_touch_pressed_menu = None;
+        match (self.state.clone(), command) {
+            (AppState::BookViewing, ReaderMenuCommand::Contents) => {
+                if self.book_reader.open_menu_command(ReaderMenuCommand::Contents) {
+                    self.set_state_toc();
+                } else {
+                    self.dirty = true;
+                }
+            }
+            (AppState::Toc, ReaderMenuCommand::Contents) => {
+                self.dirty = true;
+            }
+            (_, ReaderMenuCommand::Page)
+            | (_, ReaderMenuCommand::Stats)
+            | (_, ReaderMenuCommand::Help) => {
+                if command == ReaderMenuCommand::Help {
+                    self.reader_help_controller.clear();
+                }
+                if self.book_reader.open_menu_command(command) {
+                    self.dirty = true;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -559,7 +826,13 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_system_fonts: Vec::new(),
             home_system_fonts: Vec::new(),
             prc_menu_controller: palm::controller::PrcMenuController::default(),
+            reader_menu_controller: {
+                let mut controller = palm::controller::PrcMenuController::default();
+                controller.set_menu_bar(Some(reader_menu_bar()));
+                controller
+            },
             prc_help_controller: palm::controller::PrcHelpDialogController::default(),
+            reader_help_controller: palm::controller::PrcHelpDialogController::default(),
             prc_active_entry: None,
             prc_session: None,
             prc_blocked_timeout_ticks: 0,
@@ -569,6 +842,11 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_status_bar_focus: None,
             prc_touch_pressed_status: None,
             prc_status_bar_last_control: None,
+            reader_status_bar_focus: None,
+            reader_touch_pressed_status: None,
+            reader_touch_pressed_menu: None,
+            reader_touch_pressed_overlay: None,
+            reader_menu_last_rect: None,
             prc_return_to_start_menu: false,
             prc_reserved_gray_initialized: false,
             install_scan_elapsed_ms: 0,
@@ -691,6 +969,14 @@ impl<'a, S: AppSource> Application<'a, S> {
             }
         }
 
+        if matches!(self.state, AppState::BookViewing | AppState::Toc) {
+            for event in events {
+                if self.reader_handle_touch_event(event) {
+                    return;
+                }
+            }
+        }
+
         if matches!(self.state, AppState::StartMenu) {
             let recents = self.system.collect_recent_paths(self.last_viewed_entry.as_ref());
             for event in events {
@@ -769,34 +1055,237 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
             }
             AppState::BookViewing => {
-                let result = self
-                    .book_reader
-                    .handle_view_input(self.source, buttons);
-                if result.exit {
-                    self.exit_from = ExitFrom::Book;
-                    self.exit_overlay_drawn = false;
-                    self.state = AppState::ExitingPending;
-                    self.dirty = true;
-                } else if result.open_toc {
-                    self.set_state_toc();
-                } else if result.dirty {
+                if let Some(dialog) = self.book_reader.help_dialog() {
+                    self.reader_help_controller.sync(&dialog);
+                    let event = if buttons.is_pressed(input::Buttons::Up) {
+                        Some(palm::ui_component::UiNavEvent::Up)
+                    } else if buttons.is_pressed(input::Buttons::Down) {
+                        Some(palm::ui_component::UiNavEvent::Down)
+                    } else if buttons.is_pressed(input::Buttons::Left) {
+                        Some(palm::ui_component::UiNavEvent::Left)
+                    } else if buttons.is_pressed(input::Buttons::Right) {
+                        Some(palm::ui_component::UiNavEvent::Right)
+                    } else if buttons.is_pressed(input::Buttons::Back) {
+                        Some(palm::ui_component::UiNavEvent::Back)
+                    } else if buttons.is_pressed(input::Buttons::Confirm) {
+                        Some(palm::ui_component::UiNavEvent::Confirm)
+                    } else {
+                        None
+                    };
+                    if let Some(event) = event {
+                        let result = self.book_reader.apply_help_action(
+                            self.reader_help_controller
+                                .on_event(&dialog, self.home_system_fonts.as_slice(), event),
+                        );
+                        if result.dirty {
+                            self.dirty = true;
+                        }
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                } else if self.book_reader.has_overlay() {
+                    let result = self.book_reader.handle_overlay_input(buttons);
+                    if result.jumped {
+                        self.set_state_book_viewing();
+                    } else if result.dirty {
+                        self.dirty = true;
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                } else if self.reader_menu_controller.is_active() {
+                    let event = if buttons.is_pressed(input::Buttons::Back) {
+                        Some(palm::ui_component::UiNavEvent::Back)
+                    } else if buttons.is_pressed(input::Buttons::Left) {
+                        Some(palm::ui_component::UiNavEvent::Left)
+                    } else if buttons.is_pressed(input::Buttons::Right) {
+                        Some(palm::ui_component::UiNavEvent::Right)
+                    } else if buttons.is_pressed(input::Buttons::Up) {
+                        Some(palm::ui_component::UiNavEvent::Up)
+                    } else if buttons.is_pressed(input::Buttons::Down) {
+                        Some(palm::ui_component::UiNavEvent::Down)
+                    } else if buttons.is_pressed(input::Buttons::Confirm) {
+                        Some(palm::ui_component::UiNavEvent::Confirm)
+                    } else {
+                        None
+                    };
+                    if let Some(event) = event {
+                        match self.reader_menu_controller.on_event(event) {
+                            palm::controller::MenuAction::Activate(item_id) => {
+                                self.apply_reader_menu_command(item_id);
+                            }
+                            palm::controller::MenuAction::Redraw
+                            | palm::controller::MenuAction::Closed => {
+                                self.reader_touch_pressed_menu = None;
+                                self.dirty = true;
+                            }
+                            palm::controller::MenuAction::None => {}
+                        }
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                } else if let Some(shell_focus) = self.reader_status_bar_focus {
+                    if buttons.is_pressed(input::Buttons::Left) {
+                        if shell_focus == ReaderStatusBarFocus::Menu {
+                            self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Home);
+                            self.dirty = true;
+                        }
+                    } else if buttons.is_pressed(input::Buttons::Right) {
+                        if shell_focus == ReaderStatusBarFocus::Home {
+                            self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Menu);
+                            self.dirty = true;
+                        }
+                    } else if buttons.is_pressed(input::Buttons::Down)
+                        || buttons.is_pressed(input::Buttons::Back)
+                    {
+                        self.reader_status_bar_focus = None;
+                        self.dirty = true;
+                    } else if buttons.is_pressed(input::Buttons::Confirm) {
+                        match shell_focus {
+                            ReaderStatusBarFocus::Home => {
+                                self.exit_from = ExitFrom::Book;
+                                self.exit_overlay_drawn = false;
+                                self.state = AppState::ExitingPending;
+                                self.dirty = true;
+                            }
+                            ReaderStatusBarFocus::Menu => {
+                                if self.reader_menu_controller.open() {
+                                    self.dirty = true;
+                                }
+                            }
+                        }
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                } else if buttons.is_pressed(input::Buttons::Confirm) {
+                    self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Menu);
                     self.dirty = true;
                 } else {
-                    if self.system.add_idle(elapsed_ms) {
+                    let result = self.book_reader.handle_view_input(self.source, buttons);
+                    if result.exit {
+                        self.exit_from = ExitFrom::Book;
+                        self.exit_overlay_drawn = false;
+                        self.state = AppState::ExitingPending;
+                        self.dirty = true;
+                    } else if result.open_toc {
+                        self.set_state_toc();
+                    } else if result.dirty {
+                        self.dirty = true;
+                    } else if self.system.add_idle(elapsed_ms) {
                         self.start_sleep_request();
                     }
                 }
             }
             AppState::Toc => {
-                let result = self.book_reader.handle_toc_input(buttons);
-                if result.exit {
-                    self.set_state_book_viewing();
-                } else if result.jumped {
-                    self.set_state_book_viewing();
-                } else if result.dirty {
-                    self.dirty = true;
+                if let Some(dialog) = self.book_reader.help_dialog() {
+                    self.reader_help_controller.sync(&dialog);
+                    let event = if buttons.is_pressed(input::Buttons::Up) {
+                        Some(palm::ui_component::UiNavEvent::Up)
+                    } else if buttons.is_pressed(input::Buttons::Down) {
+                        Some(palm::ui_component::UiNavEvent::Down)
+                    } else if buttons.is_pressed(input::Buttons::Left) {
+                        Some(palm::ui_component::UiNavEvent::Left)
+                    } else if buttons.is_pressed(input::Buttons::Right) {
+                        Some(palm::ui_component::UiNavEvent::Right)
+                    } else if buttons.is_pressed(input::Buttons::Back) {
+                        Some(palm::ui_component::UiNavEvent::Back)
+                    } else if buttons.is_pressed(input::Buttons::Confirm) {
+                        Some(palm::ui_component::UiNavEvent::Confirm)
+                    } else {
+                        None
+                    };
+                    if let Some(event) = event {
+                        let result = self.book_reader.apply_help_action(
+                            self.reader_help_controller
+                                .on_event(&dialog, self.home_system_fonts.as_slice(), event),
+                        );
+                        if result.dirty {
+                            self.dirty = true;
+                        }
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                } else if self.book_reader.has_overlay() {
+                    let result = self.book_reader.handle_overlay_input(buttons);
+                    if result.jumped {
+                        self.set_state_book_viewing();
+                    } else if result.dirty {
+                        self.dirty = true;
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                } else if self.reader_menu_controller.is_active() {
+                    let event = if buttons.is_pressed(input::Buttons::Back) {
+                        Some(palm::ui_component::UiNavEvent::Back)
+                    } else if buttons.is_pressed(input::Buttons::Left) {
+                        Some(palm::ui_component::UiNavEvent::Left)
+                    } else if buttons.is_pressed(input::Buttons::Right) {
+                        Some(palm::ui_component::UiNavEvent::Right)
+                    } else if buttons.is_pressed(input::Buttons::Up) {
+                        Some(palm::ui_component::UiNavEvent::Up)
+                    } else if buttons.is_pressed(input::Buttons::Down) {
+                        Some(palm::ui_component::UiNavEvent::Down)
+                    } else if buttons.is_pressed(input::Buttons::Confirm) {
+                        Some(palm::ui_component::UiNavEvent::Confirm)
+                    } else {
+                        None
+                    };
+                    if let Some(event) = event {
+                        match self.reader_menu_controller.on_event(event) {
+                            palm::controller::MenuAction::Activate(item_id) => {
+                                self.apply_reader_menu_command(item_id);
+                            }
+                            palm::controller::MenuAction::Redraw
+                            | palm::controller::MenuAction::Closed => {
+                                self.reader_touch_pressed_menu = None;
+                                self.dirty = true;
+                            }
+                            palm::controller::MenuAction::None => {}
+                        }
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                } else if let Some(shell_focus) = self.reader_status_bar_focus {
+                    if buttons.is_pressed(input::Buttons::Left) {
+                        if shell_focus == ReaderStatusBarFocus::Menu {
+                            self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Home);
+                            self.dirty = true;
+                        }
+                    } else if buttons.is_pressed(input::Buttons::Right) {
+                        if shell_focus == ReaderStatusBarFocus::Home {
+                            self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Menu);
+                            self.dirty = true;
+                        }
+                    } else if buttons.is_pressed(input::Buttons::Down)
+                        || buttons.is_pressed(input::Buttons::Back)
+                    {
+                        self.reader_status_bar_focus = None;
+                        self.dirty = true;
+                    } else if buttons.is_pressed(input::Buttons::Confirm) {
+                        match shell_focus {
+                            ReaderStatusBarFocus::Home => {
+                                self.exit_from = ExitFrom::Book;
+                                self.exit_overlay_drawn = false;
+                                self.state = AppState::ExitingPending;
+                                self.dirty = true;
+                            }
+                            ReaderStatusBarFocus::Menu => {
+                                if self.reader_menu_controller.open() {
+                                    self.dirty = true;
+                                }
+                            }
+                        }
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
                 } else {
-                    if self.system.add_idle(elapsed_ms) {
+                    let result = self.book_reader.handle_toc_input(buttons);
+                    if result.exit {
+                        self.set_state_book_viewing();
+                    } else if result.jumped {
+                        self.set_state_book_viewing();
+                    } else if result.dirty {
+                        self.dirty = true;
+                    } else if self.system.add_idle(elapsed_ms) {
                         self.start_sleep_request();
                     }
                 }
@@ -1922,12 +2411,26 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn set_state_book_viewing(&mut self) {
         self.state = AppState::BookViewing;
+        self.reader_status_bar_focus = None;
+        self.reader_touch_pressed_status = None;
+        self.reader_touch_pressed_menu = None;
+        self.reader_touch_pressed_overlay = None;
+        self.reader_help_controller.clear();
+        self.reader_menu_controller.close();
+        self.reader_menu_last_rect = None;
         self.system.full_refresh = true;
         self.dirty = true;
     }
 
     fn set_state_toc(&mut self) {
         self.state = AppState::Toc;
+        self.reader_status_bar_focus = None;
+        self.reader_touch_pressed_status = None;
+        self.reader_touch_pressed_menu = None;
+        self.reader_touch_pressed_overlay = None;
+        self.reader_help_controller.clear();
+        self.reader_menu_controller.close();
+        self.reader_menu_last_rect = None;
         self.dirty = true;
     }
 
@@ -1951,12 +2454,7 @@ impl<'a, S: AppSource> Application<'a, S> {
 
 
     fn draw_start_menu(&mut self, display: &mut impl crate::display::Display) {
-        if self.home_system_fonts.is_empty() {
-            self.home_system_fonts = self.source.load_home_system_fonts();
-            if self.home_system_fonts.is_empty() {
-                self.home_system_fonts = self.source.load_prc_system_fonts();
-            }
-        }
+        self.ensure_home_system_fonts();
         let recents = self.system.collect_recent_paths(self.last_viewed_entry.as_ref());
         let icons = HomeIcons {
             icon_size: generated_icons::ICON_SIZE as i32,
@@ -1980,6 +2478,15 @@ impl<'a, S: AppSource> Application<'a, S> {
             draw_trbk_image,
         };
         self.home.draw_start_menu(&mut ctx, display, &recents);
+    }
+
+    fn ensure_home_system_fonts(&mut self) {
+        if self.home_system_fonts.is_empty() {
+            self.home_system_fonts = self.source.load_home_system_fonts();
+            if self.home_system_fonts.is_empty() {
+                self.home_system_fonts = self.source.load_prc_system_fonts();
+            }
+        }
     }
 
 
@@ -2013,6 +2520,7 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn draw_prc_viewer(&mut self, display: &mut impl crate::display::Display) {
         const STATUS_H: i32 = StatusBarView::HEIGHT;
+        self.ensure_home_system_fonts();
         self.display_buffers.clear(BinaryColor::On).ok();
         let size = self.display_buffers.size();
         let mut shell_ui = UiContext {
@@ -2201,6 +2709,7 @@ impl<'a, S: AppSource> Application<'a, S> {
 
 
     fn draw_book_reader(&mut self, display: &mut impl crate::display::Display) {
+        self.ensure_home_system_fonts();
         self.ensure_gray2_buffers();
         let mut ctx = BookReaderContext {
             display_buffers: self.display_buffers,
@@ -2209,13 +2718,70 @@ impl<'a, S: AppSource> Application<'a, S> {
             source: self.source,
             full_refresh: &mut self.system.full_refresh,
             render_policy: self.render_policy,
+            battery_percent: self.system.battery_percent,
+            palm_fonts: self.home_system_fonts.as_slice(),
         };
-        if let Err(err) = self.book_reader.draw_book(&mut ctx, display) {
+        let home_focused = self.reader_status_bar_focus == Some(ReaderStatusBarFocus::Home);
+        let menu_focused = self.reader_status_bar_focus == Some(ReaderStatusBarFocus::Menu);
+        if let Some(overlay) = self.reader_menu_controller.overlay() {
+            if let Err(err) = self.book_reader.render_book_frame(&mut ctx, home_focused, menu_focused) {
+                self.set_error(err);
+                return;
+            }
+            let rect = draw_reader_menu_overlay(
+                self.display_buffers,
+                self.home_system_fonts.as_slice(),
+                overlay,
+            );
+            let dirty = if let Some(prev) = self.reader_menu_last_rect {
+                let x0 = prev.x.min(rect.x);
+                let y0 = prev.y.min(rect.y);
+                let x1 = (prev.x + prev.w).max(rect.x + rect.w);
+                let y1 = (prev.y + prev.h).max(rect.y + rect.h);
+                Rect::new(x0, y0, x1 - x0, y1 - y0)
+            } else {
+                rect
+            };
+            self.reader_menu_last_rect = Some(rect);
+            let mut rq = RenderQueue::default();
+            rq.push(dirty, RefreshMode::Fast);
+            flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Fast);
+        } else if self.book_reader.has_overlay() {
+            self.reader_menu_last_rect = None;
+            if let Err(err) = self.book_reader.render_book_frame(&mut ctx, home_focused, menu_focused) {
+                self.set_error(err);
+                return;
+            }
+            let help_focus = self.book_reader.help_dialog().map(|dialog| {
+                self.reader_help_controller.sync(&dialog);
+                self.reader_help_controller.focused_control()
+            });
+            draw_reader_overlay(
+                &mut self.book_reader,
+                &mut ctx,
+                display,
+                help_focus,
+            );
+        } else if let Some(prev) = self.reader_menu_last_rect.take() {
+            if let Err(err) = self.book_reader.render_book_frame(&mut ctx, home_focused, menu_focused) {
+                self.set_error(err);
+                return;
+            }
+            let mut rq = RenderQueue::default();
+            rq.push(prev, RefreshMode::Fast);
+            flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Fast);
+        } else if let Err(err) = self.book_reader.draw_book(
+            &mut ctx,
+            display,
+            home_focused,
+            menu_focused,
+        ) {
             self.set_error(err);
         }
     }
 
     fn draw_toc_view(&mut self, display: &mut impl crate::display::Display) {
+        self.ensure_home_system_fonts();
         self.ensure_gray2_buffers();
         let mut ctx = BookReaderContext {
             display_buffers: self.display_buffers,
@@ -2224,9 +2790,83 @@ impl<'a, S: AppSource> Application<'a, S> {
             source: self.source,
             full_refresh: &mut self.system.full_refresh,
             render_policy: self.render_policy,
+            battery_percent: self.system.battery_percent,
+            palm_fonts: self.home_system_fonts.as_slice(),
         };
-        if let Err(err) = self.book_reader.draw_toc(&mut ctx, display) {
-            self.set_error(err);
+        let home_focused = self.reader_status_bar_focus == Some(ReaderStatusBarFocus::Home);
+        let menu_focused = self.reader_status_bar_focus == Some(ReaderStatusBarFocus::Menu);
+        if let Some(overlay) = self.reader_menu_controller.overlay() {
+            if let Err(err) = self.book_reader.draw_toc(
+                &mut ctx,
+                display,
+                home_focused,
+                menu_focused,
+            ) {
+                self.set_error(err);
+                return;
+            }
+            let rect = draw_reader_menu_overlay(
+                self.display_buffers,
+                self.home_system_fonts.as_slice(),
+                overlay,
+            );
+            let dirty = if let Some(prev) = self.reader_menu_last_rect {
+                let x0 = prev.x.min(rect.x);
+                let y0 = prev.y.min(rect.y);
+                let x1 = (prev.x + prev.w).max(rect.x + rect.w);
+                let y1 = (prev.y + prev.h).max(rect.y + rect.h);
+                Rect::new(x0, y0, x1 - x0, y1 - y0)
+            } else {
+                rect
+            };
+            self.reader_menu_last_rect = Some(rect);
+            let mut rq = RenderQueue::default();
+            rq.push(dirty, RefreshMode::Fast);
+            flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Fast);
+        } else if self.book_reader.has_overlay() {
+            self.reader_menu_last_rect = None;
+            if let Err(err) = self.book_reader.draw_toc(
+                &mut ctx,
+                display,
+                home_focused,
+                menu_focused,
+            ) {
+                self.set_error(err);
+                return;
+            }
+            let help_focus = self.book_reader.help_dialog().map(|dialog| {
+                self.reader_help_controller.sync(&dialog);
+                self.reader_help_controller.focused_control()
+            });
+            draw_reader_overlay(
+                &mut self.book_reader,
+                &mut ctx,
+                display,
+                help_focus,
+            );
+        } else if let Some(prev) = self.reader_menu_last_rect.take() {
+            if let Err(err) = self.book_reader.draw_toc(
+                &mut ctx,
+                display,
+                home_focused,
+                menu_focused,
+            ) {
+                self.set_error(err);
+                return;
+            }
+            let mut rq = RenderQueue::default();
+            rq.push(prev, RefreshMode::Fast);
+            flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Fast);
+        } else {
+            self.reader_menu_last_rect = None;
+            if let Err(err) = self.book_reader.draw_toc(
+                &mut ctx,
+                display,
+                home_focused,
+                menu_focused,
+            ) {
+                self.set_error(err);
+            }
         }
     }
 

@@ -446,7 +446,10 @@ impl PrcMenuController {
                 }
             }
             UiNavEvent::Up => {
-                if self.move_item(-1) {
+                if self.item_index.is_none() {
+                    self.close();
+                    MenuAction::Closed
+                } else if self.move_item(-1) {
                     MenuAction::Redraw
                 } else {
                     MenuAction::None

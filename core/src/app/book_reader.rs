@@ -15,14 +15,34 @@ use crate::display::Display;
 use crate::framebuffer::{DisplayBuffers, Rotation, BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
 use crate::image_viewer::{AppSource, ImageData, ImageError};
 use crate::input;
+use crate::palm::{
+    controller::HelpDialogAction,
+    menu_preview::{MenuBarPreview, MenuItemPreview, MenuPullDownPreview},
+    runner::RuntimeHelpDialog,
+    ui::{draw_help_dialog_native, draw_menu_overlay_native},
+};
 use crate::render_policy::RenderPolicy;
-use crate::ternos::ui::{flush_queue, ListItem, ListView, Rect, RenderQueue, UiContext, View};
+use crate::ternos::ui::{
+    flush_queue,
+    auto_button_layout_for_label,
+    palm_text_height,
+    palm_text_width,
+    ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalWidget, ObjectId,
+    Rect, ListItem, ListView, RenderQueue, StatusBarActionState, StatusBarView, UiContext, View,
+};
 
 const LIST_TOP: i32 = 60;
 const LINE_HEIGHT: i32 = 24;
 const LIST_MARGIN_X: i32 = 16;
 const HEADER_Y: i32 = 24;
 const BOOK_FULL_REFRESH_EVERY: usize = 10;
+const BOOK_STATUS_H: i32 = StatusBarView::HEIGHT;
+const BOOK_CONTENT_TOP: i32 = BOOK_STATUS_H + 5;
+
+fn reader_page_origin_y(book: &crate::trbk::TrbkBookInfo) -> i32 {
+    let desired_top = BOOK_STATUS_H + ((book.metadata.line_height as i32) / 2).max(12);
+    desired_top - book.metadata.margin_top as i32
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum PageTurnIndicator {
@@ -34,14 +54,14 @@ pub struct BookReaderState {
     pub current_book: Option<Rc<crate::trbk::TrbkBookInfo>>,
     pub current_page_ops: Option<crate::trbk::TrbkPage>,
     pub next_page_ops: Option<crate::trbk::TrbkPage>,
-    pub prefetched_page: Option<usize>,
-    pub prefetched_gray2_used: bool,
     pub toc_selected: usize,
     pub toc_labels: Option<Vec<String>>,
     pub current_page: usize,
     pub book_turns_since_full: usize,
     pub last_rendered_page: Option<usize>,
     pub page_turn_indicator: Option<PageTurnIndicator>,
+    pub overlay: Option<ReaderOverlay>,
+    pub overlay_form: ModalFormController,
 }
 
 pub struct BookReaderContext<'a, S: AppSource> {
@@ -51,6 +71,8 @@ pub struct BookReaderContext<'a, S: AppSource> {
     pub source: &'a mut S,
     pub full_refresh: &'a mut bool,
     pub render_policy: RenderPolicy,
+    pub battery_percent: Option<u8>,
+    pub palm_fonts: &'a [crate::palm::runtime::PalmFont],
 }
 
 pub struct BookViewResult {
@@ -65,20 +87,66 @@ pub struct TocResult {
     pub dirty: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReaderMenuCommand {
+    Contents,
+    Page,
+    Stats,
+    Help,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReaderOverlay {
+    PageJump { target_page: usize },
+    Stats,
+    Help(RuntimeHelpDialog),
+}
+
+pub struct ReaderOverlayResult {
+    pub close: bool,
+    pub dirty: bool,
+    pub jumped: bool,
+}
+
+const READER_MENU_NAVIGATE: u16 = 1;
+const READER_MENU_VIEW: u16 = 2;
+const READER_CMD_CONTENTS: u16 = 100;
+const READER_CMD_PAGE: u16 = 101;
+const READER_CMD_STATS: u16 = 200;
+const READER_CMD_HELP: u16 = 201;
+const READER_OVERLAY_FORM_ID: u16 = 3000;
+const READER_OVERLAY_FIELD_PAGE: ObjectId = 3001;
+const READER_OVERLAY_BTN_DEC10: ObjectId = 3002;
+const READER_OVERLAY_BTN_DEC1: ObjectId = 3003;
+const READER_OVERLAY_BTN_INC1: ObjectId = 3004;
+const READER_OVERLAY_BTN_INC10: ObjectId = 3005;
+const READER_OVERLAY_BTN_DONE: ObjectId = 3006;
+
+fn reader_help_text() -> String {
+    [
+        "Left/Up: previous page",
+        "Right/Down: next page",
+        "Confirm: focus Menu in status bar",
+        "Menu -> Contents/Page/Stats/Help",
+        "Home exits to launcher",
+    ]
+    .join("\n")
+}
+
 impl BookReaderState {
     pub fn new() -> Self {
         Self {
             current_book: None,
             current_page_ops: None,
             next_page_ops: None,
-            prefetched_page: None,
-            prefetched_gray2_used: false,
             toc_selected: 0,
             toc_labels: None,
             current_page: 0,
             book_turns_since_full: 0,
             last_rendered_page: None,
             page_turn_indicator: None,
+            overlay: None,
+            overlay_form: ModalFormController::default(),
         }
     }
 
@@ -86,14 +154,14 @@ impl BookReaderState {
         self.current_book = None;
         self.current_page_ops = None;
         self.next_page_ops = None;
-        self.prefetched_page = None;
-        self.prefetched_gray2_used = false;
         self.toc_selected = 0;
         self.toc_labels = None;
         self.current_page = 0;
         self.book_turns_since_full = 0;
         self.last_rendered_page = None;
         self.page_turn_indicator = None;
+        self.overlay = None;
+        self.overlay_form.reset();
     }
 
     pub fn close<S: AppSource>(&mut self, source: &mut S) {
@@ -115,8 +183,6 @@ impl BookReaderState {
         self.current_page = book_positions.get(entry_name).copied().unwrap_or(0);
         self.current_page_ops = source.trbk_page(self.current_page).ok();
         self.next_page_ops = None;
-        self.prefetched_page = None;
-        self.prefetched_gray2_used = false;
         self.last_rendered_page = None;
         self.book_turns_since_full = 0;
         Ok(())
@@ -148,8 +214,6 @@ impl BookReaderState {
                 self.current_page = self.current_page.saturating_sub(1);
                 self.current_page_ops = None;
                 self.next_page_ops = None;
-                self.prefetched_page = None;
-                self.prefetched_gray2_used = false;
                 self.book_turns_since_full = self.book_turns_since_full.saturating_add(1);
                 self.page_turn_indicator = Some(PageTurnIndicator::Backward);
                 result.dirty = true;
@@ -169,8 +233,6 @@ impl BookReaderState {
                         self.current_page_ops = None;
                     }
                     self.next_page_ops = None;
-                    self.prefetched_page = None;
-                    self.prefetched_gray2_used = false;
                     self.book_turns_since_full = self.book_turns_since_full.saturating_add(1);
                     self.page_turn_indicator = Some(PageTurnIndicator::Forward);
                     result.dirty = true;
@@ -180,14 +242,6 @@ impl BookReaderState {
         }
 
         if buttons.is_pressed(input::Buttons::Confirm) {
-            if let Some(book) = &self.current_book {
-                if !book.toc.is_empty() {
-                    self.toc_selected = find_toc_selection(book, self.current_page);
-                    self.toc_labels = None;
-                    result.open_toc = true;
-                    result.dirty = true;
-                }
-            }
             return result;
         }
 
@@ -200,6 +254,332 @@ impl BookReaderState {
         // Keep source used to avoid unused warnings; may be needed later.
         let _ = source;
         result
+    }
+
+    pub fn apply_overlay_action(&mut self, action: ModalFormAction) -> ReaderOverlayResult {
+        let mut result = ReaderOverlayResult {
+            close: false,
+            dirty: false,
+            jumped: false,
+        };
+        if self.overlay.is_none() {
+            return result;
+        }
+        match action {
+            ModalFormAction::None => {}
+            ModalFormAction::Redraw => {
+                result.dirty = true;
+            }
+            ModalFormAction::Closed => {
+                self.overlay = None;
+                self.overlay_form.reset();
+                result.close = true;
+                result.dirty = true;
+            }
+            ModalFormAction::Activate(id) => match self.overlay.as_ref() {
+                Some(ReaderOverlay::PageJump { .. }) => {
+                    let Some(ReaderOverlay::PageJump { target_page }) = self.overlay.as_mut() else {
+                        return result;
+                    };
+                    let max_page = self
+                        .current_book
+                        .as_ref()
+                        .map(|book| book.page_count.saturating_sub(1))
+                        .unwrap_or(0);
+                    match id {
+                        READER_OVERLAY_BTN_DEC10 => {
+                            *target_page = target_page.saturating_sub(10);
+                            result.dirty = true;
+                        }
+                        READER_OVERLAY_BTN_DEC1 => {
+                            *target_page = target_page.saturating_sub(1);
+                            result.dirty = true;
+                        }
+                        READER_OVERLAY_BTN_INC1 => {
+                            *target_page = (*target_page + 1).min(max_page);
+                            result.dirty = true;
+                        }
+                        READER_OVERLAY_BTN_INC10 => {
+                            *target_page = (*target_page + 10).min(max_page);
+                            result.dirty = true;
+                        }
+                        READER_OVERLAY_BTN_DONE => {
+                            self.current_page = *target_page;
+                            self.current_page_ops = None;
+                            self.next_page_ops = None;
+                            self.last_rendered_page = None;
+                            self.book_turns_since_full = 0;
+                            self.overlay = None;
+                            self.overlay_form.reset();
+                            result.close = true;
+                            result.jumped = true;
+                            result.dirty = true;
+                        }
+                        _ => {}
+                    }
+                }
+                Some(ReaderOverlay::Stats) => {
+                    if id == READER_OVERLAY_BTN_DONE {
+                        self.overlay = None;
+                        self.overlay_form.reset();
+                        result.close = true;
+                        result.dirty = true;
+                    }
+                }
+                Some(ReaderOverlay::Help(_)) => {}
+                None => {}
+            },
+        }
+        result
+    }
+
+    pub fn handle_overlay_input(
+        &mut self,
+        buttons: &input::ButtonState,
+    ) -> ReaderOverlayResult {
+        if self.overlay.is_none() {
+            return ReaderOverlayResult {
+                close: false,
+                dirty: false,
+                jumped: false,
+            };
+        }
+        let Some(spec) = self.overlay_spec() else {
+            return ReaderOverlayResult {
+                close: false,
+                dirty: false,
+                jumped: false,
+            };
+        };
+        let event = if buttons.is_pressed(input::Buttons::Back) {
+            Some(crate::palm::ui_component::UiNavEvent::Back)
+        } else if buttons.is_pressed(input::Buttons::Left) {
+            Some(crate::palm::ui_component::UiNavEvent::Left)
+        } else if buttons.is_pressed(input::Buttons::Right) {
+            Some(crate::palm::ui_component::UiNavEvent::Right)
+        } else if buttons.is_pressed(input::Buttons::Up) {
+            Some(crate::palm::ui_component::UiNavEvent::Up)
+        } else if buttons.is_pressed(input::Buttons::Down) {
+            Some(crate::palm::ui_component::UiNavEvent::Down)
+        } else if buttons.is_pressed(input::Buttons::Confirm) {
+            Some(crate::palm::ui_component::UiNavEvent::Confirm)
+        } else {
+            None
+        };
+        let Some(event) = event else {
+            return ReaderOverlayResult {
+                close: false,
+                dirty: false,
+                jumped: false,
+            };
+        };
+
+        let action = self.overlay_form.on_event(&spec, event);
+        self.apply_overlay_action(action)
+    }
+
+    pub fn apply_help_action(&mut self, action: HelpDialogAction) -> ReaderOverlayResult {
+        let mut result = ReaderOverlayResult {
+            close: false,
+            dirty: false,
+            jumped: false,
+        };
+        let Some(ReaderOverlay::Help(dialog)) = self.overlay.as_mut() else {
+            return result;
+        };
+        match action {
+            HelpDialogAction::None => {}
+            HelpDialogAction::Redraw => {
+                result.dirty = true;
+            }
+            HelpDialogAction::Scroll(delta) => {
+                if delta < 0 {
+                    dialog.scroll_line = dialog.scroll_line.saturating_sub(delta.unsigned_abs() as usize);
+                } else if delta > 0 {
+                    dialog.scroll_line = dialog.scroll_line.saturating_add(delta as usize);
+                }
+                result.dirty = true;
+            }
+            HelpDialogAction::Dismiss => {
+                self.overlay = None;
+                result.close = true;
+                result.dirty = true;
+            }
+        }
+        result
+    }
+
+    pub fn open_menu_command(&mut self, command: ReaderMenuCommand) -> bool {
+        match command {
+            ReaderMenuCommand::Contents => {
+                if let Some(book) = &self.current_book {
+                    if !book.toc.is_empty() {
+                        self.toc_selected = find_toc_selection(book, self.current_page);
+                        self.toc_labels = None;
+                        return true;
+                    }
+                }
+                false
+            }
+            ReaderMenuCommand::Page => {
+                self.overlay = Some(ReaderOverlay::PageJump {
+                    target_page: self.current_page,
+                });
+                self.overlay_form.reset();
+                true
+            }
+            ReaderMenuCommand::Stats => {
+                self.overlay = Some(ReaderOverlay::Stats);
+                self.overlay_form.reset();
+                true
+            }
+            ReaderMenuCommand::Help => {
+                self.overlay = Some(ReaderOverlay::Help(RuntimeHelpDialog {
+                    help_id: 1,
+                    text: reader_help_text(),
+                    scroll_line: 0,
+                }));
+                self.overlay_form.reset();
+                true
+            }
+        }
+    }
+
+    pub fn has_overlay(&self) -> bool {
+        self.overlay.is_some()
+    }
+
+    pub fn help_dialog(&self) -> Option<RuntimeHelpDialog> {
+        match self.overlay.as_ref() {
+            Some(ReaderOverlay::Help(dialog)) => Some(dialog.clone()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn overlay_spec(&self) -> Option<ModalFormSpec> {
+        let overlay = self.overlay.as_ref()?;
+        let bounds = match overlay {
+            ReaderOverlay::PageJump { .. } => Rect::new(30, BOOK_STATUS_H + 8, 420, 190),
+            ReaderOverlay::Stats => Rect::new(22, BOOK_STATUS_H + 8, 438, 196),
+            ReaderOverlay::Help(..) => return None,
+        };
+        let title = match overlay {
+            ReaderOverlay::PageJump { .. } => "Go To Page",
+            ReaderOverlay::Stats => "Book Stats",
+            ReaderOverlay::Help(..) => return None,
+        };
+        let body_x = bounds.x + 20;
+        let body_y = bounds.y + 52;
+        let btn_margin_right = 14;
+        let btn_margin_bottom = 14;
+        let btn_x = bounds.x + bounds.w - 80 - btn_margin_right;
+        let btn_y = bounds.y + bounds.h - 32 - btn_margin_bottom;
+        let done_w = palm_text_width("Done", 0, &[], 1).max(24);
+        let done_h = palm_text_height(0, &[], 1).max(10);
+        let btn = auto_button_layout_for_label(btn_x, btn_y, done_w, done_h, 58, 24, 10, 5);
+
+        let mut widgets = Vec::new();
+        let default_focus = match overlay {
+            ReaderOverlay::PageJump { target_page } => {
+                widgets.push(ModalWidget::Label {
+                    id: 0,
+                    bounds: Rect::new(body_x, body_y, 200, 12),
+                    text: format!(
+                        "Page {} of {}",
+                        target_page.saturating_add(1),
+                        self.current_book.as_ref().map(|b| b.page_count).unwrap_or(0)
+                    ),
+                    font_id: 0,
+                });
+                widgets.push(ModalWidget::Field {
+                    id: READER_OVERLAY_FIELD_PAGE,
+                    bounds: Rect::new(body_x, body_y + 22, 120, 24),
+                    text: format!("{}", target_page.saturating_add(1)),
+                    font_id: 0,
+                });
+                let row_y = body_y + 60;
+                let button_w = 48;
+                let gap = 8;
+                for (id, text, x) in [
+                    (READER_OVERLAY_BTN_DEC10, "-10", body_x),
+                    (READER_OVERLAY_BTN_DEC1, "-1", body_x + button_w + gap),
+                    (READER_OVERLAY_BTN_INC1, "+1", body_x + (button_w + gap) * 2),
+                    (READER_OVERLAY_BTN_INC10, "+10", body_x + (button_w + gap) * 3),
+                ] {
+                    widgets.push(ModalWidget::Button {
+                        id,
+                        bounds: Rect::new(x, row_y, button_w, 24),
+                        text: text.into(),
+                        font_id: 0,
+                        style: 0,
+                        no_frame: false,
+                    });
+                }
+                widgets.push(ModalWidget::Label {
+                    id: 0,
+                    bounds: Rect::new(body_x, row_y + 40, 300, 12),
+                    text: "Use Left/Right and Up/Down to move between controls".into(),
+                    font_id: 0,
+                });
+                widgets.push(ModalWidget::Label {
+                    id: 0,
+                    bounds: Rect::new(body_x, row_y + 62, 240, 12),
+                    text: "Confirm activates the selected button".into(),
+                    font_id: 0,
+                });
+                READER_OVERLAY_BTN_DEC1
+            }
+            ReaderOverlay::Stats => {
+                if let Some(book) = self.current_book.as_ref() {
+                    let progress = if book.page_count > 0 {
+                        ((self.current_page + 1) * 100) / book.page_count.max(1)
+                    } else {
+                        0
+                    };
+                    for (idx, line) in [
+                        format!("Title: {}", book.metadata.title),
+                        format!("Page: {}/{}", self.current_page + 1, book.page_count),
+                        format!("Progress: {}%", progress),
+                        format!("TOC entries: {}", book.toc.len()),
+                    ]
+                    .iter()
+                    .enumerate()
+                    {
+                        widgets.push(ModalWidget::Label {
+                            id: 0,
+                            bounds: Rect::new(body_x, body_y + idx as i32 * 24, 380, 12),
+                            text: line.clone(),
+                            font_id: 0,
+                        });
+                    }
+                }
+                widgets.push(ModalWidget::Label {
+                    id: 0,
+                    bounds: Rect::new(body_x, bounds.y + bounds.h - 56, 220, 12),
+                    text: "Confirm or Back to close".into(),
+                    font_id: 0,
+                });
+                READER_OVERLAY_BTN_DONE
+            }
+            ReaderOverlay::Help(..) => return None,
+        };
+
+        widgets.push(ModalWidget::Button {
+            id: READER_OVERLAY_BTN_DONE,
+            bounds: Rect::new(btn_x, btn_y, btn.w, btn.h),
+            text: "Done".into(),
+            font_id: 0,
+            style: 0,
+            no_frame: false,
+        });
+
+        Some(ModalFormSpec {
+            form_id: READER_OVERLAY_FORM_ID,
+            bounds,
+            title: title.into(),
+            widgets,
+            default_focus: Some(default_focus),
+        })
     }
 
     pub fn handle_toc_input(
@@ -238,8 +618,6 @@ impl BookReaderState {
                 self.current_page = entry.page_index as usize;
                 self.current_page_ops = None;
                 self.next_page_ops = None;
-                self.prefetched_page = None;
-                self.prefetched_gray2_used = false;
                 self.last_rendered_page = None;
                 self.book_turns_since_full = 0;
                 result.jumped = true;
@@ -260,8 +638,11 @@ impl BookReaderState {
         &mut self,
         ctx: &mut BookReaderContext<'_, S>,
         display: &mut impl Display,
+        home_focused: bool,
+        menu_focused: bool,
     ) -> Result<(), ImageError> {
         ctx.display_buffers.clear(BinaryColor::On).ok();
+        draw_reader_status_bar(ctx, None, home_focused, menu_focused);
         let Some(book) = &self.current_book else {
             return Err(ImageError::Decode);
         };
@@ -291,12 +672,12 @@ impl BookReaderState {
         list.empty_label = Some("No table of contents.");
         list.selected = self.toc_selected.min(items.len().saturating_sub(1));
         list.margin_x = LIST_MARGIN_X;
-        list.header_y = HEADER_Y;
-        list.list_top = LIST_TOP;
+        list.header_y = HEADER_Y + BOOK_CONTENT_TOP;
+        list.list_top = LIST_TOP + BOOK_CONTENT_TOP;
         list.line_height = LINE_HEIGHT;
 
         let size = ctx.display_buffers.size();
-        let rect = Rect::new(0, 0, size.width as i32, size.height as i32);
+        let rect = Rect::new(0, BOOK_CONTENT_TOP, size.width as i32, size.height as i32 - BOOK_CONTENT_TOP);
         let mut rq = RenderQueue::default();
         let mut ui = UiContext {
             buffers: ctx.display_buffers,
@@ -313,33 +694,22 @@ impl BookReaderState {
         &mut self,
         ctx: &mut BookReaderContext<'_, S>,
         display: &mut impl Display,
+        home_focused: bool,
+        menu_focused: bool,
     ) -> Result<(), ImageError> {
+        self.render_book_frame(ctx, home_focused, menu_focused)?;
         let Some(book) = &self.current_book else {
             return Err(ImageError::Decode);
         };
-        let book_ptr = book.as_ref() as *const crate::trbk::TrbkBookInfo;
-        let book_page_count = book.page_count;
-        let using_prefetch = self.prefetched_page == Some(self.current_page);
+        let mode = ctx.render_policy.refresh_mode(*ctx.full_refresh);
         let mut gray2_used = false;
         let mut gray2_absolute = false;
-        if using_prefetch {
-            gray2_used = self.prefetched_gray2_used;
-        } else {
-            ctx.display_buffers.clear(BinaryColor::On).ok();
-            ctx.gray2_lsb.fill(0);
-            ctx.gray2_msb.fill(0);
-            if self.current_page_ops.is_none() {
-                self.current_page_ops = ctx.source.trbk_page(self.current_page).ok();
-            }
-            let page = self.current_page_ops.clone();
-            if let Some(page) = page.as_ref() {
-                unsafe {
-                    self.render_trbk_page_ops(ctx, &*book_ptr, page, &mut gray2_used, &mut gray2_absolute);
-                }
-            }
+        if self.current_page_ops.is_some() {
+            // Detect grayscale state from prepared planes.
+            gray2_used = ctx.gray2_lsb.iter().any(|b| *b != 0) || ctx.gray2_msb.iter().any(|b| *b != 0);
+            gray2_absolute = false;
         }
         self.last_rendered_page = Some(self.current_page);
-        draw_page_indicator(ctx.display_buffers, self.current_page, book_page_count);
         if self.book_turns_since_full >= BOOK_FULL_REFRESH_EVERY {
             *ctx.full_refresh = true;
             self.book_turns_since_full = 0;
@@ -362,17 +732,42 @@ impl BookReaderState {
             flush_queue(display, ctx.display_buffers, &mut rq, mode);
         }
 
-        self.prefetched_page = None;
-        self.prefetched_gray2_used = false;
-
         if self.next_page_ops.is_none() {
             let next = self.current_page + 1;
-            if next < book_page_count {
+            if next < book.page_count {
                 self.next_page_ops = ctx.source.trbk_page(next).ok();
             }
         }
-        unsafe {
-            self.prefetch_next_page(ctx, &*book_ptr);
+        Ok(())
+    }
+
+    pub fn render_book_frame<S: AppSource>(
+        &mut self,
+        ctx: &mut BookReaderContext<'_, S>,
+        home_focused: bool,
+        menu_focused: bool,
+    ) -> Result<(), ImageError> {
+        let Some(book) = self.current_book.clone() else {
+            return Err(ImageError::Decode);
+        };
+        let book_page_count = book.page_count;
+        let mut gray2_used = false;
+        let mut gray2_absolute = false;
+        ctx.display_buffers.clear(BinaryColor::On).ok();
+        draw_reader_status_bar(
+            ctx,
+            Some((self.current_page, book_page_count)),
+            home_focused,
+            menu_focused,
+        );
+        ctx.gray2_lsb.fill(0);
+        ctx.gray2_msb.fill(0);
+        if self.current_page_ops.is_none() {
+            self.current_page_ops = ctx.source.trbk_page(self.current_page).ok();
+        }
+        let page = self.current_page_ops.clone();
+        if let Some(page) = page.as_ref() {
+            self.render_trbk_page_ops(ctx, book.as_ref(), page, &mut gray2_used, &mut gray2_absolute);
         }
         Ok(())
     }
@@ -385,6 +780,7 @@ impl BookReaderState {
         gray2_used: &mut bool,
         gray2_absolute: &mut bool,
     ) {
+        let content_origin_y = reader_page_origin_y(book);
         for op in &page.ops {
             match op {
                 crate::trbk::TrbkOp::TextRun { x, y, style, text } => {
@@ -396,7 +792,7 @@ impl BookReaderState {
                         book,
                         &mut gray2_ctx,
                         *x,
-                        *y,
+                        *y + content_origin_y,
                         *style,
                         text,
                     );
@@ -497,7 +893,7 @@ impl BookReaderState {
                                         &mut gray2_ctx,
                                         ctx.render_policy,
                                         *x,
-                                        *y,
+                                        *y + content_origin_y,
                                         *width as i32,
                                         *height as i32,
                                     );
@@ -519,38 +915,55 @@ impl BookReaderState {
         }
     }
 
-    fn prefetch_next_page<S: AppSource>(
-        &mut self,
-        ctx: &mut BookReaderContext<'_, S>,
-        book: &crate::trbk::TrbkBookInfo,
-    ) {
-        if self.prefetched_page.is_some() {
-            return;
-        }
-        let next = self.current_page + 1;
-        if next >= book.page_count {
-            return;
-        }
-        if self.next_page_ops.is_none() {
-            self.next_page_ops = ctx.source.trbk_page(next).ok();
-        }
-        let Some(page) = self.next_page_ops.clone() else {
-            return;
-        };
-        ctx.display_buffers.clear(BinaryColor::On).ok();
-        ctx.gray2_lsb.fill(0);
-        ctx.gray2_msb.fill(0);
-        let mut gray2_used = false;
-        let mut gray2_absolute = false;
-        self.render_trbk_page_ops(ctx, book, &page, &mut gray2_used, &mut gray2_absolute);
-        draw_page_indicator(ctx.display_buffers, next, book.page_count);
-        if gray2_absolute {
-            self.prefetched_page = None;
-            self.prefetched_gray2_used = false;
-            return;
-        }
-        self.prefetched_page = Some(next);
-        self.prefetched_gray2_used = gray2_used;
+}
+
+pub fn reader_menu_bar() -> MenuBarPreview {
+    MenuBarPreview {
+        resource_id: 1,
+        menus: alloc::vec![
+            MenuPullDownPreview {
+                resource_id: READER_MENU_NAVIGATE,
+                title: "Navigate".into(),
+                items: alloc::vec![
+                    MenuItemPreview {
+                        id: READER_CMD_CONTENTS,
+                        text: "Contents".into(),
+                        shortcut: None,
+                    },
+                    MenuItemPreview {
+                        id: READER_CMD_PAGE,
+                        text: "Page".into(),
+                        shortcut: None,
+                    },
+                ],
+            },
+            MenuPullDownPreview {
+                resource_id: READER_MENU_VIEW,
+                title: "View".into(),
+                items: alloc::vec![
+                    MenuItemPreview {
+                        id: READER_CMD_STATS,
+                        text: "Stats".into(),
+                        shortcut: None,
+                    },
+                    MenuItemPreview {
+                        id: READER_CMD_HELP,
+                        text: "Help".into(),
+                        shortcut: None,
+                    },
+                ],
+            },
+        ],
+    }
+}
+
+pub fn reader_menu_command(item_id: u16) -> Option<ReaderMenuCommand> {
+    match item_id {
+        READER_CMD_CONTENTS => Some(ReaderMenuCommand::Contents),
+        READER_CMD_PAGE => Some(ReaderMenuCommand::Page),
+        READER_CMD_STATS => Some(ReaderMenuCommand::Stats),
+        READER_CMD_HELP => Some(ReaderMenuCommand::Help),
+        _ => None,
     }
 }
 
@@ -729,20 +1142,101 @@ pub(crate) fn draw_trbk_image(
     }
 }
 
-fn draw_page_indicator(buffers: &mut DisplayBuffers, page: usize, total: usize) {
-    if total == 0 {
+fn draw_reader_status_bar<S: AppSource>(
+    ctx: &mut BookReaderContext<'_, S>,
+    page_info: Option<(usize, usize)>,
+    home_focused: bool,
+    menu_focused: bool,
+) {
+    let size = ctx.display_buffers.size();
+    let mut shell_ui = UiContext {
+        buffers: ctx.display_buffers,
+        render_policy: ctx.render_policy,
+        gray2: None,
+    };
+    let mut status_bar = StatusBarView::new(ctx.palm_fonts);
+    status_bar.battery_percent = ctx.battery_percent;
+    status_bar.home = StatusBarActionState {
+        enabled: true,
+        focused: home_focused,
+    };
+    status_bar.menu = StatusBarActionState {
+        enabled: true,
+        focused: menu_focused,
+    };
+    let page_label = page_info.map(|(page, total)| format!("{}/{}", page.saturating_add(1), total));
+    status_bar.right_text = page_label.as_deref();
+    status_bar.render(
+        &mut shell_ui,
+        Rect::new(0, 0, size.width as i32, BOOK_STATUS_H),
+        &mut RenderQueue::default(),
+    );
+}
+
+pub fn draw_reader_menu_overlay(
+    buffers: &mut DisplayBuffers,
+    fonts: &[crate::palm::runtime::PalmFont],
+    overlay: (&MenuBarPreview, usize, Option<usize>),
+) -> Rect {
+    let (menu, active_menu_index, active_item_index) = overlay;
+    draw_menu_overlay_native(
+        buffers,
+        menu,
+        active_menu_index,
+        active_item_index,
+        fonts,
+        0,
+        BOOK_STATUS_H + 5,
+        buffers.size().width as i32,
+    )
+}
+
+pub fn draw_reader_overlay<S: AppSource>(
+    state: &mut BookReaderState,
+    ctx: &mut BookReaderContext<'_, S>,
+    display: &mut impl Display,
+    help_focus: Option<crate::palm::ui::HelpOverlayHit>,
+) {
+    if let Some(dialog) = state.help_dialog() {
+        let rect = draw_help_dialog_native(
+            ctx.display_buffers,
+            &dialog,
+            ctx.palm_fonts,
+            help_focus,
+            crate::ternos::ui::Rect::new(18, BOOK_STATUS_H + 8, 448, 236),
+        );
+        let mut rq = RenderQueue::default();
+        rq.push(rect, crate::display::RefreshMode::Half);
+        flush_queue(display, ctx.display_buffers, &mut rq, crate::display::RefreshMode::Half);
         return;
     }
-    let label = format!("{}/{}", page.saturating_add(1), total);
-    let text_w = (label.len() as i32) * 10;
-    let size = buffers.size();
-    let margin = 8;
-    let x = (size.width as i32 - margin - text_w).max(margin);
-    let y = (size.height as i32 - margin).max(0);
-    let style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
-    Text::new(label.as_str(), Point::new(x, y), style)
-        .draw(buffers)
-        .ok();
+    let Some(spec) = state.overlay_spec() else {
+        return;
+    };
+    state.overlay_form.sync(&spec);
+    let mut form_view = ModalFormView {
+        spec: &spec,
+        fonts: ctx.palm_fonts,
+        focused_id: state.overlay_form.focused_id(),
+    };
+    let mut ui = UiContext {
+        buffers: ctx.display_buffers,
+        render_policy: ctx.render_policy,
+        gray2: None,
+    };
+    form_view.render(&mut ui, spec.bounds, &mut RenderQueue::default());
+
+    let mut rq = RenderQueue::default();
+    rq.push(
+        Rect::new(
+            spec.bounds.x - 1,
+            spec.bounds.y - 1,
+            spec.bounds.w + 2,
+            spec.bounds.h + 3,
+        ),
+        crate::display::RefreshMode::Half,
+    );
+    flush_queue(display, ctx.display_buffers, &mut rq, crate::display::RefreshMode::Half);
 }
 
 fn map_display_point(rotation: Rotation, x: i32, y: i32) -> Option<(usize, usize)> {
