@@ -1,5 +1,6 @@
 extern crate alloc;
 
+use alloc::{format, string::{String, ToString}, vec, vec::Vec};
 use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::Size,
@@ -10,11 +11,12 @@ use embedded_graphics::{
     text::Text,
     Drawable,
 };
-use alloc::{string::String, vec::Vec};
+use crate::palm::runtime::PalmFont;
 
 use super::{
     geom::{Point, Rect},
     runtime::{UiTableCell, UiTableModel, UiTableRow},
+    text::{draw_palm_text, palm_text_height, palm_text_width},
     view::{RenderQueue, UiContext, View},
 };
 
@@ -30,7 +32,20 @@ pub enum TableScrollBarHit {
     Track { top_row: usize },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TableInteraction {
+    pub selected_row: Option<usize>,
+    pub selected_col: Option<usize>,
+    pub top_row: usize,
+    pub activated: bool,
+    pub dirty_rects: Vec<Rect>,
+}
+
 pub trait TableCellRenderer {
+    fn row_height(&self, _table_rect: Rect, row: &UiTableRow) -> i32 {
+        (row.height as i32).max(1)
+    }
+
     fn render_cell(
         &self,
         ctx: &mut UiContext<'_>,
@@ -41,6 +56,63 @@ pub trait TableCellRenderer {
         col_index: usize,
         selected: bool,
     );
+}
+
+pub struct PalmWrappedTextCellRenderer<'a> {
+    pub fonts: &'a [PalmFont],
+    pub font_id: u8,
+    pub padding_x: i32,
+    pub padding_y: i32,
+    pub line_spacing: i32,
+}
+
+impl PalmWrappedTextCellRenderer<'_> {
+    fn wrapped_lines(&self, text: &str, cell_width: i32) -> Vec<String> {
+        wrap_palm_text_lines(
+            text,
+            (cell_width - self.padding_x * 2).max(8),
+            self.font_id,
+            self.fonts,
+        )
+    }
+}
+
+impl TableCellRenderer for PalmWrappedTextCellRenderer<'_> {
+    fn row_height(&self, table_rect: Rect, row: &UiTableRow) -> i32 {
+        let cell_text = row.cells.first().map(|cell| cell.text.as_str()).unwrap_or("");
+        let line_h = (palm_text_height(self.font_id, self.fonts, 1) + self.line_spacing).max(8);
+        let lines = self.wrapped_lines(cell_text, table_rect.w);
+        (self.padding_y * 2 + line_h * lines.len() as i32).max(line_h + self.padding_y * 2)
+    }
+
+    fn render_cell(
+        &self,
+        ctx: &mut UiContext<'_>,
+        cell_rect: Rect,
+        _row: &UiTableRow,
+        cell: &UiTableCell,
+        _row_index: usize,
+        _col_index: usize,
+        selected: bool,
+    ) {
+        let line_h = (palm_text_height(self.font_id, self.fonts, 1) + self.line_spacing).max(8);
+        for (line_idx, line) in self.wrapped_lines(&cell.text, cell_rect.w).iter().enumerate() {
+            draw_palm_text(
+                ctx.buffers,
+                line,
+                cell_rect.x + self.padding_x,
+                cell_rect.y + self.padding_y + line_idx as i32 * line_h,
+                self.font_id,
+                self.fonts,
+                1,
+                if selected {
+                    BinaryColor::On
+                } else {
+                    BinaryColor::Off
+                },
+            );
+        }
+    }
 }
 
 pub struct TableView<'a> {
@@ -60,14 +132,21 @@ impl<'a> TableView<'a> {
         }
     }
 
-    pub fn visible_row_count(&self, rect: Rect) -> usize {
+    fn row_height_for(&self, rect: Rect, row: &UiTableRow) -> i32 {
+        self.renderer
+            .map(|renderer| renderer.row_height(rect, row))
+            .unwrap_or_else(|| (row.height as i32).max(1))
+            .max(1)
+    }
+
+    pub fn visible_row_count_from(&self, rect: Rect, top_row: usize) -> usize {
         if rect.w <= 0 || rect.h <= 0 {
             return 0;
         }
         let mut y = rect.y;
         let mut count = 0usize;
-        for row in self.model.rows.iter().skip(self.model.top_row as usize) {
-            let row_h = (row.height as i32).max(1);
+        for row in self.model.rows.iter().skip(top_row) {
+            let row_h = self.row_height_for(rect, row);
             if y + row_h > rect.y + rect.h {
                 break;
             }
@@ -75,6 +154,10 @@ impl<'a> TableView<'a> {
             y += row_h;
         }
         count
+    }
+
+    pub fn visible_row_count(&self, rect: Rect) -> usize {
+        self.visible_row_count_from(rect, self.model.top_row as usize)
     }
 
     pub fn hit_test(&self, rect: Rect, point: Point) -> Option<TableHit> {
@@ -103,8 +186,8 @@ impl<'a> TableView<'a> {
         None
     }
 
-    pub fn row_rect(&self, rect: Rect, row_index: usize) -> Option<Rect> {
-        if rect.w <= 0 || rect.h <= 0 || row_index < self.model.top_row as usize {
+    pub fn row_rect_from(&self, rect: Rect, top_row: usize, row_index: usize) -> Option<Rect> {
+        if rect.w <= 0 || rect.h <= 0 || row_index < top_row {
             return None;
         }
         let mut y = rect.y;
@@ -113,9 +196,9 @@ impl<'a> TableView<'a> {
             .rows
             .iter()
             .enumerate()
-            .skip(self.model.top_row as usize)
+            .skip(top_row)
         {
-            let row_h = (row.height as i32).max(1);
+            let row_h = self.row_height_for(rect, row);
             let row_rect = Rect::new(rect.x, y, rect.w, row_h);
             if idx == row_index {
                 return (row_rect.y + row_rect.h <= rect.y + rect.h).then_some(row_rect);
@@ -126,6 +209,10 @@ impl<'a> TableView<'a> {
             }
         }
         None
+    }
+
+    pub fn row_rect(&self, rect: Rect, row_index: usize) -> Option<Rect> {
+        self.row_rect_from(rect, self.model.top_row as usize, row_index)
     }
 
     pub fn cell_rect(&self, rect: Rect, row_index: usize, col_index: usize) -> Option<Rect> {
@@ -237,6 +324,156 @@ impl<'a> TableView<'a> {
 
         if self.draw_grid && row_index + 1 < self.model.rows.len() {
             draw_dotted_hline(ctx.buffers, rect.x, rect.x + rect.w - 1, row_bottom, BinaryColor::Off);
+        }
+    }
+
+    pub fn move_selection(&self, rect: Rect, delta: i32, scrollbar_rect: Option<Rect>) -> Option<TableInteraction> {
+        if self.model.rows.is_empty() {
+            return None;
+        }
+        let old_selected = self.model.selected_row.map(|row| row as usize);
+        let mut new_selected = old_selected.unwrap_or(self.model.top_row as usize);
+        if delta < 0 {
+            if new_selected == 0 {
+                return None;
+            }
+            new_selected = new_selected.saturating_sub(1);
+        } else if delta > 0 {
+            if new_selected + 1 >= self.model.rows.len() {
+                return None;
+            }
+            new_selected += 1;
+        } else {
+            return None;
+        }
+
+        let mut top_row = self.model.top_row as usize;
+        let visible_rows = self.visible_row_count_from(rect, top_row).max(1);
+        if new_selected < top_row {
+            top_row = new_selected;
+        } else {
+            let bottom = top_row.saturating_add(visible_rows.saturating_sub(1));
+            if new_selected > bottom {
+                top_row = new_selected.saturating_sub(visible_rows.saturating_sub(1));
+            }
+        }
+
+        Some(self.interaction_for_state_change(rect, scrollbar_rect, old_selected, Some(new_selected), top_row, false))
+    }
+
+    pub fn activate_selection(&self, rect: Rect, scrollbar_rect: Option<Rect>) -> Option<TableInteraction> {
+        let selected = self.model.selected_row.map(|row| row as usize)?;
+        Some(self.interaction_for_state_change(
+            rect,
+            scrollbar_rect,
+            Some(selected),
+            Some(selected),
+            self.model.top_row as usize,
+            true,
+        ))
+    }
+
+    pub fn apply_scrollbar_hit(
+        &self,
+        rect: Rect,
+        scrollbar_rect: Rect,
+        hit: TableScrollBarHit,
+    ) -> Option<TableInteraction> {
+        let visible_rows = self.visible_row_count(rect).max(1);
+        let max_top = self.model.rows.len().saturating_sub(visible_rows);
+        let mut top_row = self.model.top_row as usize;
+        match hit {
+            TableScrollBarHit::ArrowUp => {
+                if top_row == 0 {
+                    return None;
+                }
+                top_row = top_row.saturating_sub(1);
+            }
+            TableScrollBarHit::ArrowDown => {
+                if top_row >= max_top {
+                    return None;
+                }
+                top_row += 1;
+            }
+            TableScrollBarHit::Track { top_row: hit_top } => {
+                let next = hit_top.min(max_top);
+                if next == top_row {
+                    return None;
+                }
+                top_row = next;
+            }
+        }
+
+        let old_selected = self.model.selected_row.map(|row| row as usize);
+        let mut selected = old_selected;
+        if let Some(row) = selected {
+            let bottom = top_row.saturating_add(visible_rows.saturating_sub(1));
+            if row < top_row {
+                selected = Some(top_row);
+            } else if row > bottom {
+                selected = Some(bottom.min(self.model.rows.len().saturating_sub(1)));
+            }
+        }
+
+        Some(self.interaction_for_state_change(
+            rect,
+            Some(scrollbar_rect),
+            old_selected,
+            selected,
+            top_row,
+            false,
+        ))
+    }
+
+    pub fn select_row(
+        &self,
+        rect: Rect,
+        scrollbar_rect: Option<Rect>,
+        row: usize,
+        activated: bool,
+    ) -> Option<TableInteraction> {
+        let row = row.min(self.model.rows.len().saturating_sub(1));
+        let old_selected = self.model.selected_row.map(|selected| selected as usize);
+        Some(self.interaction_for_state_change(
+            rect,
+            scrollbar_rect,
+            old_selected,
+            Some(row),
+            self.model.top_row as usize,
+            activated,
+        ))
+    }
+
+    fn interaction_for_state_change(
+        &self,
+        rect: Rect,
+        scrollbar_rect: Option<Rect>,
+        old_selected: Option<usize>,
+        new_selected: Option<usize>,
+        top_row: usize,
+        activated: bool,
+    ) -> TableInteraction {
+        let mut dirty_rects = Vec::new();
+        let top_changed = top_row != self.model.top_row as usize;
+        if top_changed {
+            dirty_rects.push(rect);
+            if let Some(scrollbar_rect) = scrollbar_rect {
+                dirty_rects.push(scrollbar_rect);
+            }
+        } else {
+            if let Some(old_row) = old_selected.and_then(|row| self.row_rect(rect, row)) {
+                dirty_rects.push(old_row);
+            }
+            if let Some(new_row) = new_selected.and_then(|row| self.row_rect_from(rect, top_row, row)) {
+                dirty_rects.push(new_row);
+            }
+        }
+        TableInteraction {
+            selected_row: new_selected,
+            selected_col: Some(self.model.selected_col.unwrap_or(0) as usize),
+            top_row,
+            activated,
+            dirty_rects,
         }
     }
 }
@@ -429,4 +666,37 @@ fn draw_triangle<T: DrawTarget<Color = BinaryColor>>(
                 .draw(target);
         }
     }
+}
+
+fn wrap_palm_text_lines(
+    text: &str,
+    max_w: i32,
+    font_id: u8,
+    fonts: &[PalmFont],
+) -> Vec<String> {
+    if text.is_empty() {
+        return vec![String::new()];
+    }
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        let candidate = if current.is_empty() {
+            word.to_string()
+        } else {
+            format!("{} {}", current, word)
+        };
+        if palm_text_width(&candidate, font_id, fonts, 1) <= max_w || current.is_empty() {
+            current = candidate;
+        } else {
+            lines.push(current);
+            current = word.to_string();
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if lines.is_empty() {
+        lines.push(text.to_string());
+    }
+    lines
 }

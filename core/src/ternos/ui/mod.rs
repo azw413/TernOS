@@ -28,7 +28,10 @@ pub use form::{
 };
 pub use geom::{Point, Rect, Size};
 pub use list_view::{ListHit, ListItem, ListView};
-pub use modal_form::{ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalWidget};
+pub use modal_form::{
+    ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalHit,
+    ModalTableCellStyle, ModalWidget,
+};
 pub use popup_view::{PopupHit, PopupMenuView};
 pub use reader_view::ReaderView;
 pub use resource::{FormResource, ObjectResource};
@@ -38,7 +41,10 @@ pub use runtime::{
     UiTableModel, UiTableRow,
 };
 pub use status_bar_view::{StatusBarActionState, StatusBarHit, StatusBarView};
-pub use table_view::{TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView};
+pub use table_view::{
+    PalmWrappedTextCellRenderer, TableCellRenderer, TableHit, TableInteraction,
+    TableScrollBarHit, TableScrollBarView, TableView,
+};
 pub use text::{
     draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled,
     palm_text_width, palm_text_width_scaled,

@@ -37,7 +37,7 @@ use crate::{
         book_reader::{
             draw_reader_menu_overlay, draw_reader_overlay, draw_trbk_image, reader_menu_bar,
             reader_menu_command, BookReaderContext, BookReaderState, PageTurnIndicator,
-            ReaderMenuCommand, TocTouchHit,
+            ReaderMenuCommand,
         },
         home::{
             HomeAction,
@@ -57,7 +57,7 @@ use crate::{
     platform::PlatformInputEvent,
     palm,
     render_policy::RenderPolicy,
-    ternos::ui::{flush_queue, Rect, RenderQueue, StatusBarActionState, StatusBarHit, StatusBarView, UiContext, View},
+    ternos::ui::{flush_queue, ModalHit, Rect, RenderQueue, StatusBarActionState, StatusBarHit, StatusBarView, UiContext, View},
 };
 
 const LIST_MARGIN_X: i32 = 16;
@@ -107,7 +107,7 @@ pub struct Application<'a, S: AppSource> {
     reader_touch_pressed_status: Option<ReaderStatusBarFocus>,
     reader_touch_pressed_menu: Option<palm::ui::MenuOverlayHit>,
     reader_touch_pressed_overlay: Option<crate::ternos::ui::ObjectId>,
-    reader_touch_pressed_toc: Option<TocTouchHit>,
+    reader_touch_pressed_toc: Option<ModalHit>,
     reader_menu_last_rect: Option<Rect>,
     prc_return_to_start_menu: bool,
     prc_reserved_gray_initialized: bool,
@@ -521,7 +521,14 @@ impl<'a, S: AppSource> Application<'a, S> {
         if self.book_reader.has_overlay() {
             if let Some(spec) = self.book_reader.overlay_spec() {
                 let point = crate::ternos::ui::Point::new(x, y);
-                if let Some(id) = self.book_reader.overlay_form.hit_test(&spec, point) {
+                if let Some(hit) = self
+                    .book_reader
+                    .overlay_form
+                    .hit_test(&spec, point, self.home_system_fonts.as_slice())
+                {
+                    let ModalHit::Widget(id) = hit else {
+                        return true;
+                    };
                     let changed = self.book_reader.overlay_form.select_id(&spec, id);
                     if is_down {
                         self.reader_touch_pressed_overlay = Some(id);
@@ -566,7 +573,11 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 } else if is_up {
                     let pressed = self.reader_touch_pressed_toc.take();
-                    let result = self.book_reader.handle_toc_touch_release(hit, pressed);
+                    let result = self.book_reader.handle_toc_touch_release(
+                        hit,
+                        pressed,
+                        self.home_system_fonts.as_slice(),
+                    );
                     if result.exit || result.jumped {
                         self.set_state_book_viewing();
                     } else if result.dirty {
@@ -1115,7 +1126,9 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.start_sleep_request();
                     }
                 } else if self.book_reader.has_overlay() {
-                    let result = self.book_reader.handle_overlay_input(buttons);
+                    let result = self
+                        .book_reader
+                        .handle_overlay_input(buttons, self.home_system_fonts.as_slice());
                     if result.jumped {
                         self.set_state_book_viewing();
                     } else if result.dirty {
@@ -1236,7 +1249,9 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.start_sleep_request();
                     }
                 } else if self.book_reader.has_overlay() {
-                    let result = self.book_reader.handle_overlay_input(buttons);
+                    let result = self
+                        .book_reader
+                        .handle_overlay_input(buttons, self.home_system_fonts.as_slice());
                     if result.jumped {
                         self.set_state_book_viewing();
                     } else if result.dirty {

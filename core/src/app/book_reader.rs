@@ -3,11 +3,9 @@ extern crate alloc;
 use alloc::{collections::BTreeMap, format, rc::Rc, string::{String, ToString}, vec, vec::Vec};
 
 use embedded_graphics::{
-    geometry::Size,
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
     pixelcolor::BinaryColor,
-    prelude::{DrawTarget, OriginDimensions, Point, Primitive},
-    primitives::{PrimitiveStyle, Rectangle},
+    prelude::{DrawTarget, OriginDimensions, Point},
     text::Text,
     Drawable,
 };
@@ -26,23 +24,15 @@ use crate::render_policy::RenderPolicy;
 use crate::ternos::ui::{
     flush_queue,
     auto_button_layout_for_label,
-    chrome::draw_alert_frame_hi,
-    form::draw_form_button_hi,
     palm_text_height,
     palm_text_width,
-    ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalWidget, ObjectId,
-    Rect, RenderQueue, StatusBarActionState, StatusBarView, TableCellRenderer, TableHit,
-    TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiTableCell, UiTableModel,
-    UiTableRow, View,
+    ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalHit,
+    ModalTableCellStyle, ModalWidget, ObjectId, Rect, RenderQueue, StatusBarActionState,
+    StatusBarView, UiContext, UiTableCell, UiTableModel, UiTableRow, View,
 };
 
-const LIST_TOP: i32 = 60;
-const LINE_HEIGHT: i32 = 24;
-const LIST_MARGIN_X: i32 = 16;
-const HEADER_Y: i32 = 24;
 const BOOK_FULL_REFRESH_EVERY: usize = 10;
 const BOOK_STATUS_H: i32 = StatusBarView::HEIGHT;
-const BOOK_CONTENT_TOP: i32 = BOOK_STATUS_H + 5;
 
 fn reader_page_origin_y(book: &crate::trbk::TrbkBookInfo) -> i32 {
     let desired_top = BOOK_STATUS_H + ((book.metadata.line_height as i32) / 2).max(12);
@@ -61,13 +51,13 @@ pub struct BookReaderState {
     pub next_page_ops: Option<crate::trbk::TrbkPage>,
     pub toc_selected: usize,
     pub toc_top_row: usize,
-    pub toc_cancel_focused: bool,
     pub toc_labels: Option<Vec<String>>,
     pub current_page: usize,
     pub book_turns_since_full: usize,
     pub last_rendered_page: Option<usize>,
     pub page_turn_indicator: Option<PageTurnIndicator>,
     pub overlay: Option<ReaderOverlay>,
+    pub toc_form: ModalFormController,
     pub overlay_form: ModalFormController,
 }
 
@@ -92,15 +82,6 @@ pub struct TocResult {
     pub exit: bool,
     pub jumped: bool,
     pub dirty: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TocTouchHit {
-    Row(usize),
-    Cancel,
-    ScrollUp,
-    ScrollDown,
-    ScrollTrack(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -136,6 +117,10 @@ const READER_OVERLAY_BTN_CANCEL: ObjectId = 3002;
 const READER_OVERLAY_DIGIT_UP_BASE: ObjectId = 3100;
 const READER_OVERLAY_DIGIT_FIELD_BASE: ObjectId = 3200;
 const READER_OVERLAY_DIGIT_DOWN_BASE: ObjectId = 3300;
+const READER_TOC_FORM_ID: u16 = 3400;
+const READER_TOC_TABLE_ID: ObjectId = 3401;
+const READER_TOC_SCROLLBAR_ID: ObjectId = 3402;
+const READER_TOC_CANCEL_ID: ObjectId = 3403;
 
 fn reader_help_text() -> String {
     [
@@ -201,70 +186,6 @@ fn toc_scrollbar_rect(_modal: Rect, table_rect: Rect) -> Rect {
     Rect::new(table_rect.x + table_rect.w + 4, table_rect.y, 11, table_rect.h)
 }
 
-struct TocTableRenderer<'a> {
-    palm_fonts: &'a [crate::palm::runtime::PalmFont],
-}
-
-impl TableCellRenderer for TocTableRenderer<'_> {
-    fn render_cell(
-        &self,
-        ctx: &mut UiContext<'_>,
-        cell_rect: Rect,
-        _row: &UiTableRow,
-        cell: &UiTableCell,
-        _row_index: usize,
-        _col_index: usize,
-        selected: bool,
-    ) {
-        let lines = wrap_toc_lines(&cell.text, (cell_rect.w - 12).max(20), self.palm_fonts);
-        let line_h = (palm_text_height(0, self.palm_fonts, 1) + 2).max(10);
-        for (line_idx, line) in lines.iter().enumerate() {
-            crate::ternos::ui::draw_palm_text(
-                ctx.buffers,
-                line,
-                cell_rect.x + 6,
-                cell_rect.y + 5 + line_idx as i32 * line_h,
-                0,
-                self.palm_fonts,
-                1,
-                if selected {
-                    BinaryColor::On
-                } else {
-                    BinaryColor::Off
-                },
-            );
-        }
-    }
-}
-
-fn wrap_toc_lines(text: &str, max_w: i32, fonts: &[crate::palm::runtime::PalmFont]) -> Vec<String> {
-    if text.is_empty() {
-        return vec![String::new()];
-    }
-    let mut lines = Vec::new();
-    let mut current = String::new();
-    for word in text.split_whitespace() {
-        let candidate = if current.is_empty() {
-            word.to_string()
-        } else {
-            format!("{} {}", current, word)
-        };
-        if palm_text_width(&candidate, 0, fonts, 1) <= max_w || current.is_empty() {
-            current = candidate;
-        } else {
-            lines.push(current);
-            current = word.to_string();
-        }
-    }
-    if !current.is_empty() {
-        lines.push(current);
-    }
-    if lines.is_empty() {
-        lines.push(text.to_string());
-    }
-    lines
-}
-
 impl BookReaderState {
     fn ensure_toc_labels(&mut self, book: &crate::trbk::TrbkBookInfo) {
         if self.toc_labels.is_some() {
@@ -283,64 +204,31 @@ impl BookReaderState {
         self.toc_labels = Some(labels);
     }
 
-    fn toc_rows(&self, table_w: i32, fonts: &[crate::palm::runtime::PalmFont]) -> Vec<UiTableRow> {
+    fn toc_rows(&self) -> Vec<UiTableRow> {
         let labels = self.toc_labels.as_ref().map(Vec::as_slice).unwrap_or(&[]);
-        let text_w = (table_w - 12).max(20);
-        let line_h = (palm_text_height(0, fonts, 1) + 2).max(10);
         labels
             .iter()
             .enumerate()
-            .map(|(idx, label)| {
-                let lines = wrap_toc_lines(label, text_w, fonts);
-                let height = (lines.len() as i32 * line_h + 8).max(line_h + 8) as i16;
-                UiTableRow {
+            .map(|(idx, label)| UiTableRow {
                 id: idx as u16,
-                height,
+                height: 0,
                 usable: true,
                 selectable: true,
                 data: 0,
                 cells: vec![UiTableCell { text: label.clone() }],
-            }})
+            })
             .collect()
     }
 
-    fn toc_table_model(&self, table_w: i32, fonts: &[crate::palm::runtime::PalmFont]) -> UiTableModel {
+    fn toc_table_model(&self) -> UiTableModel {
         let labels = self.toc_labels.as_ref().map(Vec::as_slice).unwrap_or(&[]);
         UiTableModel {
-            rows: self.toc_rows(table_w, fonts),
+            rows: self.toc_rows(),
             cols: 1,
             columns: Vec::new(),
             selected_row: Some(self.toc_selected.min(labels.len().saturating_sub(1)) as u16),
             selected_col: Some(0),
             top_row: self.toc_top_row as u16,
-        }
-    }
-
-    fn toc_visible_rows(&self, fonts: &[crate::palm::runtime::PalmFont]) -> usize {
-        let modal = toc_modal_rect();
-        let cancel_rect = toc_cancel_rect(modal);
-        let table_rect = toc_table_rect(modal, cancel_rect);
-        let model = self.toc_table_model(table_rect.w, fonts);
-        TableView::new(&model).visible_row_count(table_rect)
-    }
-
-    fn clamp_toc_selection_to_view(&mut self, total_rows: usize, visible_rows: usize) {
-        if total_rows == 0 || visible_rows == 0 {
-            self.toc_selected = 0;
-            self.toc_top_row = 0;
-            self.toc_cancel_focused = false;
-            return;
-        }
-        let max_top = total_rows.saturating_sub(visible_rows);
-        self.toc_top_row = self.toc_top_row.min(max_top);
-        let bottom = self
-            .toc_top_row
-            .saturating_add(visible_rows.saturating_sub(1))
-            .min(total_rows.saturating_sub(1));
-        if self.toc_selected < self.toc_top_row {
-            self.toc_selected = self.toc_top_row;
-        } else if self.toc_selected > bottom {
-            self.toc_selected = bottom;
         }
     }
 
@@ -351,13 +239,13 @@ impl BookReaderState {
             next_page_ops: None,
             toc_selected: 0,
             toc_top_row: 0,
-            toc_cancel_focused: false,
             toc_labels: None,
             current_page: 0,
             book_turns_since_full: 0,
             last_rendered_page: None,
             page_turn_indicator: None,
             overlay: None,
+            toc_form: ModalFormController::default(),
             overlay_form: ModalFormController::default(),
         }
     }
@@ -368,13 +256,13 @@ impl BookReaderState {
         self.next_page_ops = None;
         self.toc_selected = 0;
         self.toc_top_row = 0;
-        self.toc_cancel_focused = false;
         self.toc_labels = None;
         self.current_page = 0;
         self.book_turns_since_full = 0;
         self.last_rendered_page = None;
         self.page_turn_indicator = None;
         self.overlay = None;
+        self.toc_form.reset();
         self.overlay_form.reset();
     }
 
@@ -571,6 +459,7 @@ impl BookReaderState {
                 Some(ReaderOverlay::Help(_)) => {}
                 None => {}
             },
+            ModalFormAction::TableChanged { .. } => {}
         }
         result
     }
@@ -578,6 +467,7 @@ impl BookReaderState {
     pub fn handle_overlay_input(
         &mut self,
         buttons: &input::ButtonState,
+        fonts: &[crate::palm::runtime::PalmFont],
     ) -> ReaderOverlayResult {
         if self.overlay.is_none() {
             return ReaderOverlayResult {
@@ -616,7 +506,7 @@ impl BookReaderState {
             };
         };
 
-        let action = self.overlay_form.on_event(&spec, event);
+        let action = self.overlay_form.on_event(&spec, event, fonts);
         self.apply_overlay_action(action)
     }
 
@@ -656,10 +546,10 @@ impl BookReaderState {
             ReaderMenuCommand::Contents => {
                 if let Some(book) = &self.current_book {
                     if !book.toc.is_empty() {
-        self.toc_selected = find_toc_selection(book, self.current_page);
-        self.toc_top_row = self.toc_selected.saturating_sub(2);
-        self.toc_cancel_focused = false;
-        self.toc_labels = None;
+                        self.toc_selected = find_toc_selection(book, self.current_page);
+                        self.toc_top_row = self.toc_selected.saturating_sub(2);
+                        self.toc_labels = None;
+                        self.toc_form.reset();
                         return true;
                     }
                 }
@@ -856,245 +746,189 @@ impl BookReaderState {
         })
     }
 
-    pub fn handle_toc_input(
-        &mut self,
-        buttons: &input::ButtonState,
-        fonts: &[crate::palm::runtime::PalmFont],
-    ) -> TocResult {
+    pub(crate) fn toc_spec(&mut self) -> Option<ModalFormSpec> {
+        let book = self.current_book.as_ref()?.clone();
+        self.ensure_toc_labels(book.as_ref());
+        let modal = toc_modal_rect();
+        let cancel_rect = toc_cancel_rect(modal);
+        let table_rect = toc_table_rect(modal, cancel_rect);
+        let scrollbar_rect = toc_scrollbar_rect(modal, table_rect);
+        Some(ModalFormSpec {
+            form_id: READER_TOC_FORM_ID,
+            bounds: modal,
+            title: "Table of Contents".into(),
+            widgets: vec![
+                ModalWidget::Table {
+                    id: READER_TOC_TABLE_ID,
+                    bounds: table_rect,
+                    model: self.toc_table_model(),
+                    cell_style: ModalTableCellStyle::PalmWrappedText {
+                        font_id: 0,
+                        padding_x: 6,
+                        padding_y: 5,
+                        line_spacing: 2,
+                    },
+                },
+                ModalWidget::ScrollBar {
+                    id: READER_TOC_SCROLLBAR_ID,
+                    bounds: scrollbar_rect,
+                    table_id: READER_TOC_TABLE_ID,
+                },
+                ModalWidget::Button {
+                    id: READER_TOC_CANCEL_ID,
+                    bounds: cancel_rect,
+                    text: "Cancel".into(),
+                    font_id: 0,
+                    style: 0,
+                    no_frame: false,
+                },
+            ],
+            default_focus: Some(READER_TOC_TABLE_ID),
+        })
+    }
+
+    fn apply_toc_action(&mut self, action: ModalFormAction) -> TocResult {
         let mut result = TocResult {
             exit: false,
             jumped: false,
             dirty: false,
         };
-
-        let Some(book) = self.current_book.as_ref().cloned() else {
-            result.exit = true;
-            result.dirty = true;
-            return result;
-        };
-
-        self.ensure_toc_labels(book.as_ref());
-        let toc_len = book.toc.len();
-        let visible_rows = self.toc_visible_rows(fonts);
-
-        if buttons.is_pressed(input::Buttons::Up) {
-            if self.toc_cancel_focused {
-                self.toc_cancel_focused = false;
-                result.dirty = true;
-                return result;
-            }
-            if self.toc_selected > 0 {
-                self.toc_selected -= 1;
-                if self.toc_selected < self.toc_top_row {
-                    self.toc_top_row = self.toc_selected;
-                }
+        match action {
+            ModalFormAction::None => {}
+            ModalFormAction::Redraw => {
                 result.dirty = true;
             }
-            return result;
-        }
-        if buttons.is_pressed(input::Buttons::Down) {
-            if self.toc_cancel_focused {
-                return result;
-            }
-            if self.toc_selected + 1 < toc_len {
-                self.toc_selected += 1;
-                let bottom = self.toc_top_row.saturating_add(visible_rows.saturating_sub(1));
-                if self.toc_selected > bottom {
-                    self.toc_top_row = self
-                        .toc_selected
-                        .saturating_sub(visible_rows.saturating_sub(1));
-                }
-                result.dirty = true;
-            } else {
-                self.toc_cancel_focused = true;
-                result.dirty = true;
-            }
-            return result;
-        }
-        if buttons.is_pressed(input::Buttons::Left) || buttons.is_pressed(input::Buttons::Right) {
-            self.toc_cancel_focused = !self.toc_cancel_focused;
-            result.dirty = true;
-            return result;
-        }
-        if buttons.is_pressed(input::Buttons::Confirm) {
-            if self.toc_cancel_focused {
+            ModalFormAction::Closed => {
                 result.exit = true;
                 result.dirty = true;
-                return result;
             }
-            if let Some(entry) = book.toc.get(self.toc_selected) {
-                self.current_page = entry.page_index as usize;
-                self.current_page_ops = None;
-                self.next_page_ops = None;
-                self.last_rendered_page = None;
-                self.book_turns_since_full = 0;
-                result.jumped = true;
-                result.dirty = true;
+            ModalFormAction::Activate(id) => {
+                if id == READER_TOC_CANCEL_ID {
+                    result.exit = true;
+                    result.dirty = true;
+                }
             }
-            return result;
+            ModalFormAction::TableChanged {
+                id,
+                selected_row,
+                top_row,
+                activated,
+                ..
+            } => {
+                if id == READER_TOC_TABLE_ID {
+                    if let Some(selected_row) = selected_row {
+                        self.toc_selected = selected_row;
+                    }
+                    self.toc_top_row = top_row;
+                    result.dirty = true;
+                    if activated {
+                        if let Some(book) = self.current_book.as_ref().cloned() {
+                            if let Some(entry) = book.toc.get(self.toc_selected) {
+                                self.current_page = entry.page_index as usize;
+                                self.current_page_ops = None;
+                                self.next_page_ops = None;
+                                self.last_rendered_page = None;
+                                self.book_turns_since_full = 0;
+                                result.jumped = true;
+                            }
+                        }
+                    }
+                }
+            }
         }
-        if buttons.is_pressed(input::Buttons::Back) {
-            result.exit = true;
-            result.dirty = true;
-            return result;
-        }
-
         result
+    }
+
+    pub fn handle_toc_input(
+        &mut self,
+        buttons: &input::ButtonState,
+        fonts: &[crate::palm::runtime::PalmFont],
+    ) -> TocResult {
+        let Some(spec) = self.toc_spec() else {
+            return TocResult {
+                exit: true,
+                jumped: false,
+                dirty: true,
+            };
+        };
+        let event = if buttons.is_pressed(input::Buttons::Back) {
+            Some(crate::palm::ui_component::UiNavEvent::Back)
+        } else if buttons.is_pressed(input::Buttons::Left) {
+            Some(crate::palm::ui_component::UiNavEvent::Left)
+        } else if buttons.is_pressed(input::Buttons::Right) {
+            Some(crate::palm::ui_component::UiNavEvent::Right)
+        } else if buttons.is_pressed(input::Buttons::Up) {
+            Some(crate::palm::ui_component::UiNavEvent::Up)
+        } else if buttons.is_pressed(input::Buttons::Down) {
+            Some(crate::palm::ui_component::UiNavEvent::Down)
+        } else if buttons.is_pressed(input::Buttons::Confirm) {
+            Some(crate::palm::ui_component::UiNavEvent::Confirm)
+        } else {
+            None
+        };
+        let Some(event) = event else {
+            return TocResult {
+                exit: false,
+                jumped: false,
+                dirty: false,
+            };
+        };
+        let action = self.toc_form.on_event(&spec, event, fonts);
+        self.apply_toc_action(action)
     }
 
     pub fn toc_hit_test(
         &mut self,
         point: crate::ternos::ui::Point,
         fonts: &[crate::palm::runtime::PalmFont],
-    ) -> Option<TocTouchHit> {
-        let book = self.current_book.as_ref()?.clone();
-        self.ensure_toc_labels(book.as_ref());
-
-        let modal = toc_modal_rect();
-        let cancel_rect = toc_cancel_rect(modal);
-        let table_rect = toc_table_rect(modal, cancel_rect);
-        let scrollbar_rect = toc_scrollbar_rect(modal, table_rect);
-        if cancel_rect.contains(point) {
-            return Some(TocTouchHit::Cancel);
-        }
-
-        let model = self.toc_table_model(table_rect.w, fonts);
-        let table = TableView::new(&model);
-        if let Some(TableHit::Cell { row, .. }) = table.hit_test(table_rect, point) {
-            return Some(TocTouchHit::Row(row));
-        }
-
-        let visible_rows = table.visible_row_count(table_rect);
-        let labels = self.toc_labels.as_ref().map(Vec::as_slice).unwrap_or(&[]);
-        if labels.len() > visible_rows {
-            let scrollbar = TableScrollBarView::new(self.toc_top_row, visible_rows, labels.len());
-            return match scrollbar.hit_test(scrollbar_rect, point) {
-                Some(TableScrollBarHit::ArrowUp) => Some(TocTouchHit::ScrollUp),
-                Some(TableScrollBarHit::ArrowDown) => Some(TocTouchHit::ScrollDown),
-                Some(TableScrollBarHit::Track { top_row }) => Some(TocTouchHit::ScrollTrack(top_row)),
-                None => None,
-            };
-        }
-
-        None
+    ) -> Option<ModalHit> {
+        let spec = self.toc_spec()?;
+        self.toc_form.hit_test(&spec, point, fonts)
     }
 
     pub fn handle_toc_touch_press(
         &mut self,
-        hit: TocTouchHit,
+        hit: ModalHit,
         fonts: &[crate::palm::runtime::PalmFont],
     ) -> TocResult {
-        let mut result = TocResult {
+        let Some(spec) = self.toc_spec() else {
+            return TocResult {
+                exit: true,
+                jumped: false,
+                dirty: true,
+            };
+        };
+        let changed = self.toc_form.select_hit(&spec, hit, fonts);
+        TocResult {
             exit: false,
             jumped: false,
-            dirty: false,
-        };
-
-        let Some(book) = self.current_book.as_ref().cloned() else {
-            result.exit = true;
-            result.dirty = true;
-            return result;
-        };
-        self.ensure_toc_labels(book.as_ref());
-        let toc_len = book.toc.len();
-        let visible_rows = self.toc_visible_rows(fonts);
-
-        match hit {
-            TocTouchHit::Row(row) => {
-                let row = row.min(toc_len.saturating_sub(1));
-                let changed = self.toc_selected != row || self.toc_cancel_focused;
-                self.toc_selected = row;
-                self.toc_cancel_focused = false;
-                result.dirty = changed;
-            }
-            TocTouchHit::Cancel => {
-                let changed = !self.toc_cancel_focused;
-                self.toc_cancel_focused = true;
-                result.dirty = changed;
-            }
-            TocTouchHit::ScrollUp => {
-                if self.toc_top_row > 0 {
-                    self.toc_top_row -= 1;
-                    self.clamp_toc_selection_to_view(toc_len, visible_rows);
-                    result.dirty = true;
-                }
-            }
-            TocTouchHit::ScrollDown => {
-                let max_top = toc_len.saturating_sub(visible_rows);
-                if self.toc_top_row < max_top {
-                    self.toc_top_row += 1;
-                    self.clamp_toc_selection_to_view(toc_len, visible_rows);
-                    result.dirty = true;
-                }
-            }
-            TocTouchHit::ScrollTrack(top_row) => {
-                let max_top = toc_len.saturating_sub(visible_rows);
-                let new_top = top_row.min(max_top);
-                if self.toc_top_row != new_top {
-                    self.toc_top_row = new_top;
-                    self.clamp_toc_selection_to_view(toc_len, visible_rows);
-                    result.dirty = true;
-                }
-            }
+            dirty: changed,
         }
-
-        result
     }
 
     pub fn handle_toc_touch_release(
         &mut self,
-        hit: TocTouchHit,
-        pressed: Option<TocTouchHit>,
+        hit: ModalHit,
+        pressed: Option<ModalHit>,
+        fonts: &[crate::palm::runtime::PalmFont],
     ) -> TocResult {
-        let mut result = TocResult {
-            exit: false,
-            jumped: false,
-            dirty: false,
+        let Some(spec) = self.toc_spec() else {
+            return TocResult {
+                exit: true,
+                jumped: false,
+                dirty: true,
+            };
         };
-
-        let Some(book) = self.current_book.as_ref().cloned() else {
-            result.exit = true;
-            result.dirty = true;
-            return result;
-        };
-        self.ensure_toc_labels(book.as_ref());
-
-        match hit {
-            TocTouchHit::Row(row) => {
-                let row = row.min(book.toc.len().saturating_sub(1));
-                let changed = self.toc_selected != row || self.toc_cancel_focused;
-                self.toc_selected = row;
-                self.toc_cancel_focused = false;
-                if changed {
-                    result.dirty = true;
-                }
-                if pressed == Some(TocTouchHit::Row(row)) {
-                    if let Some(entry) = book.toc.get(row) {
-                        self.current_page = entry.page_index as usize;
-                        self.current_page_ops = None;
-                        self.next_page_ops = None;
-                        self.last_rendered_page = None;
-                        self.book_turns_since_full = 0;
-                        result.jumped = true;
-                        result.dirty = true;
-                    }
-                }
+        if pressed == Some(hit) {
+            let action = self.toc_form.activate_hit(&spec, hit, fonts);
+            self.apply_toc_action(action)
+        } else {
+            TocResult {
+                exit: false,
+                jumped: false,
+                dirty: false,
             }
-            TocTouchHit::Cancel => {
-                let changed = !self.toc_cancel_focused;
-                self.toc_cancel_focused = true;
-                if changed {
-                    result.dirty = true;
-                }
-                if pressed == Some(TocTouchHit::Cancel) {
-                    result.exit = true;
-                    result.dirty = true;
-                }
-            }
-            TocTouchHit::ScrollUp | TocTouchHit::ScrollDown | TocTouchHit::ScrollTrack(_) => {}
         }
-
-        result
     }
 
     pub fn draw_toc<S: AppSource>(
@@ -1109,63 +943,32 @@ impl BookReaderState {
             return Err(ImageError::Decode);
         };
         self.ensure_toc_labels(book.as_ref());
-        let label_count = self.toc_labels.as_ref().map(Vec::len).unwrap_or(0);
-        let modal = toc_modal_rect();
-        let cancel_rect = toc_cancel_rect(modal);
-        let table_rect = toc_table_rect(modal, cancel_rect);
-        let scrollbar_rect = toc_scrollbar_rect(modal, table_rect);
-        let model = self.toc_table_model(table_rect.w, ctx.palm_fonts);
-        let visible_rows = TableView::new(&model).visible_row_count(table_rect);
-        let renderer = TocTableRenderer {
-            palm_fonts: ctx.palm_fonts,
+        let Some(spec) = self.toc_spec() else {
+            return Err(ImageError::Decode);
         };
+        let first_draw = self.toc_form.focused_id().is_none();
+        self.toc_form.sync(&spec);
         let mut ui = UiContext {
             buffers: ctx.display_buffers,
             render_policy: ctx.render_policy,
             gray2: None,
         };
-        let mut table = TableView::new(&model);
-        table.clear = false;
-        table.renderer = Some(&renderer);
-        draw_alert_frame_hi(ui.buffers, modal.x, modal.y, modal.w, modal.h, 34);
-        let title_w = palm_text_width("Table of Contents", 1, ctx.palm_fonts, 1);
-        let title_h = palm_text_height(1, ctx.palm_fonts, 1);
-        crate::ternos::ui::draw_palm_text(
-            ui.buffers,
-            "Table of Contents",
-            modal.x + ((modal.w - title_w) / 2).max(0),
-            modal.y + ((34 - title_h) / 2).max(2) - 1,
-            1,
-            ctx.palm_fonts,
-            1,
-            BinaryColor::On,
-        );
-        table.render(&mut ui, table_rect, &mut RenderQueue::default());
-        if label_count > visible_rows {
-            let mut scrollbar =
-                TableScrollBarView::new(self.toc_top_row, visible_rows, label_count);
-            scrollbar.render(&mut ui, scrollbar_rect, &mut RenderQueue::default());
-        }
-        draw_form_button_hi(
-            ui.buffers,
-            ctx.palm_fonts,
-            cancel_rect.x,
-            cancel_rect.y,
-            cancel_rect.w,
-            cancel_rect.h,
-            0,
-            0,
-            false,
-            "Cancel",
-            self.toc_cancel_focused,
-        );
-        let mut rq = RenderQueue::default();
-        let refresh = if *ctx.full_refresh {
-            ctx.render_policy.refresh_mode(*ctx.full_refresh)
-        } else {
-            crate::display::RefreshMode::Fast
+        let mut view = ModalFormView {
+            spec: &spec,
+            fonts: ctx.palm_fonts,
+            focused_id: self.toc_form.focused_id(),
         };
-        rq.push(modal, refresh);
+        view.render(&mut ui, spec.bounds, &mut RenderQueue::default());
+        let mut rq = RenderQueue::default();
+        let refresh = if *ctx.full_refresh { ctx.render_policy.refresh_mode(true) } else { crate::display::RefreshMode::Fast };
+        let dirty_rects = if *ctx.full_refresh || first_draw {
+            vec![spec.bounds]
+        } else {
+            self.toc_form.take_dirty_rects(spec.bounds)
+        };
+        for rect in dirty_rects {
+            rq.push(rect, refresh);
+        }
         flush_queue(display, ctx.display_buffers, &mut rq, refresh);
         Ok(())
     }
@@ -1181,7 +984,6 @@ impl BookReaderState {
         let Some(book) = &self.current_book else {
             return Err(ImageError::Decode);
         };
-        let mode = ctx.render_policy.refresh_mode(*ctx.full_refresh);
         let mut gray2_used = false;
         let mut gray2_absolute = false;
         if self.current_page_ops.is_some() {
