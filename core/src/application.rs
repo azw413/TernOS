@@ -204,9 +204,11 @@ impl<'a, S: AppSource> Application<'a, S> {
             ) {
                 match hit {
                     palm::ui::HelpOverlayHit::Done => {
+                        self.prc_help_controller.focus_control(palm::ui::HelpOverlayHit::Done);
                         if is_up {
                             if let Some(session) = self.prc_session.as_mut() {
                                 let _ = session.dismiss_help_dialog();
+                                self.prc_help_controller.clear();
                                 self.resume_prc_runtime_session();
                             }
                         } else {
@@ -215,6 +217,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                         return true;
                     }
                     palm::ui::HelpOverlayHit::ScrollUp => {
+                        self.prc_help_controller
+                            .focus_control(palm::ui::HelpOverlayHit::ScrollUp);
                         if is_down {
                             if let Some(session) = self.prc_session.as_mut() {
                                 if session.scroll_help_dialog(-self.prc_help_controller.scroll_step_lines) {
@@ -225,6 +229,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                         return true;
                     }
                     palm::ui::HelpOverlayHit::ScrollDown => {
+                        self.prc_help_controller
+                            .focus_control(palm::ui::HelpOverlayHit::ScrollDown);
                         if is_down {
                             if let Some(session) = self.prc_session.as_mut() {
                                 if session.scroll_help_dialog(self.prc_help_controller.scroll_step_lines) {
@@ -765,16 +771,20 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.dirty = true;
                     }
                 }
-                if self
+                if let Some(dialog) = self
                     .prc_session
                     .as_ref()
-                    .map(|s| s.has_help_dialog())
-                    .unwrap_or(false)
+                    .and_then(|s| s.help_dialog())
                 {
+                    self.prc_help_controller.sync(&dialog);
                     let event = if buttons.is_pressed(input::Buttons::Up) {
                         Some(palm::ui_component::UiNavEvent::Up)
                     } else if buttons.is_pressed(input::Buttons::Down) {
                         Some(palm::ui_component::UiNavEvent::Down)
+                    } else if buttons.is_pressed(input::Buttons::Left) {
+                        Some(palm::ui_component::UiNavEvent::Left)
+                    } else if buttons.is_pressed(input::Buttons::Right) {
+                        Some(palm::ui_component::UiNavEvent::Right)
                     } else if buttons.is_pressed(input::Buttons::Back) {
                         Some(palm::ui_component::UiNavEvent::Back)
                     } else if buttons.is_pressed(input::Buttons::Confirm) {
@@ -783,7 +793,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                         None
                     };
                     if let Some(event) = event {
-                        match self.prc_help_controller.on_event(event) {
+                        match self.prc_help_controller.on_event(&dialog, self.prc_system_fonts.as_slice(), event) {
+                            palm::controller::HelpDialogAction::Redraw => {
+                                self.dirty = true;
+                            }
                             palm::controller::HelpDialogAction::Scroll(delta) => {
                                 if let Some(session) = self.prc_session.as_mut() {
                                     if session.scroll_help_dialog(delta) {
@@ -794,6 +807,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                             palm::controller::HelpDialogAction::Dismiss => {
                                 if let Some(session) = self.prc_session.as_mut() {
                                     let _ = session.dismiss_help_dialog();
+                                    self.prc_help_controller.clear();
                                     self.resume_prc_runtime_session();
                                 }
                             }
@@ -2022,6 +2036,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                             None,
                             None,
                             None,
+                            None,
                             pane_x,
                             pane_y,
                             pane_w,
@@ -2052,6 +2067,11 @@ impl<'a, S: AppSource> Application<'a, S> {
                     .as_ref()
                     .and_then(|session| session.help_dialog())
                     .as_ref(),
+                self.prc_session
+                    .as_ref()
+                    .and_then(|session| session.help_dialog())
+                    .as_ref()
+                    .map(|_| self.prc_help_controller.focused_control()),
                 pane_x,
                 pane_y,
                 pane_w,

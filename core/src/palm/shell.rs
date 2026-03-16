@@ -4,6 +4,7 @@ use crate::{
     render_policy::RenderPolicy,
     ternos::ui::{Rect, StatusBarActionState, StatusBarView, UiContext, View},
 };
+use embedded_graphics::geometry::OriginDimensions;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrcStatusBarFocus {

@@ -4,6 +4,8 @@ use alloc::vec::Vec;
 
 use crate::palm::form_preview::{FormPreview, FormPreviewObject};
 use crate::palm::menu_preview::{MenuBarPreview, MenuItemPreview};
+use crate::palm::runner::RuntimeHelpDialog;
+use crate::palm::ui::{HelpOverlayHit, help_overlay_control_rects};
 use crate::palm::ui_component::{FocusChain, UiComponent, UiNavEvent};
 use crate::ternos::ui::Rect;
 
@@ -482,30 +484,146 @@ pub enum MenuAction {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HelpDialogAction {
     None,
+    Redraw,
     Scroll(i32),
     Dismiss,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct PrcHelpDialogController {
     pub scroll_step_lines: i32,
+    focused: HelpOverlayHit,
+    active_help_id: Option<u16>,
 }
 
 impl Default for PrcHelpDialogController {
     fn default() -> Self {
         Self {
             scroll_step_lines: 8,
+            focused: HelpOverlayHit::Done,
+            active_help_id: None,
         }
     }
 }
 
 impl PrcHelpDialogController {
-    pub fn on_event(&self, event: UiNavEvent) -> HelpDialogAction {
-        match event {
-            UiNavEvent::Up => HelpDialogAction::Scroll(-self.scroll_step_lines),
-            UiNavEvent::Down => HelpDialogAction::Scroll(self.scroll_step_lines),
-            UiNavEvent::Back | UiNavEvent::Confirm => HelpDialogAction::Dismiss,
-            UiNavEvent::Left | UiNavEvent::Right | UiNavEvent::Tick => HelpDialogAction::None,
+    pub fn sync(&mut self, dialog: &RuntimeHelpDialog) {
+        if self.active_help_id != Some(dialog.help_id) {
+            self.active_help_id = Some(dialog.help_id);
+            self.focused = HelpOverlayHit::Done;
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.active_help_id = None;
+        self.focused = HelpOverlayHit::Done;
+    }
+
+    pub fn focused_control(&self) -> HelpOverlayHit {
+        self.focused
+    }
+
+    pub fn focus_control(&mut self, control: HelpOverlayHit) {
+        self.focused = control;
+    }
+
+    pub fn on_event(&mut self, dialog: &RuntimeHelpDialog, fonts: &[crate::palm::runtime::PalmFont], event: UiNavEvent) -> HelpDialogAction {
+        self.sync(dialog);
+        match event {
+            UiNavEvent::Back => HelpDialogAction::Dismiss,
+            UiNavEvent::Confirm => match self.focused {
+                HelpOverlayHit::Done => HelpDialogAction::Dismiss,
+                HelpOverlayHit::ScrollUp => HelpDialogAction::Scroll(-self.scroll_step_lines),
+                HelpOverlayHit::ScrollDown => HelpDialogAction::Scroll(self.scroll_step_lines),
+            },
+            UiNavEvent::Up => {
+                self.move_focus(dialog, fonts, FocusDirection::Up)
+            }
+            UiNavEvent::Down => {
+                self.move_focus(dialog, fonts, FocusDirection::Down)
+            }
+            UiNavEvent::Left => {
+                self.move_focus(dialog, fonts, FocusDirection::Left)
+            }
+            UiNavEvent::Right => {
+                self.move_focus(dialog, fonts, FocusDirection::Right)
+            }
+            UiNavEvent::Tick => HelpDialogAction::None,
+        }
+    }
+
+    fn move_focus(
+        &mut self,
+        dialog: &RuntimeHelpDialog,
+        fonts: &[crate::palm::runtime::PalmFont],
+        direction: FocusDirection,
+    ) -> HelpDialogAction {
+        let controls = help_overlay_control_rects(dialog, fonts);
+        if controls.is_empty() {
+            return HelpDialogAction::None;
+        }
+        let current_rect = controls
+            .iter()
+            .find(|(id, _)| *id == self.focused)
+            .map(|(_, rect)| *rect)
+            .unwrap_or(controls[0].1);
+        let cur_cx = current_rect.x + current_rect.w / 2;
+        let cur_cy = current_rect.y + current_rect.h / 2;
+        let mut best: Option<((u8, i32, i32, i32, i32), HelpOverlayHit)> = None;
+
+        for (id, rect) in controls.iter().copied() {
+            if id == self.focused {
+                continue;
+            }
+            let cx = rect.x + rect.w / 2;
+            let cy = rect.y + rect.h / 2;
+            let (in_dir, primary, secondary, overlap) = match direction {
+                FocusDirection::Up => (
+                    cy < cur_cy,
+                    cur_cy - cy,
+                    (cx - cur_cx).abs(),
+                    axis_overlap(current_rect.x, current_rect.x + current_rect.w, rect.x, rect.x + rect.w),
+                ),
+                FocusDirection::Down => (
+                    cy > cur_cy,
+                    cy - cur_cy,
+                    (cx - cur_cx).abs(),
+                    axis_overlap(current_rect.x, current_rect.x + current_rect.w, rect.x, rect.x + rect.w),
+                ),
+                FocusDirection::Left => (
+                    cx < cur_cx,
+                    cur_cx - cx,
+                    (cy - cur_cy).abs(),
+                    axis_overlap(current_rect.y, current_rect.y + current_rect.h, rect.y, rect.y + rect.h),
+                ),
+                FocusDirection::Right => (
+                    cx > cur_cx,
+                    cx - cur_cx,
+                    (cy - cur_cy).abs(),
+                    axis_overlap(current_rect.y, current_rect.y + current_rect.h, rect.y, rect.y + rect.h),
+                ),
+            };
+            if !in_dir {
+                continue;
+            }
+            let key = (
+                if overlap > 0 { 0 } else { 1 },
+                primary,
+                secondary,
+                rect.y,
+                rect.x,
+            );
+            if best.as_ref().map(|(best_key, _)| key < *best_key).unwrap_or(true) {
+                best = Some((key, id));
+            }
+        }
+
+        if let Some((_, id)) = best {
+            if id != self.focused {
+                self.focused = id;
+                return HelpDialogAction::Redraw;
+            }
+        }
+        HelpDialogAction::None
     }
 }

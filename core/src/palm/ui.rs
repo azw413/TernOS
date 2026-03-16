@@ -37,6 +37,51 @@ pub enum HelpOverlayHit {
     ScrollDown,
 }
 
+pub fn help_overlay_control_rects(
+    dialog: &RuntimeHelpDialog,
+    fonts: &[PalmFont],
+) -> alloc::vec::Vec<(HelpOverlayHit, crate::ternos::ui::Rect)> {
+    let x = 1i32;
+    let y = 1i32;
+    let w = 158i32;
+    let h = 158i32;
+    let mut controls = alloc::vec::Vec::new();
+
+    let (done_tw, done_th) = text_metrics("Done", 1, fonts, 1);
+    let btn_x = x + 8;
+    let layout =
+        prc_components::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 36, 10, 7, 2);
+    let btn_y = y + h - layout.h - 4;
+    controls.push((
+        HelpOverlayHit::Done,
+        crate::ternos::ui::Rect::new(btn_x, btn_y, layout.w, layout.h),
+    ));
+
+    let header_h = 14i32;
+    let body_h = h - header_h - 26;
+    let line_h = 12i32;
+    let visible = (body_h / line_h).max(1) as usize;
+    let body_w = w - 14;
+    let lines = wrap_text_lines(&dialog.text, 1, body_w, fonts);
+    let max_scroll = lines.len().saturating_sub(visible);
+    if max_scroll > 0 {
+        let ind_w = 11i32;
+        let ind_h = 16i32;
+        let ind_x = x + w - ind_w - 6;
+        let ind_y = y + h - ind_h - 3;
+        controls.push((
+            HelpOverlayHit::ScrollUp,
+            crate::ternos::ui::Rect::new(ind_x, ind_y, ind_w, ind_h / 2),
+        ));
+        controls.push((
+            HelpOverlayHit::ScrollDown,
+            crate::ternos::ui::Rect::new(ind_x, ind_y + ind_h / 2, ind_w, ind_h - ind_h / 2),
+        ));
+    }
+
+    controls
+}
+
 fn find_font(fonts: &[PalmFont], font_id: u8) -> Option<&PalmFont> {
     fonts.iter().find(|f| f.font_id == font_id as u16)
 }
@@ -162,13 +207,148 @@ fn draw_button_outline<T: DrawTarget<Color = BinaryColor>>(
     style: u8,
     _outline: PrimitiveStyle<BinaryColor>,
 ) {
-    if style == 1 || style == 5 {
+    if style == 1 {
         let _ = Rectangle::new(Point::new(bx, by), Size::new(bw.max(1) as u32, bh.max(1) as u32))
             .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
             .draw(target);
     } else {
         prc_components::draw_button_frame(target, bx, by, bw, bh, BinaryColor::Off);
     }
+}
+
+fn draw_repeating_button_glyph<T: DrawTarget<Color = BinaryColor>>(
+    target: &mut T,
+    bx: i32,
+    by: i32,
+    bw: i32,
+    bh: i32,
+    up: bool,
+    color: BinaryColor,
+    dithered: bool,
+) {
+    let cx = bx + bw / 2;
+    let cy = by + bh / 2;
+    let half = ((bw.min(bh) - 2) / 2).max(2);
+    for row in 0..=half {
+        let y = if up {
+            cy - half / 2 + row
+        } else {
+            cy + half / 2 - row
+        };
+        for dx in -row..=row {
+            if !dithered || (((cx + dx) + y) & 1) == 0 {
+                let _ = Pixel(Point::new(cx + dx, y), color).draw(target);
+            }
+        }
+    }
+}
+
+fn draw_form_button_like<T: DrawTarget<Color = BinaryColor>>(
+    target: &mut T,
+    fonts: &[PalmFont],
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    font_id: u8,
+    style: u8,
+    no_frame: bool,
+    text: &str,
+    focused: bool,
+    outline: PrimitiveStyle<BinaryColor>,
+) {
+    let mut bx = x;
+    let mut by = y;
+    let mut bw = w.max(8);
+    let mut bh = h.max(8);
+    if style == 1 {
+        by -= 1;
+        bw += 2;
+        bh += 2;
+    }
+    if bw <= 0 || bh <= 0 {
+        return;
+    }
+    if style == 5 {
+        if focused {
+            let _ = Rectangle::new(
+                Point::new(bx.max(0), by.max(0)),
+                Size::new(bw.max(1) as u32, bh.max(1) as u32),
+            )
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
+            .draw(target);
+        }
+        if focused && bw > 2 && bh > 2 {
+            let _ = Rectangle::new(
+                Point::new((bx + 1).max(0), (by + 1).max(0)),
+                Size::new((bw - 2).max(1) as u32, (bh - 2).max(1) as u32),
+            )
+            .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+            .draw(target);
+        }
+        let up = matches!(text, "^" | "~");
+        draw_repeating_button_glyph(
+            target,
+            bx,
+            by,
+            bw,
+            bh,
+            up,
+            if focused {
+                BinaryColor::On
+            } else {
+                BinaryColor::Off
+            },
+            matches!(text, "~" | "V"),
+        );
+        return;
+    }
+    if !no_frame {
+        draw_button_outline(target, bx, by, bw, bh, style, outline);
+        if focused && bw > 4 && bh > 4 {
+            let _ = Rectangle::new(
+                Point::new(bx + 1, by + 1),
+                Size::new((bw - 2) as u32, (bh - 2) as u32),
+            )
+            .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+            .draw(target);
+        }
+    } else if focused {
+        let _ = Rectangle::new(
+            Point::new(bx.max(0), by.max(0)),
+            Size::new(bw.max(1) as u32, bh.max(1) as u32),
+        )
+        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
+        .draw(target);
+    }
+    let (tw, th) = text_metrics(text, font_id, fonts, 1);
+    let mut tx = bx + ((bw - tw) / 2).max(1);
+    if style == 1 {
+        tx += 1;
+    }
+    let ty = by + ((bh - th) / 2).max(1);
+    if no_frame && focused {
+        let _ = Rectangle::new(
+            Point::new((tx - 1).max(0), (ty - 1).max(0)),
+            Size::new((tw + 2).max(1) as u32, (th + 2).max(1) as u32),
+        )
+        .into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+        .draw(target);
+    }
+    draw_text(
+        target,
+        text,
+        tx,
+        ty,
+        font_id,
+        fonts,
+        1,
+        if focused {
+            BinaryColor::On
+        } else {
+            BinaryColor::Off
+        },
+    );
 }
 
 fn draw_dotted_hline<T: DrawTarget<Color = BinaryColor>>(
@@ -663,45 +843,14 @@ pub fn hit_test_menu_overlay(
 }
 
 pub fn hit_test_help_overlay(dialog: &RuntimeHelpDialog, fonts: &[PalmFont], point: UiPoint) -> Option<HelpOverlayHit> {
-    let x = 1i32;
-    let y = 1i32;
-    let w = 158i32;
-    let h = 158i32;
-    let header_h = 14i32;
-
-    let (done_tw, done_th) = text_metrics("Done", 1, fonts, 1);
-    let btn_x = x + 8;
-    let layout =
-        prc_components::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 36, 10, 7, 2);
-    let btn_y = y + h - layout.h - 4;
-    if point.x >= btn_x
-        && point.x < btn_x + layout.w
-        && point.y >= btn_y
-        && point.y < btn_y + layout.h
-    {
-        return Some(HelpOverlayHit::Done);
-    }
-
-    let body_h = h - header_h - 26;
-    let line_h = 12i32;
-    let visible = (body_h / line_h).max(1) as usize;
-    let body_w = w - 14;
-    let lines = wrap_text_lines(&dialog.text, 1, body_w, fonts);
-    let max_scroll = lines.len().saturating_sub(visible);
-    if max_scroll == 0 {
-        return None;
-    }
-
-    let ind_x = x + w - 11;
-    let ind_y = y + h - 17;
-    let ind_w = 7i32;
-    let ind_h = 14i32;
-    if point.x >= ind_x && point.x < ind_x + ind_w && point.y >= ind_y && point.y < ind_y + ind_h {
-        let mid_y = ind_y + ind_h / 2;
-        if point.y < mid_y {
-            return Some(HelpOverlayHit::ScrollUp);
+    for (hit, rect) in help_overlay_control_rects(dialog, fonts) {
+        if point.x >= rect.x
+            && point.x < rect.x + rect.w
+            && point.y >= rect.y
+            && point.y < rect.y + rect.h
+        {
+            return Some(hit);
         }
-        return Some(HelpOverlayHit::ScrollDown);
     }
 
     None
@@ -735,7 +884,12 @@ fn wrap_text_lines(text: &str, font_id: u8, max_w: i32, fonts: &[PalmFont]) -> a
     lines
 }
 
-fn draw_help_dialog_on_canvas(canvas: &mut MonoCanvas160, dialog: &RuntimeHelpDialog, fonts: &[PalmFont]) {
+fn draw_help_dialog_on_canvas(
+    canvas: &mut MonoCanvas160,
+    dialog: &RuntimeHelpDialog,
+    fonts: &[PalmFont],
+    focused: Option<HelpOverlayHit>,
+) {
     let x = 1i32;
     let y = 1i32;
     let w = 158i32;
@@ -777,27 +931,42 @@ fn draw_help_dialog_on_canvas(canvas: &mut MonoCanvas160, dialog: &RuntimeHelpDi
     let layout =
         prc_components::auto_button_layout_for_label(btn_x, 0, done_tw, done_th, 36, 10, 7, 2);
     let btn_y = y + h - layout.h - 4;
-    prc_alert::draw_done_button(canvas, btn_x, btn_y, layout.w, layout.h);
-    let done_tx = btn_x + ((layout.w - done_tw) / 2).max(1);
-    let done_ty = btn_y + ((layout.h - done_th) / 2).max(1);
-    draw_text(
+    draw_form_button_like(
         canvas,
-        "Done",
-        done_tx,
-        done_ty,
-        1,
         fonts,
+        btn_x,
+        btn_y,
+        layout.w,
+        layout.h,
         1,
-        BinaryColor::Off,
+        0,
+        false,
+        "Done",
+        focused == Some(HelpOverlayHit::Done),
+        PrimitiveStyle::with_stroke(BinaryColor::Off, 1),
     );
 
-    prc_alert::draw_scroll_indicator(
-        canvas,
-        x + w - 11,
-        y + h - 17,
-        scroll > 0,
-        scroll < max_scroll,
-    );
+    for (hit, rect) in help_overlay_control_rects(dialog, fonts) {
+        let (label, enabled) = match hit {
+            HelpOverlayHit::Done => continue,
+            HelpOverlayHit::ScrollUp => (if scroll > 0 { "^" } else { "~" }, scroll > 0),
+            HelpOverlayHit::ScrollDown => (if scroll < max_scroll { "v" } else { "V" }, scroll < max_scroll),
+        };
+        draw_form_button_like(
+            canvas,
+            fonts,
+            rect.x,
+            rect.y,
+            rect.w.max(12),
+            rect.h.max(8),
+            1,
+            5,
+            false,
+            label,
+            focused == Some(hit),
+            PrimitiveStyle::with_stroke(BinaryColor::Off, 1),
+        );
+    }
 }
 
 pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
@@ -812,6 +981,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     focused_field_id: Option<u16>,
     menu_overlay: Option<(&MenuBarPreview, usize, Option<usize>)>,
     help_overlay: Option<&RuntimeHelpDialog>,
+    help_overlay_focus: Option<HelpOverlayHit>,
     pane_x: i32,
     pane_y: i32,
     pane_w: i32,
@@ -1258,7 +1428,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
         draw_menu_overlay_on_canvas(&mut canvas, menu, active_menu_index, active_item_index, fonts);
     }
     if let Some(dialog) = help_overlay {
-        draw_help_dialog_on_canvas(&mut canvas, dialog, fonts);
+        draw_help_dialog_on_canvas(&mut canvas, dialog, fonts, help_overlay_focus);
     }
 
     let s = scale.max(1);

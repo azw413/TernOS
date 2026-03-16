@@ -77,7 +77,7 @@ impl<'a> StatusBarView<'a> {
     }
 
     fn battery_rect(rect: Rect) -> Rect {
-        Rect::new(rect.x + (rect.w - 110) / 2, rect.y + 8, 110, 28)
+        Rect::new(rect.x + (rect.w - 110) / 2, rect.y + 9, 110, 28)
     }
 
     fn use_true_gray(ctx: &UiContext<'_>) -> bool {
