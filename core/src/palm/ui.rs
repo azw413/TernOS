@@ -404,6 +404,7 @@ fn draw_button_outline<T: DrawTarget<Color = BinaryColor>>(
     bw: i32,
     bh: i32,
     style: u8,
+    density: form::PalmDensity,
     _outline: PrimitiveStyle<BinaryColor>,
 ) {
     if style == 1 {
@@ -411,10 +412,13 @@ fn draw_button_outline<T: DrawTarget<Color = BinaryColor>>(
             .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
             .draw(target);
     } else {
-        if bw >= 40 || bh >= 20 {
-            form::draw_button_frame_hi(target, bx, by, bw, bh, BinaryColor::Off);
-        } else {
-            form::draw_button_frame(target, bx, by, bw, bh, BinaryColor::Off);
+        match density {
+            form::PalmDensity::Low => {
+                form::draw_button_frame(target, bx, by, bw, bh, BinaryColor::Off);
+            }
+            form::PalmDensity::High => {
+                form::draw_button_frame_hi(target, bx, by, bw, bh, BinaryColor::Off);
+            }
         }
     }
 }
@@ -458,13 +462,14 @@ fn draw_form_button_like<T: DrawTarget<Color = BinaryColor>>(
     no_frame: bool,
     text: &str,
     focused: bool,
+    density: form::PalmDensity,
     outline: PrimitiveStyle<BinaryColor>,
 ) {
     let bx = x;
     let mut by = y;
     let mut bw = w.max(8);
     let mut bh = h.max(8);
-    let hi = bw >= 40 || bh >= 20;
+    let hi = matches!(density, form::PalmDensity::High);
     let focus_inset = if hi { 2 } else { 1 };
     let focus_stroke = if hi { 2 } else { 1 };
     if style == 1 {
@@ -510,7 +515,7 @@ fn draw_form_button_like<T: DrawTarget<Color = BinaryColor>>(
         return;
     }
     if !no_frame {
-        draw_button_outline(target, bx, by, bw, bh, style, outline);
+        draw_button_outline(target, bx, by, bw, bh, style, density, outline);
         if focused && bw > focus_inset * 2 + 2 && bh > focus_inset * 2 + 2 {
             let _ = Rectangle::new(
                 Point::new(bx + focus_inset, by + focus_inset),
@@ -1523,6 +1528,7 @@ pub fn draw_help_dialog_native<T: DrawTarget<Color = BinaryColor>>(
                     false,
                     "Done",
                     focused == Some(HelpOverlayHit::Done),
+                    form::PalmDensity::High,
                     PrimitiveStyle::with_stroke(BinaryColor::Off, 1),
                 );
             }
@@ -1551,6 +1557,7 @@ pub fn draw_help_dialog_native<T: DrawTarget<Color = BinaryColor>>(
                     false,
                     label,
                     focused == Some(hit),
+                    form::PalmDensity::High,
                     PrimitiveStyle::with_stroke(BinaryColor::Off, 1),
                 );
             }
@@ -1619,6 +1626,7 @@ fn draw_help_dialog_on_canvas(
         false,
         "Done",
         focused == Some(HelpOverlayHit::Done),
+        form::PalmDensity::Low,
         PrimitiveStyle::with_stroke(BinaryColor::Off, 1),
     );
 
@@ -1640,6 +1648,7 @@ fn draw_help_dialog_on_canvas(
             false,
             label,
             focused == Some(hit),
+            form::PalmDensity::Low,
             PrimitiveStyle::with_stroke(BinaryColor::Off, 1),
         );
     }
@@ -1892,7 +1901,16 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
                 }
                 let focused = focused_control_id == Some(*id);
                 if !*no_frame {
-                    draw_button_outline(&mut canvas, bx, by, bw, bh, *style, outline);
+                    draw_button_outline(
+                        &mut canvas,
+                        bx,
+                        by,
+                        bw,
+                        bh,
+                        *style,
+                        form::PalmDensity::Low,
+                        outline,
+                    );
                     if focused && bw > 4 && bh > 4 {
                         let _ = Rectangle::new(
                             Point::new(bx + 1, by + 1),

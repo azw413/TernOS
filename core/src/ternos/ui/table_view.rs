@@ -118,7 +118,7 @@ impl<'a> TableView<'a> {
             let row_h = (row.height as i32).max(1);
             let row_rect = Rect::new(rect.x, y, rect.w, row_h);
             if idx == row_index {
-                return (row_rect.y < rect.y + rect.h).then_some(row_rect);
+                return (row_rect.y + row_rect.h <= rect.y + rect.h).then_some(row_rect);
             }
             y += row_h;
             if y >= rect.y + rect.h {

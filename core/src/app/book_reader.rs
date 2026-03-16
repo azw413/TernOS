@@ -1,12 +1,13 @@
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, format, rc::Rc, string::String};
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, format, rc::Rc, string::{String, ToString}, vec, vec::Vec};
 
 use embedded_graphics::{
+    geometry::Size,
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
     pixelcolor::BinaryColor,
-    prelude::{DrawTarget, OriginDimensions, Point},
+    prelude::{DrawTarget, OriginDimensions, Point, Primitive},
+    primitives::{PrimitiveStyle, Rectangle},
     text::Text,
     Drawable,
 };
@@ -25,10 +26,14 @@ use crate::render_policy::RenderPolicy;
 use crate::ternos::ui::{
     flush_queue,
     auto_button_layout_for_label,
+    chrome::draw_alert_frame_hi,
+    form::draw_form_button_hi,
     palm_text_height,
     palm_text_width,
     ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalWidget, ObjectId,
-    Rect, ListItem, ListView, RenderQueue, StatusBarActionState, StatusBarView, UiContext, View,
+    Rect, RenderQueue, StatusBarActionState, StatusBarView, TableCellRenderer, TableHit,
+    TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiTableCell, UiTableModel,
+    UiTableRow, View,
 };
 
 const LIST_TOP: i32 = 60;
@@ -55,6 +60,8 @@ pub struct BookReaderState {
     pub current_page_ops: Option<crate::trbk::TrbkPage>,
     pub next_page_ops: Option<crate::trbk::TrbkPage>,
     pub toc_selected: usize,
+    pub toc_top_row: usize,
+    pub toc_cancel_focused: bool,
     pub toc_labels: Option<Vec<String>>,
     pub current_page: usize,
     pub book_turns_since_full: usize,
@@ -88,6 +95,15 @@ pub struct TocResult {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TocTouchHit {
+    Row(usize),
+    Cancel,
+    ScrollUp,
+    ScrollDown,
+    ScrollTrack(usize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReaderMenuCommand {
     Contents,
     Page,
@@ -115,12 +131,11 @@ const READER_CMD_PAGE: u16 = 101;
 const READER_CMD_STATS: u16 = 200;
 const READER_CMD_HELP: u16 = 201;
 const READER_OVERLAY_FORM_ID: u16 = 3000;
-const READER_OVERLAY_FIELD_PAGE: ObjectId = 3001;
-const READER_OVERLAY_BTN_DEC10: ObjectId = 3002;
-const READER_OVERLAY_BTN_DEC1: ObjectId = 3003;
-const READER_OVERLAY_BTN_INC1: ObjectId = 3004;
-const READER_OVERLAY_BTN_INC10: ObjectId = 3005;
-const READER_OVERLAY_BTN_DONE: ObjectId = 3006;
+const READER_OVERLAY_BTN_OK: ObjectId = 3001;
+const READER_OVERLAY_BTN_CANCEL: ObjectId = 3002;
+const READER_OVERLAY_DIGIT_UP_BASE: ObjectId = 3100;
+const READER_OVERLAY_DIGIT_FIELD_BASE: ObjectId = 3200;
+const READER_OVERLAY_DIGIT_DOWN_BASE: ObjectId = 3300;
 
 fn reader_help_text() -> String {
     [
@@ -133,13 +148,210 @@ fn reader_help_text() -> String {
     .join("\n")
 }
 
+fn page_jump_digit_count(page_count: usize) -> usize {
+    page_count.max(1).to_string().len().max(1)
+}
+
+fn page_jump_display_value(target_page: usize, page_count: usize) -> usize {
+    target_page
+        .saturating_add(1)
+        .clamp(1, page_count.max(1))
+}
+
+fn page_jump_place_value(digits: usize, index: usize) -> usize {
+    let power = digits.saturating_sub(index + 1) as u32;
+    10usize.saturating_pow(power)
+}
+
+fn page_jump_adjust_digit(
+    display_value: usize,
+    page_count: usize,
+    digits: usize,
+    index: usize,
+    delta: i32,
+) -> usize {
+    let place = page_jump_place_value(digits, index);
+    let max_value = page_count.max(1);
+    if delta < 0 {
+        display_value.saturating_sub(place).clamp(1, max_value)
+    } else {
+        display_value.saturating_add(place).clamp(1, max_value)
+    }
+}
+
+fn toc_modal_rect() -> Rect {
+    Rect::new(30, BOOK_STATUS_H + 10, 420, 620)
+}
+
+fn toc_cancel_rect(modal: Rect) -> Rect {
+    let cancel_w = 74;
+    Rect::new(modal.x + modal.w - cancel_w - 16, modal.y + modal.h - 40, cancel_w, 24)
+}
+
+fn toc_table_rect(modal: Rect, cancel_rect: Rect) -> Rect {
+    Rect::new(
+        modal.x + 14,
+        modal.y + 44,
+        modal.w - 28 - 12,
+        (cancel_rect.y - 14) - (modal.y + 44),
+    )
+}
+
+fn toc_scrollbar_rect(_modal: Rect, table_rect: Rect) -> Rect {
+    Rect::new(table_rect.x + table_rect.w + 4, table_rect.y, 11, table_rect.h)
+}
+
+struct TocTableRenderer<'a> {
+    palm_fonts: &'a [crate::palm::runtime::PalmFont],
+}
+
+impl TableCellRenderer for TocTableRenderer<'_> {
+    fn render_cell(
+        &self,
+        ctx: &mut UiContext<'_>,
+        cell_rect: Rect,
+        _row: &UiTableRow,
+        cell: &UiTableCell,
+        _row_index: usize,
+        _col_index: usize,
+        selected: bool,
+    ) {
+        let lines = wrap_toc_lines(&cell.text, (cell_rect.w - 12).max(20), self.palm_fonts);
+        let line_h = (palm_text_height(0, self.palm_fonts, 1) + 2).max(10);
+        for (line_idx, line) in lines.iter().enumerate() {
+            crate::ternos::ui::draw_palm_text(
+                ctx.buffers,
+                line,
+                cell_rect.x + 6,
+                cell_rect.y + 5 + line_idx as i32 * line_h,
+                0,
+                self.palm_fonts,
+                1,
+                if selected {
+                    BinaryColor::On
+                } else {
+                    BinaryColor::Off
+                },
+            );
+        }
+    }
+}
+
+fn wrap_toc_lines(text: &str, max_w: i32, fonts: &[crate::palm::runtime::PalmFont]) -> Vec<String> {
+    if text.is_empty() {
+        return vec![String::new()];
+    }
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        let candidate = if current.is_empty() {
+            word.to_string()
+        } else {
+            format!("{} {}", current, word)
+        };
+        if palm_text_width(&candidate, 0, fonts, 1) <= max_w || current.is_empty() {
+            current = candidate;
+        } else {
+            lines.push(current);
+            current = word.to_string();
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if lines.is_empty() {
+        lines.push(text.to_string());
+    }
+    lines
+}
+
 impl BookReaderState {
+    fn ensure_toc_labels(&mut self, book: &crate::trbk::TrbkBookInfo) {
+        if self.toc_labels.is_some() {
+            return;
+        }
+        let mut labels: Vec<String> = Vec::with_capacity(book.toc.len());
+        for entry in &book.toc {
+            let mut label = String::new();
+            let indent = (entry.level as usize).min(6);
+            for _ in 0..indent {
+                label.push_str("  ");
+            }
+            label.push_str(entry.title.as_str());
+            labels.push(label);
+        }
+        self.toc_labels = Some(labels);
+    }
+
+    fn toc_rows(&self, table_w: i32, fonts: &[crate::palm::runtime::PalmFont]) -> Vec<UiTableRow> {
+        let labels = self.toc_labels.as_ref().map(Vec::as_slice).unwrap_or(&[]);
+        let text_w = (table_w - 12).max(20);
+        let line_h = (palm_text_height(0, fonts, 1) + 2).max(10);
+        labels
+            .iter()
+            .enumerate()
+            .map(|(idx, label)| {
+                let lines = wrap_toc_lines(label, text_w, fonts);
+                let height = (lines.len() as i32 * line_h + 8).max(line_h + 8) as i16;
+                UiTableRow {
+                id: idx as u16,
+                height,
+                usable: true,
+                selectable: true,
+                data: 0,
+                cells: vec![UiTableCell { text: label.clone() }],
+            }})
+            .collect()
+    }
+
+    fn toc_table_model(&self, table_w: i32, fonts: &[crate::palm::runtime::PalmFont]) -> UiTableModel {
+        let labels = self.toc_labels.as_ref().map(Vec::as_slice).unwrap_or(&[]);
+        UiTableModel {
+            rows: self.toc_rows(table_w, fonts),
+            cols: 1,
+            columns: Vec::new(),
+            selected_row: Some(self.toc_selected.min(labels.len().saturating_sub(1)) as u16),
+            selected_col: Some(0),
+            top_row: self.toc_top_row as u16,
+        }
+    }
+
+    fn toc_visible_rows(&self, fonts: &[crate::palm::runtime::PalmFont]) -> usize {
+        let modal = toc_modal_rect();
+        let cancel_rect = toc_cancel_rect(modal);
+        let table_rect = toc_table_rect(modal, cancel_rect);
+        let model = self.toc_table_model(table_rect.w, fonts);
+        TableView::new(&model).visible_row_count(table_rect)
+    }
+
+    fn clamp_toc_selection_to_view(&mut self, total_rows: usize, visible_rows: usize) {
+        if total_rows == 0 || visible_rows == 0 {
+            self.toc_selected = 0;
+            self.toc_top_row = 0;
+            self.toc_cancel_focused = false;
+            return;
+        }
+        let max_top = total_rows.saturating_sub(visible_rows);
+        self.toc_top_row = self.toc_top_row.min(max_top);
+        let bottom = self
+            .toc_top_row
+            .saturating_add(visible_rows.saturating_sub(1))
+            .min(total_rows.saturating_sub(1));
+        if self.toc_selected < self.toc_top_row {
+            self.toc_selected = self.toc_top_row;
+        } else if self.toc_selected > bottom {
+            self.toc_selected = bottom;
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             current_book: None,
             current_page_ops: None,
             next_page_ops: None,
             toc_selected: 0,
+            toc_top_row: 0,
+            toc_cancel_focused: false,
             toc_labels: None,
             current_page: 0,
             book_turns_since_full: 0,
@@ -155,6 +367,8 @@ impl BookReaderState {
         self.current_page_ops = None;
         self.next_page_ops = None;
         self.toc_selected = 0;
+        self.toc_top_row = 0;
+        self.toc_cancel_focused = false;
         self.toc_labels = None;
         self.current_page = 0;
         self.book_turns_since_full = 0;
@@ -281,29 +495,13 @@ impl BookReaderState {
                     let Some(ReaderOverlay::PageJump { target_page }) = self.overlay.as_mut() else {
                         return result;
                     };
-                    let max_page = self
+                    let page_count = self
                         .current_book
                         .as_ref()
-                        .map(|book| book.page_count.saturating_sub(1))
-                        .unwrap_or(0);
+                        .map(|book| book.page_count)
+                        .unwrap_or(1);
                     match id {
-                        READER_OVERLAY_BTN_DEC10 => {
-                            *target_page = target_page.saturating_sub(10);
-                            result.dirty = true;
-                        }
-                        READER_OVERLAY_BTN_DEC1 => {
-                            *target_page = target_page.saturating_sub(1);
-                            result.dirty = true;
-                        }
-                        READER_OVERLAY_BTN_INC1 => {
-                            *target_page = (*target_page + 1).min(max_page);
-                            result.dirty = true;
-                        }
-                        READER_OVERLAY_BTN_INC10 => {
-                            *target_page = (*target_page + 10).min(max_page);
-                            result.dirty = true;
-                        }
-                        READER_OVERLAY_BTN_DONE => {
+                        READER_OVERLAY_BTN_OK => {
                             self.current_page = *target_page;
                             self.current_page_ops = None;
                             self.next_page_ops = None;
@@ -315,11 +513,55 @@ impl BookReaderState {
                             result.jumped = true;
                             result.dirty = true;
                         }
+                        READER_OVERLAY_BTN_CANCEL => {
+                            self.overlay = None;
+                            self.overlay_form.reset();
+                            result.close = true;
+                            result.dirty = true;
+                        }
+                        id if id >= READER_OVERLAY_DIGIT_UP_BASE
+                            && id < READER_OVERLAY_DIGIT_UP_BASE + 16 =>
+                        {
+                            let digits = page_jump_digit_count(page_count);
+                            let index = (id - READER_OVERLAY_DIGIT_UP_BASE) as usize;
+                            if index < digits {
+                                let display_value =
+                                    page_jump_display_value(*target_page, page_count);
+                                let next_value = page_jump_adjust_digit(
+                                    display_value,
+                                    page_count,
+                                    digits,
+                                    index,
+                                    -1,
+                                );
+                                *target_page = next_value.saturating_sub(1);
+                                result.dirty = true;
+                            }
+                        }
+                        id if id >= READER_OVERLAY_DIGIT_DOWN_BASE
+                            && id < READER_OVERLAY_DIGIT_DOWN_BASE + 16 =>
+                        {
+                            let digits = page_jump_digit_count(page_count);
+                            let index = (id - READER_OVERLAY_DIGIT_DOWN_BASE) as usize;
+                            if index < digits {
+                                let display_value =
+                                    page_jump_display_value(*target_page, page_count);
+                                let next_value = page_jump_adjust_digit(
+                                    display_value,
+                                    page_count,
+                                    digits,
+                                    index,
+                                    1,
+                                );
+                                *target_page = next_value.saturating_sub(1);
+                                result.dirty = true;
+                            }
+                        }
                         _ => {}
                     }
                 }
                 Some(ReaderOverlay::Stats) => {
-                    if id == READER_OVERLAY_BTN_DONE {
+                    if id == READER_OVERLAY_BTN_OK || id == READER_OVERLAY_BTN_CANCEL {
                         self.overlay = None;
                         self.overlay_form.reset();
                         result.close = true;
@@ -414,8 +656,10 @@ impl BookReaderState {
             ReaderMenuCommand::Contents => {
                 if let Some(book) = &self.current_book {
                     if !book.toc.is_empty() {
-                        self.toc_selected = find_toc_selection(book, self.current_page);
-                        self.toc_labels = None;
+        self.toc_selected = find_toc_selection(book, self.current_page);
+        self.toc_top_row = self.toc_selected.saturating_sub(2);
+        self.toc_cancel_focused = false;
+        self.toc_labels = None;
                         return true;
                     }
                 }
@@ -459,12 +703,12 @@ impl BookReaderState {
     pub(crate) fn overlay_spec(&self) -> Option<ModalFormSpec> {
         let overlay = self.overlay.as_ref()?;
         let bounds = match overlay {
-            ReaderOverlay::PageJump { .. } => Rect::new(30, BOOK_STATUS_H + 8, 420, 190),
+            ReaderOverlay::PageJump { .. } => Rect::new(72, BOOK_STATUS_H + 18, 336, 232),
             ReaderOverlay::Stats => Rect::new(22, BOOK_STATUS_H + 8, 438, 196),
             ReaderOverlay::Help(..) => return None,
         };
         let title = match overlay {
-            ReaderOverlay::PageJump { .. } => "Go To Page",
+            ReaderOverlay::PageJump { .. } => "Page Number",
             ReaderOverlay::Stats => "Book Stats",
             ReaderOverlay::Help(..) => return None,
         };
@@ -481,53 +725,81 @@ impl BookReaderState {
         let mut widgets = Vec::new();
         let default_focus = match overlay {
             ReaderOverlay::PageJump { target_page } => {
+                let page_count = self
+                    .current_book
+                    .as_ref()
+                    .map(|b| b.page_count)
+                    .unwrap_or(1);
+                let digits = page_jump_digit_count(page_count);
+                let display_value = page_jump_display_value(*target_page, page_count);
+                let display_text = format!("{:0width$}", display_value, width = digits);
                 widgets.push(ModalWidget::Label {
                     id: 0,
                     bounds: Rect::new(body_x, body_y, 200, 12),
-                    text: format!(
-                        "Page {} of {}",
-                        target_page.saturating_add(1),
-                        self.current_book.as_ref().map(|b| b.page_count).unwrap_or(0)
-                    ),
+                    text: "Goto page:".into(),
                     font_id: 0,
                 });
-                widgets.push(ModalWidget::Field {
-                    id: READER_OVERLAY_FIELD_PAGE,
-                    bounds: Rect::new(body_x, body_y + 22, 120, 24),
-                    text: format!("{}", target_page.saturating_add(1)),
-                    font_id: 0,
-                });
-                let row_y = body_y + 60;
-                let button_w = 48;
+                let digit_w = 30;
+                let digit_h = 28;
+                let rep_h = 18;
                 let gap = 8;
-                for (id, text, x) in [
-                    (READER_OVERLAY_BTN_DEC10, "-10", body_x),
-                    (READER_OVERLAY_BTN_DEC1, "-1", body_x + button_w + gap),
-                    (READER_OVERLAY_BTN_INC1, "+1", body_x + (button_w + gap) * 2),
-                    (READER_OVERLAY_BTN_INC10, "+10", body_x + (button_w + gap) * 3),
-                ] {
+                let total_w = digits as i32 * digit_w + (digits.saturating_sub(1) as i32 * gap);
+                let digits_x = bounds.x + ((bounds.w - total_w) / 2).max(0);
+                let top_y = body_y + 26;
+                for (idx, ch) in display_text.chars().enumerate() {
+                    let x = digits_x + idx as i32 * (digit_w + gap);
                     widgets.push(ModalWidget::Button {
-                        id,
-                        bounds: Rect::new(x, row_y, button_w, 24),
-                        text: text.into(),
-                        font_id: 0,
-                        style: 0,
+                        id: READER_OVERLAY_DIGIT_UP_BASE + idx as u16,
+                        bounds: Rect::new(x, top_y, digit_w, rep_h),
+                        text: "^".into(),
+                        font_id: 1,
+                        style: 5,
+                        no_frame: false,
+                    });
+                    widgets.push(ModalWidget::Field {
+                        id: READER_OVERLAY_DIGIT_FIELD_BASE + idx as u16,
+                        bounds: Rect::new(x, top_y + rep_h + 6, digit_w, digit_h),
+                        text: ch.to_string(),
+                        font_id: 1,
+                        focusable: false,
+                    });
+                    widgets.push(ModalWidget::Button {
+                        id: READER_OVERLAY_DIGIT_DOWN_BASE + idx as u16,
+                        bounds: Rect::new(x, top_y + rep_h + 6 + digit_h + 6, digit_w, rep_h),
+                        text: "v".into(),
+                        font_id: 1,
+                        style: 5,
                         no_frame: false,
                     });
                 }
                 widgets.push(ModalWidget::Label {
                     id: 0,
-                    bounds: Rect::new(body_x, row_y + 40, 300, 12),
-                    text: "Use Left/Right and Up/Down to move between controls".into(),
+                    bounds: Rect::new(body_x, bounds.y + bounds.h - 74, 260, 12),
+                    text: format!("1 - {}", page_count.max(1)),
                     font_id: 0,
                 });
-                widgets.push(ModalWidget::Label {
-                    id: 0,
-                    bounds: Rect::new(body_x, row_y + 62, 240, 12),
-                    text: "Confirm activates the selected button".into(),
+                let ok_w = 56;
+                let cancel_w = 74;
+                let buttons_y = bounds.y + bounds.h - 40;
+                let cancel_x = bounds.x + bounds.w - cancel_w - 16;
+                let ok_x = cancel_x - ok_w - 10;
+                widgets.push(ModalWidget::Button {
+                    id: READER_OVERLAY_BTN_OK,
+                    bounds: Rect::new(ok_x, buttons_y, ok_w, 24),
+                    text: "OK".into(),
                     font_id: 0,
+                    style: 0,
+                    no_frame: false,
                 });
-                READER_OVERLAY_BTN_DEC1
+                widgets.push(ModalWidget::Button {
+                    id: READER_OVERLAY_BTN_CANCEL,
+                    bounds: Rect::new(cancel_x, buttons_y, cancel_w, 24),
+                    text: "Cancel".into(),
+                    font_id: 0,
+                    style: 0,
+                    no_frame: false,
+                });
+                READER_OVERLAY_DIGIT_UP_BASE + digits.saturating_sub(1) as u16
             }
             ReaderOverlay::Stats => {
                 if let Some(book) = self.current_book.as_ref() {
@@ -559,19 +831,21 @@ impl BookReaderState {
                     text: "Confirm or Back to close".into(),
                     font_id: 0,
                 });
-                READER_OVERLAY_BTN_DONE
+                READER_OVERLAY_BTN_OK
             }
             ReaderOverlay::Help(..) => return None,
         };
 
-        widgets.push(ModalWidget::Button {
-            id: READER_OVERLAY_BTN_DONE,
-            bounds: Rect::new(btn_x, btn_y, btn.w, btn.h),
-            text: "Done".into(),
-            font_id: 0,
-            style: 0,
-            no_frame: false,
-        });
+        if matches!(overlay, ReaderOverlay::Stats) {
+            widgets.push(ModalWidget::Button {
+                id: READER_OVERLAY_BTN_OK,
+                bounds: Rect::new(btn_x, btn_y, btn.w, btn.h),
+                text: "Done".into(),
+                font_id: 0,
+                style: 0,
+                no_frame: false,
+            });
+        }
 
         Some(ModalFormSpec {
             form_id: READER_OVERLAY_FORM_ID,
@@ -585,6 +859,7 @@ impl BookReaderState {
     pub fn handle_toc_input(
         &mut self,
         buttons: &input::ButtonState,
+        fonts: &[crate::palm::runtime::PalmFont],
     ) -> TocResult {
         let mut result = TocResult {
             exit: false,
@@ -592,28 +867,61 @@ impl BookReaderState {
             dirty: false,
         };
 
-        let Some(book) = &self.current_book else {
+        let Some(book) = self.current_book.as_ref().cloned() else {
             result.exit = true;
             result.dirty = true;
             return result;
         };
 
+        self.ensure_toc_labels(book.as_ref());
         let toc_len = book.toc.len();
+        let visible_rows = self.toc_visible_rows(fonts);
+
         if buttons.is_pressed(input::Buttons::Up) {
+            if self.toc_cancel_focused {
+                self.toc_cancel_focused = false;
+                result.dirty = true;
+                return result;
+            }
             if self.toc_selected > 0 {
                 self.toc_selected -= 1;
+                if self.toc_selected < self.toc_top_row {
+                    self.toc_top_row = self.toc_selected;
+                }
                 result.dirty = true;
             }
             return result;
         }
         if buttons.is_pressed(input::Buttons::Down) {
+            if self.toc_cancel_focused {
+                return result;
+            }
             if self.toc_selected + 1 < toc_len {
                 self.toc_selected += 1;
+                let bottom = self.toc_top_row.saturating_add(visible_rows.saturating_sub(1));
+                if self.toc_selected > bottom {
+                    self.toc_top_row = self
+                        .toc_selected
+                        .saturating_sub(visible_rows.saturating_sub(1));
+                }
+                result.dirty = true;
+            } else {
+                self.toc_cancel_focused = true;
                 result.dirty = true;
             }
             return result;
         }
+        if buttons.is_pressed(input::Buttons::Left) || buttons.is_pressed(input::Buttons::Right) {
+            self.toc_cancel_focused = !self.toc_cancel_focused;
+            result.dirty = true;
+            return result;
+        }
         if buttons.is_pressed(input::Buttons::Confirm) {
+            if self.toc_cancel_focused {
+                result.exit = true;
+                result.dirty = true;
+                return result;
+            }
             if let Some(entry) = book.toc.get(self.toc_selected) {
                 self.current_page = entry.page_index as usize;
                 self.current_page_ops = None;
@@ -634,6 +942,161 @@ impl BookReaderState {
         result
     }
 
+    pub fn toc_hit_test(
+        &mut self,
+        point: crate::ternos::ui::Point,
+        fonts: &[crate::palm::runtime::PalmFont],
+    ) -> Option<TocTouchHit> {
+        let book = self.current_book.as_ref()?.clone();
+        self.ensure_toc_labels(book.as_ref());
+
+        let modal = toc_modal_rect();
+        let cancel_rect = toc_cancel_rect(modal);
+        let table_rect = toc_table_rect(modal, cancel_rect);
+        let scrollbar_rect = toc_scrollbar_rect(modal, table_rect);
+        if cancel_rect.contains(point) {
+            return Some(TocTouchHit::Cancel);
+        }
+
+        let model = self.toc_table_model(table_rect.w, fonts);
+        let table = TableView::new(&model);
+        if let Some(TableHit::Cell { row, .. }) = table.hit_test(table_rect, point) {
+            return Some(TocTouchHit::Row(row));
+        }
+
+        let visible_rows = table.visible_row_count(table_rect);
+        let labels = self.toc_labels.as_ref().map(Vec::as_slice).unwrap_or(&[]);
+        if labels.len() > visible_rows {
+            let scrollbar = TableScrollBarView::new(self.toc_top_row, visible_rows, labels.len());
+            return match scrollbar.hit_test(scrollbar_rect, point) {
+                Some(TableScrollBarHit::ArrowUp) => Some(TocTouchHit::ScrollUp),
+                Some(TableScrollBarHit::ArrowDown) => Some(TocTouchHit::ScrollDown),
+                Some(TableScrollBarHit::Track { top_row }) => Some(TocTouchHit::ScrollTrack(top_row)),
+                None => None,
+            };
+        }
+
+        None
+    }
+
+    pub fn handle_toc_touch_press(
+        &mut self,
+        hit: TocTouchHit,
+        fonts: &[crate::palm::runtime::PalmFont],
+    ) -> TocResult {
+        let mut result = TocResult {
+            exit: false,
+            jumped: false,
+            dirty: false,
+        };
+
+        let Some(book) = self.current_book.as_ref().cloned() else {
+            result.exit = true;
+            result.dirty = true;
+            return result;
+        };
+        self.ensure_toc_labels(book.as_ref());
+        let toc_len = book.toc.len();
+        let visible_rows = self.toc_visible_rows(fonts);
+
+        match hit {
+            TocTouchHit::Row(row) => {
+                let row = row.min(toc_len.saturating_sub(1));
+                let changed = self.toc_selected != row || self.toc_cancel_focused;
+                self.toc_selected = row;
+                self.toc_cancel_focused = false;
+                result.dirty = changed;
+            }
+            TocTouchHit::Cancel => {
+                let changed = !self.toc_cancel_focused;
+                self.toc_cancel_focused = true;
+                result.dirty = changed;
+            }
+            TocTouchHit::ScrollUp => {
+                if self.toc_top_row > 0 {
+                    self.toc_top_row -= 1;
+                    self.clamp_toc_selection_to_view(toc_len, visible_rows);
+                    result.dirty = true;
+                }
+            }
+            TocTouchHit::ScrollDown => {
+                let max_top = toc_len.saturating_sub(visible_rows);
+                if self.toc_top_row < max_top {
+                    self.toc_top_row += 1;
+                    self.clamp_toc_selection_to_view(toc_len, visible_rows);
+                    result.dirty = true;
+                }
+            }
+            TocTouchHit::ScrollTrack(top_row) => {
+                let max_top = toc_len.saturating_sub(visible_rows);
+                let new_top = top_row.min(max_top);
+                if self.toc_top_row != new_top {
+                    self.toc_top_row = new_top;
+                    self.clamp_toc_selection_to_view(toc_len, visible_rows);
+                    result.dirty = true;
+                }
+            }
+        }
+
+        result
+    }
+
+    pub fn handle_toc_touch_release(
+        &mut self,
+        hit: TocTouchHit,
+        pressed: Option<TocTouchHit>,
+    ) -> TocResult {
+        let mut result = TocResult {
+            exit: false,
+            jumped: false,
+            dirty: false,
+        };
+
+        let Some(book) = self.current_book.as_ref().cloned() else {
+            result.exit = true;
+            result.dirty = true;
+            return result;
+        };
+        self.ensure_toc_labels(book.as_ref());
+
+        match hit {
+            TocTouchHit::Row(row) => {
+                let row = row.min(book.toc.len().saturating_sub(1));
+                let changed = self.toc_selected != row || self.toc_cancel_focused;
+                self.toc_selected = row;
+                self.toc_cancel_focused = false;
+                if changed {
+                    result.dirty = true;
+                }
+                if pressed == Some(TocTouchHit::Row(row)) {
+                    if let Some(entry) = book.toc.get(row) {
+                        self.current_page = entry.page_index as usize;
+                        self.current_page_ops = None;
+                        self.next_page_ops = None;
+                        self.last_rendered_page = None;
+                        self.book_turns_since_full = 0;
+                        result.jumped = true;
+                        result.dirty = true;
+                    }
+                }
+            }
+            TocTouchHit::Cancel => {
+                let changed = !self.toc_cancel_focused;
+                self.toc_cancel_focused = true;
+                if changed {
+                    result.dirty = true;
+                }
+                if pressed == Some(TocTouchHit::Cancel) {
+                    result.exit = true;
+                    result.dirty = true;
+                }
+            }
+            TocTouchHit::ScrollUp | TocTouchHit::ScrollDown | TocTouchHit::ScrollTrack(_) => {}
+        }
+
+        result
+    }
+
     pub fn draw_toc<S: AppSource>(
         &mut self,
         ctx: &mut BookReaderContext<'_, S>,
@@ -641,51 +1104,68 @@ impl BookReaderState {
         home_focused: bool,
         menu_focused: bool,
     ) -> Result<(), ImageError> {
-        ctx.display_buffers.clear(BinaryColor::On).ok();
-        draw_reader_status_bar(ctx, None, home_focused, menu_focused);
-        let Some(book) = &self.current_book else {
+        self.render_book_frame(ctx, home_focused, menu_focused)?;
+        let Some(book) = self.current_book.as_ref().cloned() else {
             return Err(ImageError::Decode);
         };
-        if self.toc_labels.is_none() {
-            let mut labels: Vec<String> = Vec::with_capacity(book.toc.len());
-            for entry in &book.toc {
-                let mut label = String::new();
-                let indent = (entry.level as usize).min(6);
-                for _ in 0..indent {
-                    label.push_str("  ");
-                }
-                label.push_str(entry.title.as_str());
-                labels.push(label);
-            }
-            self.toc_labels = Some(labels);
-        }
-        let labels = self.toc_labels.as_ref().map(Vec::as_slice).unwrap_or(&[]);
-        let items: Vec<ListItem<'_>> = labels
-            .iter()
-            .map(|label| ListItem { label: label.as_str() })
-            .collect();
-
-        let title = book.metadata.title.as_str();
-        let mut list = ListView::new(&items);
-        list.title = Some(title);
-        list.footer = Some("Up/Down: select  Confirm: jump  Back: return");
-        list.empty_label = Some("No table of contents.");
-        list.selected = self.toc_selected.min(items.len().saturating_sub(1));
-        list.margin_x = LIST_MARGIN_X;
-        list.header_y = HEADER_Y + BOOK_CONTENT_TOP;
-        list.list_top = LIST_TOP + BOOK_CONTENT_TOP;
-        list.line_height = LINE_HEIGHT;
-
-        let size = ctx.display_buffers.size();
-        let rect = Rect::new(0, BOOK_CONTENT_TOP, size.width as i32, size.height as i32 - BOOK_CONTENT_TOP);
-        let mut rq = RenderQueue::default();
+        self.ensure_toc_labels(book.as_ref());
+        let label_count = self.toc_labels.as_ref().map(Vec::len).unwrap_or(0);
+        let modal = toc_modal_rect();
+        let cancel_rect = toc_cancel_rect(modal);
+        let table_rect = toc_table_rect(modal, cancel_rect);
+        let scrollbar_rect = toc_scrollbar_rect(modal, table_rect);
+        let model = self.toc_table_model(table_rect.w, ctx.palm_fonts);
+        let visible_rows = TableView::new(&model).visible_row_count(table_rect);
+        let renderer = TocTableRenderer {
+            palm_fonts: ctx.palm_fonts,
+        };
         let mut ui = UiContext {
             buffers: ctx.display_buffers,
             render_policy: ctx.render_policy,
             gray2: None,
         };
-        list.render(&mut ui, rect, &mut rq);
-        let refresh = ctx.render_policy.refresh_mode(*ctx.full_refresh);
+        let mut table = TableView::new(&model);
+        table.clear = false;
+        table.renderer = Some(&renderer);
+        draw_alert_frame_hi(ui.buffers, modal.x, modal.y, modal.w, modal.h, 34);
+        let title_w = palm_text_width("Table of Contents", 1, ctx.palm_fonts, 1);
+        let title_h = palm_text_height(1, ctx.palm_fonts, 1);
+        crate::ternos::ui::draw_palm_text(
+            ui.buffers,
+            "Table of Contents",
+            modal.x + ((modal.w - title_w) / 2).max(0),
+            modal.y + ((34 - title_h) / 2).max(2) - 1,
+            1,
+            ctx.palm_fonts,
+            1,
+            BinaryColor::On,
+        );
+        table.render(&mut ui, table_rect, &mut RenderQueue::default());
+        if label_count > visible_rows {
+            let mut scrollbar =
+                TableScrollBarView::new(self.toc_top_row, visible_rows, label_count);
+            scrollbar.render(&mut ui, scrollbar_rect, &mut RenderQueue::default());
+        }
+        draw_form_button_hi(
+            ui.buffers,
+            ctx.palm_fonts,
+            cancel_rect.x,
+            cancel_rect.y,
+            cancel_rect.w,
+            cancel_rect.h,
+            0,
+            0,
+            false,
+            "Cancel",
+            self.toc_cancel_focused,
+        );
+        let mut rq = RenderQueue::default();
+        let refresh = if *ctx.full_refresh {
+            ctx.render_policy.refresh_mode(*ctx.full_refresh)
+        } else {
+            crate::display::RefreshMode::Fast
+        };
+        rq.push(modal, refresh);
         flush_queue(display, ctx.display_buffers, &mut rq, refresh);
         Ok(())
     }

@@ -26,6 +26,7 @@ pub enum ModalWidget {
         bounds: Rect,
         text: String,
         font_id: u8,
+        focusable: bool,
     },
     Button {
         id: ObjectId,
@@ -51,7 +52,11 @@ impl ModalWidget {
     }
 
     pub fn is_focusable(&self) -> bool {
-        matches!(self, Self::Field { .. } | Self::Button { .. })
+        match self {
+            Self::Field { focusable, .. } => *focusable,
+            Self::Button { .. } => true,
+            Self::Label { .. } => false,
+        }
     }
 }
 

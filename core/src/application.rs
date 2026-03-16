@@ -37,7 +37,7 @@ use crate::{
         book_reader::{
             draw_reader_menu_overlay, draw_reader_overlay, draw_trbk_image, reader_menu_bar,
             reader_menu_command, BookReaderContext, BookReaderState, PageTurnIndicator,
-            ReaderMenuCommand,
+            ReaderMenuCommand, TocTouchHit,
         },
         home::{
             HomeAction,
@@ -107,6 +107,7 @@ pub struct Application<'a, S: AppSource> {
     reader_touch_pressed_status: Option<ReaderStatusBarFocus>,
     reader_touch_pressed_menu: Option<palm::ui::MenuOverlayHit>,
     reader_touch_pressed_overlay: Option<crate::ternos::ui::ObjectId>,
+    reader_touch_pressed_toc: Option<TocTouchHit>,
     reader_menu_last_rect: Option<Rect>,
     prc_return_to_start_menu: bool,
     prc_reserved_gray_initialized: bool,
@@ -550,6 +551,35 @@ impl<'a, S: AppSource> Application<'a, S> {
             }
         }
 
+        if matches!(self.state, AppState::Toc) {
+            let point = crate::ternos::ui::Point::new(x, y);
+            if let Some(hit) = self.book_reader.toc_hit_test(point, self.home_system_fonts.as_slice()) {
+                if is_down {
+                    self.reader_touch_pressed_toc = Some(hit);
+                    let result =
+                        self.book_reader
+                            .handle_toc_touch_press(hit, self.home_system_fonts.as_slice());
+                    if result.exit || result.jumped {
+                        self.set_state_book_viewing();
+                    } else if result.dirty {
+                        self.dirty = true;
+                    }
+                } else if is_up {
+                    let pressed = self.reader_touch_pressed_toc.take();
+                    let result = self.book_reader.handle_toc_touch_release(hit, pressed);
+                    if result.exit || result.jumped {
+                        self.set_state_book_viewing();
+                    } else if result.dirty {
+                        self.dirty = true;
+                    }
+                }
+                return true;
+            }
+            if is_up {
+                self.reader_touch_pressed_toc = None;
+            }
+        }
+
         if self.reader_menu_controller.is_active() {
             if let Some((menu, active_menu_index, _)) = self.reader_menu_controller.overlay() {
                 let hit = palm::ui::hit_test_menu_overlay_native(
@@ -846,6 +876,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             reader_touch_pressed_status: None,
             reader_touch_pressed_menu: None,
             reader_touch_pressed_overlay: None,
+            reader_touch_pressed_toc: None,
             reader_menu_last_rect: None,
             prc_return_to_start_menu: false,
             prc_reserved_gray_initialized: false,
@@ -1278,7 +1309,9 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.start_sleep_request();
                     }
                 } else {
-                    let result = self.book_reader.handle_toc_input(buttons);
+                    let result =
+                        self.book_reader
+                            .handle_toc_input(buttons, self.home_system_fonts.as_slice());
                     if result.exit {
                         self.set_state_book_viewing();
                     } else if result.jumped {
@@ -2012,6 +2045,8 @@ impl<'a, S: AppSource> Application<'a, S> {
     fn mark_recent_now(&mut self, path: String) {
         self.system.mark_recent(path);
         self.system.save_recent_entries_now(self.source);
+        self.home.start_menu_cache.clear();
+        self.home.start_menu_need_base_refresh = true;
     }
 
     fn resume_prc_runtime_session(&mut self) {
@@ -2415,6 +2450,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.reader_touch_pressed_status = None;
         self.reader_touch_pressed_menu = None;
         self.reader_touch_pressed_overlay = None;
+        self.reader_touch_pressed_toc = None;
         self.reader_help_controller.clear();
         self.reader_menu_controller.close();
         self.reader_menu_last_rect = None;
@@ -2428,6 +2464,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.reader_touch_pressed_status = None;
         self.reader_touch_pressed_menu = None;
         self.reader_touch_pressed_overlay = None;
+        self.reader_touch_pressed_toc = None;
         self.reader_help_controller.clear();
         self.reader_menu_controller.close();
         self.reader_menu_last_rect = None;
