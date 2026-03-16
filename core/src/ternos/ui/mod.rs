@@ -23,7 +23,7 @@ pub use runtime::{
     MenuState, ObjectId, ObjectIndex, UiForm, UiObject, UiRuntime, UiTableCell, UiTableColumn,
     UiTableModel, UiTableRow,
 };
-pub use status_bar_view::{StatusBarActionState, StatusBarView};
+pub use status_bar_view::{StatusBarActionState, StatusBarHit, StatusBarView};
 pub use table_view::{TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView};
 pub use text_view::TextView;
 pub use view::{

@@ -29,6 +29,12 @@ pub struct StatusBarActionState {
     pub focused: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StatusBarHit {
+    Home,
+    Menu,
+}
+
 pub struct StatusBarView<'a> {
     pub battery_percent: Option<u8>,
     pub right_text: Option<&'a str>,
@@ -70,6 +76,26 @@ impl<'a> StatusBarView<'a> {
             Self::ACTION_SIZE,
             Self::ACTION_SIZE,
         )
+    }
+
+    pub fn hit_test(rect: Rect, point: super::Point) -> Option<StatusBarHit> {
+        let home = Self::home_rect(rect);
+        if point.x >= home.x
+            && point.x < home.x + home.w
+            && point.y >= home.y
+            && point.y < home.y + home.h
+        {
+            return Some(StatusBarHit::Home);
+        }
+        let menu = Self::menu_rect(rect);
+        if point.x >= menu.x
+            && point.x < menu.x + menu.w
+            && point.y >= menu.y
+            && point.y < menu.y + menu.h
+        {
+            return Some(StatusBarHit::Menu);
+        }
+        None
     }
 
     fn right_text_rect(rect: Rect) -> Rect {

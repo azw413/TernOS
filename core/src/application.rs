@@ -53,7 +53,7 @@ use crate::{
     platform::PlatformInputEvent,
     palm,
     render_policy::RenderPolicy,
-    ternos::ui::{flush_queue, Rect, RenderQueue, StatusBarActionState, StatusBarView, UiContext, View},
+    ternos::ui::{flush_queue, Rect, RenderQueue, StatusBarActionState, StatusBarHit, StatusBarView, UiContext, View},
 };
 
 const LIST_MARGIN_X: i32 = 16;
@@ -95,6 +95,7 @@ pub struct Application<'a, S: AppSource> {
     prc_soft_menu_focused: bool,
     prc_soft_menu_last_control: Option<u16>,
     prc_status_bar_focus: Option<PrcStatusBarFocus>,
+    prc_touch_pressed_status: Option<PrcStatusBarFocus>,
     prc_status_bar_last_control: Option<u16>,
     prc_return_to_start_menu: bool,
     prc_reserved_gray_initialized: bool,
@@ -186,6 +187,41 @@ impl<'a, S: AppSource> Application<'a, S> {
         let Some((form, pane_x, pane_y, scale)) = self.prc_pane_layout() else {
             return false;
         };
+
+        let status_rect = Rect::new(0, 0, self.display_buffers.size().width as i32, StatusBarView::HEIGHT);
+        if let Some(hit) = StatusBarView::hit_test(status_rect, crate::ternos::ui::Point::new(x, y)) {
+            let shell_hit = match hit {
+                StatusBarHit::Home => Some(PrcStatusBarFocus::Home),
+                StatusBarHit::Menu if self.prc_menu_controller.menu_count() > 0 => {
+                    Some(PrcStatusBarFocus::Menu)
+                }
+                StatusBarHit::Menu => None,
+            };
+            if let Some(shell_hit) = shell_hit {
+                self.prc_status_bar_focus = Some(shell_hit);
+                if is_down {
+                    self.prc_touch_pressed_status = Some(shell_hit);
+                    self.dirty = true;
+                    return true;
+                }
+                if is_up && self.prc_touch_pressed_status == Some(shell_hit) {
+                    self.prc_touch_pressed_status = None;
+                    match shell_hit {
+                        PrcStatusBarFocus::Home => {
+                            self.exit_prc_viewer_to_origin();
+                        }
+                        PrcStatusBarFocus::Menu => {
+                            if self.prc_menu_controller.open() {
+                                self.dirty = true;
+                            }
+                        }
+                    }
+                    return true;
+                }
+            }
+        } else if is_up {
+            self.prc_touch_pressed_status = None;
+        }
 
         let local_x = x - pane_x;
         let local_y = y - pane_y;
@@ -531,6 +567,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_soft_menu_focused: false,
             prc_soft_menu_last_control: None,
             prc_status_bar_focus: None,
+            prc_touch_pressed_status: None,
             prc_status_bar_last_control: None,
             prc_return_to_start_menu: false,
             prc_reserved_gray_initialized: false,
@@ -981,6 +1018,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                             false
                         };
                         self.prc_status_bar_focus = None;
+                        self.prc_touch_pressed_status = None;
                         if !restored {
                             let _ = self.prc_ui_controller.move_focus_direction(
                                 form.as_ref(),
@@ -1853,6 +1891,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_soft_menu_focused = false;
         self.prc_soft_menu_last_control = None;
         self.prc_status_bar_focus = None;
+        self.prc_touch_pressed_status = None;
         self.prc_status_bar_last_control = None;
         self.prc_scroll = 0;
         self.prc_form_index = 0;
@@ -1897,6 +1936,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_soft_menu_focused = false;
         self.prc_soft_menu_last_control = None;
         self.prc_status_bar_focus = None;
+        self.prc_touch_pressed_status = None;
         self.prc_status_bar_last_control = None;
         self.prc_reserved_gray_initialized = false;
         self.system.full_refresh = true;

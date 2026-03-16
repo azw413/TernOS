@@ -17,7 +17,7 @@ use crate::image_viewer::{AppSource, ImageData, ImageEntry, InstalledAppEntry};
 use crate::platform::ButtonId;
 use crate::platform::PlatformInputEvent;
 use crate::render_policy::RenderPolicy;
-use crate::ternos::ui::{flush_queue_tracked, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, render_positioned_views, FormResource, Gray2Context, ObjectId, ObjectResource, PopupHit, PopupMenuView, PositionedView, Rect, RenderQueue, StatusBarActionState, StatusBarView, TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
+use crate::ternos::ui::{flush_queue_tracked, prc_alert, prc_components::{auto_button_layout_for_label, draw_form_title_bar, draw_palm_text, draw_palm_text_scaled, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled}, render_positioned_views, FormResource, Gray2Context, ObjectId, ObjectResource, PopupHit, PopupMenuView, PositionedView, Rect, RenderQueue, StatusBarActionState, StatusBarHit, StatusBarView, TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
 
 const START_MENU_MARGIN: i32 = 16;
 const START_MENU_RECENT_THUMB: i32 = 74;
@@ -91,6 +91,7 @@ pub struct HomeState {
     pub books_top_row: usize,
     pub images_top_row: usize,
     pub touch_pressed_index: Option<usize>,
+    pub touch_pressed_status: Option<StatusBarHit>,
     pub last_table_touch_rect: Option<Rect>,
     pub last_scrollbar_rect: Option<Rect>,
     pub last_category_trigger_rect: Option<Rect>,
@@ -574,6 +575,43 @@ impl HomeState {
             LauncherCategory::Books,
             LauncherCategory::Images,
         ];
+        let status_rect = Rect::new(0, 0, width, START_MENU_STATUS_H);
+        if let Some(hit) = StatusBarView::hit_test(status_rect, point) {
+            match hit {
+                StatusBarHit::Home => {
+                    self.touch_pressed_status = None;
+                    return HomeAction::None;
+                }
+                StatusBarHit::Menu => {
+                    self.set_shell_focus();
+                    if is_down {
+                        self.touch_pressed_status = Some(StatusBarHit::Menu);
+                        self.start_menu_nav_pending = true;
+                        return HomeAction::None;
+                    }
+                    if is_up && self.touch_pressed_status == Some(StatusBarHit::Menu) {
+                        self.touch_pressed_status = None;
+                        self.category_menu_index = categories
+                            .iter()
+                            .position(|c| *c == self.launcher_category)
+                            .unwrap_or(0);
+                        self.category_menu_open = true;
+                        self.ui_runtime
+                            .invalidation
+                            .record_new_rect(self.current_category_popup_rect(), RefreshMode::Fast);
+                        self.ui_runtime
+                            .invalidation
+                            .record_exposed_rect(self.current_category_trigger_rect(), RefreshMode::Fast);
+                        self.start_menu_need_base_refresh = true;
+                        self.start_menu_nav_pending = true;
+                        self.sync_start_menu_focus(recents);
+                        return HomeAction::None;
+                    }
+                }
+            }
+        } else if is_up {
+            self.touch_pressed_status = None;
+        }
         let mut popup_view = self.category_popup_view();
         popup_view.trigger_rect = self.current_category_trigger_rect();
         popup_view.popup_rect = self.current_category_popup_rect();
@@ -722,6 +760,7 @@ impl HomeState {
             books_top_row: 0,
             images_top_row: 0,
             touch_pressed_index: None,
+            touch_pressed_status: None,
             last_table_touch_rect: None,
             last_scrollbar_rect: None,
             last_category_trigger_rect: None,
