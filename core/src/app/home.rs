@@ -17,7 +17,7 @@ use crate::image_viewer::{AppSource, ImageData, ImageEntry, InstalledAppEntry};
 use crate::platform::ButtonId;
 use crate::platform::PlatformInputEvent;
 use crate::render_policy::RenderPolicy;
-use crate::ternos::ui::{auto_button_layout_for_label, draw_form_title_bar_hi, draw_palm_text, draw_palm_text_scaled, flush_queue_tracked, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled, prc_alert, render_positioned_views, FormResource, Gray2Context, ObjectId, ObjectResource, PopupHit, PopupMenuView, PositionedView, Rect, RenderQueue, StatusBarActionState, StatusBarHit, StatusBarView, TableCellRenderer, TableHit, TableScrollBarHit, TableScrollBarView, TableView, UiContext, UiEvent, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, View};
+use crate::ternos::ui::{auto_button_layout_for_label, draw_form_title_bar_hi, draw_palm_text, draw_palm_text_scaled, flush_queue_tracked, handle_popup_menu_button, handle_status_bar_button, palm_text_height, palm_text_height_scaled, palm_text_width, palm_text_width_scaled, prc_alert, preferred_status_bar_focus, render_positioned_views, FormResource, Gray2Context, ObjectId, ObjectResource, PopupHit, PopupMenuAction, PopupMenuView, PositionedView, Rect, RenderQueue, StatusBarActionState, StatusBarButtons, StatusBarHit, StatusBarView, TableCellRenderer, TableHit, TableScrollBarView, TableView, UiContext, UiEvent, UiPopupState, UiRuntime, UiTableCell, UiTableColumn, UiTableModel, UiTableRow, UiTableState, View};
 
 const START_MENU_MARGIN: i32 = 16;
 const START_MENU_RECENT_THUMB: i32 = 74;
@@ -30,6 +30,8 @@ const HOME_OBJ_STATUS_MENU: ObjectId = 90;
 const HOME_OBJ_CATEGORY_TRIGGER: ObjectId = 100;
 const HOME_OBJ_RECENTS_TABLE: ObjectId = 110;
 const HOME_OBJ_APPS_TABLE: ObjectId = 111;
+const HOME_OBJ_BOOKS_TABLE: ObjectId = 112;
+const HOME_OBJ_IMAGES_TABLE: ObjectId = 113;
 const HOME_OBJ_CONTENT_BASE: ObjectId = 1000;
 const HOME_OBJ_CATEGORY_MENU_BASE: ObjectId = 2000;
 const HOME_OBJ_DIALOG_DISMISS: ObjectId = 3000;
@@ -78,18 +80,12 @@ pub struct InstallDialogState {
 pub struct HomeState {
     pub ui_runtime: UiRuntime,
     pub prev_focus_object_id: Option<ObjectId>,
-    pub start_menu_section: StartMenuSection,
     pub launcher_category: LauncherCategory,
     pub start_menu_index: usize,
-    pub category_menu_open: bool,
-    pub category_menu_index: usize,
     pub start_menu_cache: Vec<RecentPreview>,
     pub books_cache: Vec<RecentPreview>,
     pub images_cache: Vec<RecentPreview>,
     pub installed_apps: Vec<InstalledAppEntry>,
-    pub apps_top_row: usize,
-    pub books_top_row: usize,
-    pub images_top_row: usize,
     pub touch_pressed_index: Option<usize>,
     pub touch_pressed_status: Option<StatusBarHit>,
     pub last_table_touch_rect: Option<Rect>,
@@ -345,7 +341,8 @@ impl TableCellRenderer for AppsTableRenderer<'_> {
 
 impl HomeState {
     fn launcher_content_height() -> i32 {
-        let mid_y = FB_HEIGHT as i32 - START_MENU_MARGIN;
+        let (_, height) = Self::launcher_surface_size();
+        let mid_y = height - START_MENU_MARGIN;
         let list_top = HEADER_Y + 28;
         (mid_y - list_top).max(1)
     }
@@ -372,13 +369,68 @@ impl HomeState {
         }
     }
 
-    fn launcher_top_row_for_category(&self, category: LauncherCategory) -> usize {
+    fn launcher_table_object_id(category: LauncherCategory) -> ObjectId {
         match category {
-            LauncherCategory::Recents => 0,
-            LauncherCategory::Apps => self.apps_top_row,
-            LauncherCategory::Books => self.books_top_row,
-            LauncherCategory::Images => self.images_top_row,
+            LauncherCategory::Recents => HOME_OBJ_RECENTS_TABLE,
+            LauncherCategory::Apps => HOME_OBJ_APPS_TABLE,
+            LauncherCategory::Books => HOME_OBJ_BOOKS_TABLE,
+            LauncherCategory::Images => HOME_OBJ_IMAGES_TABLE,
         }
+    }
+
+    fn category_popup_state(&self) -> UiPopupState {
+        self.ui_runtime
+            .popup_state(HOME_FORM_ID, HOME_OBJ_CATEGORY_TRIGGER)
+            .cloned()
+            .unwrap_or(UiPopupState {
+                open: false,
+                selected_index: Some(self.launcher_category as u16),
+            })
+    }
+
+    fn category_menu_open(&self) -> bool {
+        self.category_popup_state().open
+    }
+
+    fn category_menu_index(&self) -> usize {
+        self.category_popup_state()
+            .selected_index
+            .unwrap_or(self.launcher_category as u16)
+            as usize
+    }
+
+    fn set_category_popup_state(&mut self, open: bool, selected_index: usize, refresh: RefreshMode) {
+        let old_rect = self.category_menu_open().then_some(self.current_category_popup_rect());
+        let new_rect = open.then_some(self.current_category_popup_rect());
+        let focus_object_id = if open {
+            Some(Self::category_menu_object_id(selected_index.min(3)))
+        } else if self.current_start_menu_section() == StartMenuSection::Shell {
+            Some(HOME_OBJ_STATUS_MENU)
+        } else {
+            Some(HOME_OBJ_CATEGORY_TRIGGER)
+        };
+        let _ = self.ui_runtime.set_popup_state_and_focus(
+            HOME_FORM_ID,
+            HOME_OBJ_CATEGORY_TRIGGER,
+            UiPopupState {
+                open,
+                selected_index: Some(selected_index.min(3) as u16),
+            },
+            old_rect,
+            new_rect,
+            refresh,
+            focus_object_id,
+        );
+        self.ui_runtime
+            .invalidation
+            .record_exposed_rect(self.current_category_trigger_rect(), refresh);
+    }
+
+    fn launcher_top_row_for_category(&self, category: LauncherCategory) -> usize {
+        self.ui_runtime
+            .table_state(HOME_FORM_ID, Self::launcher_table_object_id(category))
+            .map(|state| state.top_row as usize)
+            .unwrap_or(0)
     }
 
     fn clamp_launcher_top_row_for_category(&mut self, recents: &[String], category: LauncherCategory) {
@@ -391,12 +443,22 @@ impl HomeState {
 
     fn set_launcher_top_row_for_category(&mut self, category: LauncherCategory, top_row: usize) {
         let changed = self.launcher_top_row_for_category(category) != top_row;
-        match category {
-            LauncherCategory::Recents => {}
-            LauncherCategory::Apps => self.apps_top_row = top_row,
-            LauncherCategory::Books => self.books_top_row = top_row,
-            LauncherCategory::Images => self.images_top_row = top_row,
-        }
+        let object_id = Self::launcher_table_object_id(category);
+        let state = self
+            .ui_runtime
+            .table_state(HOME_FORM_ID, object_id)
+            .cloned()
+            .unwrap_or(UiTableState::default());
+        let _ = self.ui_runtime.set_table_state(
+            HOME_FORM_ID,
+            object_id,
+            UiTableState {
+                top_row: top_row as u16,
+                ..state
+            },
+            &[self.current_table_rect()],
+            RefreshMode::Fast,
+        );
         if changed {
             self.mark_table_damage(RefreshMode::Fast);
         }
@@ -479,8 +541,8 @@ impl HomeState {
             width,
             trigger_label,
             &["Recents", "Apps", "Books", "Images"],
-            self.category_menu_index.min(3),
-            self.category_menu_open,
+            self.category_menu_index().min(3),
+            self.category_menu_open(),
             &[],
         )
     }
@@ -489,6 +551,12 @@ impl HomeState {
         let (width, height) = Self::launcher_surface_size();
         self.last_table_touch_rect
             .unwrap_or_else(|| Self::launcher_table_layout(self.launcher_category, width, height).0)
+    }
+
+    fn current_scrollbar_rect(&self) -> Option<Rect> {
+        let (width, height) = Self::launcher_surface_size();
+        self.last_scrollbar_rect
+            .or_else(|| Self::launcher_table_layout(self.launcher_category, width, height).1)
     }
 
     fn current_category_popup_rect(&self) -> Rect {
@@ -529,22 +597,124 @@ impl HomeState {
         }
     }
 
-    fn scroll_launcher_to(&mut self, recents: &[String], top_row: usize) {
-        let category = self.launcher_category;
-        let visible_rows = Self::launcher_visible_rows_for_category(category);
-        let total_rows = self.launcher_total_rows_for_category(recents, category);
-        let max_top = total_rows.saturating_sub(visible_rows);
-        let top_row = top_row.min(max_top);
-        self.set_launcher_top_row_for_category(category, top_row);
-        self.start_menu_index = match category {
-            LauncherCategory::Apps => (top_row * APP_GRID_COLS).min(self.installed_apps.len().saturating_sub(1)),
-            LauncherCategory::Books => top_row.min(self.books_cache.len().saturating_sub(1)),
-            LauncherCategory::Images => top_row.min(self.images_cache.len().saturating_sub(1)),
-            LauncherCategory::Recents => self.start_menu_index,
+    fn launcher_table_model_from_runtime(&self, recents: &[String]) -> UiTableModel {
+        let mut model = self.build_launcher_table_model(recents);
+        if let Some(state) = self
+            .ui_runtime
+            .table_state(HOME_FORM_ID, Self::launcher_table_object_id(self.launcher_category))
+        {
+            state.apply_to_model(&mut model);
+        }
+        model
+    }
+
+    fn sync_runtime_table_selection(&mut self, recents: &[String], refresh: RefreshMode) {
+        let object_id = Self::launcher_table_object_id(self.launcher_category);
+        let current = self
+            .ui_runtime
+            .table_state(HOME_FORM_ID, object_id)
+            .cloned()
+            .unwrap_or_else(|| UiTableState::from_model(&self.build_launcher_table_model(recents)));
+        let (selected_row, selected_col) = match self.launcher_category {
+            LauncherCategory::Apps => (
+                Some((self.start_menu_index / APP_GRID_COLS) as u16),
+                Some((self.start_menu_index % APP_GRID_COLS) as u16),
+            ),
+            LauncherCategory::Recents | LauncherCategory::Books | LauncherCategory::Images => {
+                (Some(self.start_menu_index as u16), Some(0))
+            }
         };
+        let _ = self.ui_runtime.set_table_state(
+            HOME_FORM_ID,
+            object_id,
+            UiTableState {
+                selected_row,
+                selected_col,
+                ..current
+            },
+            &[self.current_table_rect()],
+            refresh,
+        );
+    }
+
+    fn launcher_item_index_from_table_selection(
+        &self,
+        category: LauncherCategory,
+        row: usize,
+        col: usize,
+    ) -> usize {
+        match category {
+            LauncherCategory::Apps => row.saturating_mul(APP_GRID_COLS).saturating_add(col),
+            LauncherCategory::Recents | LauncherCategory::Books | LauncherCategory::Images => row,
+        }
+    }
+
+    fn apply_launcher_table_interaction(
+        &mut self,
+        recents: &[String],
+        category: LauncherCategory,
+        interaction: &crate::ternos::ui::table_view::TableInteraction,
+        refresh: RefreshMode,
+    ) -> bool {
+        let changed = self.ui_runtime.apply_table_interaction(
+            HOME_FORM_ID,
+            Self::launcher_table_object_id(category),
+            interaction,
+            refresh,
+        );
+        let Some(row) = interaction.selected_row else {
+            return changed;
+        };
+        let item_index = self
+            .launcher_item_index_from_table_selection(category, row, interaction.selected_col.unwrap_or(0))
+            .min(self.start_menu_content_len(recents).saturating_sub(1));
+        self.start_menu_index = item_index;
         self.start_menu_nav_pending = true;
-        self.start_menu_need_base_refresh = true;
         self.sync_start_menu_focus(recents);
+        changed
+    }
+
+    fn move_launcher_table_selection(
+        &mut self,
+        recents: &[String],
+        delta: i32,
+    ) -> bool {
+        let category = self.launcher_category;
+        let model = self.launcher_table_model_from_runtime(recents);
+        let table = TableView::new(&model);
+        let table_rect = self.current_table_rect();
+        let scrollbar_rect = self.current_scrollbar_rect();
+        let Some(interaction) = table.move_selection(table_rect, delta, scrollbar_rect) else {
+            return false;
+        };
+        let changed = self.apply_launcher_table_interaction(
+            recents,
+            category,
+            &interaction,
+            RefreshMode::Fast,
+        );
+        if interaction.top_row != model.top_row as usize {
+            self.start_menu_need_base_refresh = true;
+        }
+        changed
+    }
+
+    fn move_launcher_table_selection_horizontal(
+        &mut self,
+        recents: &[String],
+        delta: i32,
+    ) -> bool {
+        let category = self.launcher_category;
+        let model = self.launcher_table_model_from_runtime(recents);
+        let table = TableView::new(&model);
+        let table_rect = self.current_table_rect();
+        let scrollbar_rect = self.current_scrollbar_rect();
+        let Some(interaction) =
+            table.move_selection_horizontal(table_rect, delta, scrollbar_rect)
+        else {
+            return false;
+        };
+        self.apply_launcher_table_interaction(recents, category, &interaction, RefreshMode::Fast)
     }
 
     pub fn handle_start_menu_touch(
@@ -554,6 +724,7 @@ impl HomeState {
         width: i32,
         height: i32,
     ) -> HomeAction {
+        self.sync_start_menu_ui(recents);
         if self.install_dialog.is_some() {
             return HomeAction::None;
         }
@@ -591,17 +762,14 @@ impl HomeState {
                     }
                     if is_up && self.touch_pressed_status == Some(StatusBarHit::Menu) {
                         self.touch_pressed_status = None;
-                        self.category_menu_index = categories
-                            .iter()
-                            .position(|c| *c == self.launcher_category)
-                            .unwrap_or(0);
-                        self.category_menu_open = true;
-                        self.ui_runtime
-                            .invalidation
-                            .record_new_rect(self.current_category_popup_rect(), RefreshMode::Fast);
-                        self.ui_runtime
-                            .invalidation
-                            .record_exposed_rect(self.current_category_trigger_rect(), RefreshMode::Fast);
+                        self.set_category_popup_state(
+                            true,
+                            categories
+                                .iter()
+                                .position(|c| *c == self.launcher_category)
+                                .unwrap_or(0),
+                            RefreshMode::Fast,
+                        );
                         self.start_menu_need_base_refresh = true;
                         self.start_menu_nav_pending = true;
                         self.sync_start_menu_focus(recents);
@@ -617,15 +785,11 @@ impl HomeState {
         popup_view.popup_rect = self.current_category_popup_rect();
         popup_view.item_height = ((popup_view.popup_rect.h - 4) / popup_view.items.len() as i32).max(1);
 
-        if self.category_menu_open {
+        if self.category_menu_open() {
             match popup_view.hit_test(point) {
                 Some(PopupHit::Item(idx)) if is_down => {
                     self.launcher_category = categories[idx];
-                    self.category_menu_index = idx;
-                    self.category_menu_open = false;
-                    self.ui_runtime
-                        .invalidation
-                        .record_exposed_rect(popup_view.popup_rect, RefreshMode::Fast);
+                    self.set_category_popup_state(false, idx, RefreshMode::Fast);
                     self.mark_table_damage(RefreshMode::Fast);
                     self.touch_pressed_index = None;
                     self.set_content_focus(recents, 0);
@@ -633,10 +797,7 @@ impl HomeState {
                     return HomeAction::None;
                 }
                 Some(PopupHit::Outside) if is_down => {
-                    self.category_menu_open = false;
-                    self.ui_runtime
-                        .invalidation
-                        .record_exposed_rect(popup_view.popup_rect, RefreshMode::Fast);
+                    self.set_category_popup_state(false, self.category_menu_index(), RefreshMode::Fast);
                     self.start_menu_need_base_refresh = true;
                     self.start_menu_nav_pending = true;
                     self.sync_start_menu_focus(recents);
@@ -648,24 +809,21 @@ impl HomeState {
 
         if matches!(popup_view.hit_test(point), Some(PopupHit::Trigger)) && is_down {
             self.set_actions_focus();
-            self.category_menu_index = categories
-                .iter()
-                .position(|c| *c == self.launcher_category)
-                .unwrap_or(0);
-            self.category_menu_open = true;
-            self.ui_runtime
-                .invalidation
-                .record_new_rect(self.current_category_popup_rect(), RefreshMode::Fast);
-            self.ui_runtime
-                .invalidation
-                .record_exposed_rect(self.current_category_trigger_rect(), RefreshMode::Fast);
+            self.set_category_popup_state(
+                true,
+                categories
+                    .iter()
+                    .position(|c| *c == self.launcher_category)
+                    .unwrap_or(0),
+                RefreshMode::Fast,
+            );
             self.start_menu_need_base_refresh = true;
             self.start_menu_nav_pending = true;
             self.sync_start_menu_focus(recents);
             return HomeAction::None;
         }
 
-        let model = self.build_launcher_table_model(recents);
+        let model = self.launcher_table_model_from_runtime(recents);
         let table = TableView::new(&model);
         let table_rect = self.last_table_touch_rect.unwrap_or(table_rect);
         let scrollbar_rect = self.last_scrollbar_rect.or(scrollbar_rect);
@@ -680,8 +838,16 @@ impl HomeState {
                 LauncherCategory::Recents | LauncherCategory::Books | LauncherCategory::Images => row,
             };
             if item_index < self.start_menu_content_len(recents) {
-                self.set_content_focus(recents, item_index);
-                self.start_menu_nav_pending = true;
+                if let Some(interaction) =
+                    table.select_cell(table_rect, scrollbar_rect, row, col, false)
+                {
+                    self.apply_launcher_table_interaction(
+                        recents,
+                        category,
+                        &interaction,
+                        RefreshMode::Fast,
+                    );
+                }
                 if is_down {
                     self.touch_pressed_index = Some(item_index);
                     return HomeAction::None;
@@ -718,20 +884,17 @@ impl HomeState {
             let total_rows = self.launcher_total_rows_for_category(recents, category);
             let visible_rows =
                 Self::launcher_visible_rows_for_category(category).min(total_rows.max(1));
-            let top_row = self.launcher_top_row_for_category(category);
-            let scrollbar = TableScrollBarView::new(top_row, visible_rows, total_rows);
+            let scrollbar = TableScrollBarView::new(model.top_row as usize, visible_rows, total_rows);
             if let Some(hit) = scrollbar.hit_test(scrollbar_rect, point) {
                 self.touch_pressed_index = None;
-                match hit {
-                    TableScrollBarHit::ArrowUp => {
-                        self.scroll_launcher_to(recents, top_row.saturating_sub(1));
-                    }
-                    TableScrollBarHit::ArrowDown => {
-                        self.scroll_launcher_to(recents, top_row.saturating_add(1));
-                    }
-                    TableScrollBarHit::Track { top_row } => {
-                        self.scroll_launcher_to(recents, top_row);
-                    }
+                if let Some(interaction) = table.apply_scrollbar_hit(table_rect, scrollbar_rect, hit) {
+                    self.apply_launcher_table_interaction(
+                        recents,
+                        category,
+                        &interaction,
+                        RefreshMode::Fast,
+                    );
+                    self.start_menu_need_base_refresh = true;
                 }
             }
         }
@@ -747,18 +910,12 @@ impl HomeState {
         Self {
             ui_runtime: UiRuntime::default(),
             prev_focus_object_id: None,
-            start_menu_section: StartMenuSection::Recents,
             launcher_category: LauncherCategory::Recents,
             start_menu_index: 0,
-            category_menu_open: false,
-            category_menu_index: 0,
             start_menu_cache: Vec::new(),
             books_cache: Vec::new(),
             images_cache: Vec::new(),
             installed_apps: Vec::new(),
-            apps_top_row: 0,
-            books_top_row: 0,
-            images_top_row: 0,
             touch_pressed_index: None,
             touch_pressed_status: None,
             last_table_touch_rect: None,
@@ -825,7 +982,7 @@ impl HomeState {
         let content_len = self.start_menu_content_len(recents);
         let (width, height) = Self::launcher_surface_size();
         let (table_rect, _) = Self::launcher_table_layout(self.launcher_category, width, height);
-        let table_model = self.build_launcher_table_model(recents);
+        let table_model = self.launcher_table_model_from_runtime(recents);
         let table_view = TableView::new(&table_model);
         let status_menu_rect = StatusBarView::menu_rect(Rect::new(0, 0, width, START_MENU_STATUS_H));
         let trigger_rect = self.current_category_trigger_rect();
@@ -849,7 +1006,7 @@ impl HomeState {
                 id: HOME_OBJ_DIALOG_DISMISS,
                 bounds: Rect::new(40, 80, 80, 24),
             });
-        } else if self.category_menu_open {
+        } else if self.category_menu_open() {
             for idx in 0..4usize {
                 objects.push(ObjectResource::Button {
                     id: Self::category_menu_object_id(idx),
@@ -857,11 +1014,7 @@ impl HomeState {
                 });
             }
         } else {
-            let table_object_id = match self.launcher_category {
-                LauncherCategory::Recents => HOME_OBJ_RECENTS_TABLE,
-                LauncherCategory::Apps => HOME_OBJ_APPS_TABLE,
-                LauncherCategory::Books | LauncherCategory::Images => HOME_OBJ_RECENTS_TABLE,
-            };
+            let table_object_id = Self::launcher_table_object_id(self.launcher_category);
             objects.push(ObjectResource::Table {
                 id: table_object_id,
                 bounds: table_rect,
@@ -956,7 +1109,7 @@ impl HomeState {
                         })
                         .collect(),
                     rows,
-                    top_row: self.apps_top_row as u16,
+                    top_row: self.launcher_top_row_for_category(LauncherCategory::Apps) as u16,
                     selected_row: Some(selected_row),
                     selected_col: Some(selected_col),
                 }
@@ -984,7 +1137,7 @@ impl HomeState {
                         spacing: 0,
                         usable: true,
                     }],
-                    top_row: self.books_top_row as u16,
+                    top_row: self.launcher_top_row_for_category(LauncherCategory::Books) as u16,
                     selected_row: self.selected_content_index(recents).map(|idx| idx as u16),
                     selected_col: Some(0),
                     rows,
@@ -1013,7 +1166,7 @@ impl HomeState {
                         spacing: 0,
                         usable: true,
                     }],
-                    top_row: self.images_top_row as u16,
+                    top_row: self.launcher_top_row_for_category(LauncherCategory::Images) as u16,
                     selected_row: self.selected_content_index(recents).map(|idx| idx as u16),
                     selected_col: Some(0),
                     rows,
@@ -1025,11 +1178,11 @@ impl HomeState {
     fn sync_start_menu_focus(&mut self, recents: &[String]) {
         let target = if self.install_dialog.is_some() {
             Some(HOME_OBJ_DIALOG_DISMISS)
-        } else if self.category_menu_open {
-            Some(Self::category_menu_object_id(self.category_menu_index.min(3)))
-        } else if self.start_menu_section == StartMenuSection::Shell {
+        } else if self.category_menu_open() {
+            Some(Self::category_menu_object_id(self.category_menu_index().min(3)))
+        } else if self.current_start_menu_section() == StartMenuSection::Shell {
             Some(HOME_OBJ_STATUS_MENU)
-        } else if self.start_menu_section == StartMenuSection::Actions {
+        } else if self.current_start_menu_section() == StartMenuSection::Actions {
             Some(HOME_OBJ_CATEGORY_TRIGGER)
         } else if self.start_menu_content_len(recents) > 0 {
             Some(Self::launcher_object_id_for_index(
@@ -1050,48 +1203,57 @@ impl HomeState {
         if object_id == HOME_OBJ_DIALOG_DISMISS {
             return;
         }
-        if object_id == HOME_OBJ_STATUS_MENU {
-            self.start_menu_section = StartMenuSection::Shell;
-            return;
-        }
-        if object_id == HOME_OBJ_CATEGORY_TRIGGER {
-            self.start_menu_section = StartMenuSection::Actions;
-            return;
-        }
         if let Some(index) = Self::category_index_from_object_id(object_id) {
-            self.start_menu_section = StartMenuSection::Actions;
-            self.category_menu_index = index.min(3);
+            let _ = self.ui_runtime.set_popup_state(
+                HOME_FORM_ID,
+                HOME_OBJ_CATEGORY_TRIGGER,
+                UiPopupState {
+                    open: true,
+                    selected_index: Some(index.min(3) as u16),
+                },
+                None,
+                None,
+                RefreshMode::Fast,
+            );
             return;
         }
         if let Some(index) = Self::content_index_from_object_id(object_id) {
             let content_len = self.start_menu_content_len(recents);
             if index < content_len {
-                self.start_menu_section = StartMenuSection::Recents;
                 self.start_menu_index = index;
             }
         }
     }
 
+    fn current_start_menu_section(&self) -> StartMenuSection {
+        match self.ui_runtime.focus.object_id {
+            Some(HOME_OBJ_STATUS_MENU) => StartMenuSection::Shell,
+            Some(HOME_OBJ_CATEGORY_TRIGGER) => StartMenuSection::Actions,
+            Some(object_id) if Self::category_index_from_object_id(object_id).is_some() => {
+                StartMenuSection::Actions
+            }
+            _ => StartMenuSection::Recents,
+        }
+    }
+
     fn set_content_focus(&mut self, recents: &[String], index: usize) {
-        self.start_menu_section = StartMenuSection::Recents;
         self.start_menu_index = index.min(self.start_menu_content_len(recents).saturating_sub(1));
         if self.ensure_launcher_selection_visible(recents) {
             self.start_menu_need_base_refresh = true;
         }
+        self.sync_runtime_table_selection(recents, RefreshMode::Fast);
         self.prev_focus_object_id = self.ui_runtime.focus.object_id;
         self.ui_runtime
             .set_focus(HOME_FORM_ID, Some(Self::launcher_object_id_for_index(self.start_menu_index)));
     }
 
     fn set_actions_focus(&mut self) {
-        self.start_menu_section = StartMenuSection::Actions;
         self.prev_focus_object_id = self.ui_runtime.focus.object_id;
         self.ui_runtime
             .set_focus(HOME_FORM_ID, Some(HOME_OBJ_CATEGORY_TRIGGER));
     }
 
     fn set_shell_focus(&mut self) {
-        self.start_menu_section = StartMenuSection::Shell;
         self.prev_focus_object_id = self.ui_runtime.focus.object_id;
         self.ui_runtime
             .set_focus(HOME_FORM_ID, Some(HOME_OBJ_STATUS_MENU));
@@ -1102,11 +1264,13 @@ impl HomeState {
     }
 
     fn action_trigger_focused(&self) -> bool {
-        self.focused_object_id() == Some(HOME_OBJ_CATEGORY_TRIGGER) && !self.category_menu_open
+        self.focused_object_id() == Some(HOME_OBJ_CATEGORY_TRIGGER) && !self.category_menu_open()
     }
 
     fn selected_category_menu_index(&self) -> Option<usize> {
-        self.focused_object_id().and_then(Self::category_index_from_object_id)
+        self.focused_object_id()
+            .and_then(Self::category_index_from_object_id)
+            .or_else(|| self.category_popup_state().selected_index.map(|index| index as usize))
     }
 
     fn selected_content_index(&self, recents: &[String]) -> Option<usize> {
@@ -1155,6 +1319,7 @@ impl HomeState {
             LauncherCategory::Images,
         ];
         let event = Self::launcher_event_from_buttons(buttons);
+        let section = self.current_start_menu_section();
 
         if self.install_dialog.is_some() {
             if matches!(
@@ -1170,69 +1335,53 @@ impl HomeState {
             return HomeAction::None;
         }
 
-        if self.category_menu_open {
-            if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Up })) {
-                self.category_menu_index = self.category_menu_index.saturating_sub(1);
-                self.ui_runtime.set_focus(
-                    HOME_FORM_ID,
-                    Some(Self::category_menu_object_id(self.category_menu_index)),
-                );
-                self.start_menu_nav_pending = true;
-                return HomeAction::None;
-            }
-            if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Down })) {
-                self.category_menu_index =
-                    (self.category_menu_index + 1).min(categories.len().saturating_sub(1));
-                self.ui_runtime.set_focus(
-                    HOME_FORM_ID,
-                    Some(Self::category_menu_object_id(self.category_menu_index)),
-                );
-                self.start_menu_nav_pending = true;
-                return HomeAction::None;
-            }
-            if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Confirm })) {
-                self.launcher_category = categories[self.category_menu_index];
-                self.category_menu_open = false;
-                self.ui_runtime
-                    .invalidation
-                    .record_exposed_rect(self.current_category_popup_rect(), RefreshMode::Fast);
-                self.mark_table_damage(RefreshMode::Fast);
-                self.set_content_focus(recents, 0);
-                self.start_menu_need_base_refresh = true;
-                self.sync_start_menu_ui(recents);
-                return HomeAction::None;
-            }
-            if matches!(
-                event,
-                Some(UiEvent::ButtonDown {
-                    button: ButtonId::Back | ButtonId::Left
-                })
-            ) {
-                self.category_menu_open = false;
-                self.ui_runtime
-                    .invalidation
-                    .record_exposed_rect(self.current_category_popup_rect(), RefreshMode::Fast);
-                self.set_actions_focus();
-                self.start_menu_nav_pending = true;
-                return HomeAction::None;
+        if self.category_menu_open() {
+            if let Some(UiEvent::ButtonDown { button }) = event {
+                match handle_popup_menu_button(
+                    self.category_menu_index(),
+                    categories.len(),
+                    button,
+                ) {
+                    PopupMenuAction::Redraw { selected_index } => {
+                        self.set_category_popup_state(true, selected_index, RefreshMode::Fast);
+                        self.start_menu_nav_pending = true;
+                        return HomeAction::None;
+                    }
+                    PopupMenuAction::Activate { selected_index } => {
+                        self.launcher_category = categories[selected_index];
+                        self.set_category_popup_state(false, selected_index, RefreshMode::Fast);
+                        self.mark_table_damage(RefreshMode::Fast);
+                        self.set_content_focus(recents, 0);
+                        self.start_menu_need_base_refresh = true;
+                        self.sync_start_menu_ui(recents);
+                        return HomeAction::None;
+                    }
+                    PopupMenuAction::Close => {
+                        self.set_category_popup_state(false, self.category_menu_index(), RefreshMode::Fast);
+                        self.set_actions_focus();
+                        self.start_menu_nav_pending = true;
+                        return HomeAction::None;
+                    }
+                    PopupMenuAction::None => {}
+                }
             }
             return HomeAction::None;
         }
 
         if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Up })) {
-            if self.start_menu_section == StartMenuSection::Recents {
+            if section == StartMenuSection::Recents {
                 if self.launcher_category == LauncherCategory::Apps {
-                    if content_len > 0 && self.start_menu_index >= APP_GRID_COLS {
-                        self.set_content_focus(recents, self.start_menu_index - APP_GRID_COLS);
-                    } else {
+                    if !self.move_launcher_table_selection(recents, -1) {
                         self.set_actions_focus();
+                    } else {
+                        self.start_menu_nav_pending = true;
                     }
-                } else if content_len > 0 && self.start_menu_index > 0 {
-                    self.set_content_focus(recents, self.start_menu_index - 1);
-                } else {
+                } else if !self.move_launcher_table_selection(recents, -1) {
                     self.set_actions_focus();
+                } else {
+                    self.start_menu_nav_pending = true;
                 }
-            } else if self.start_menu_section == StartMenuSection::Actions {
+            } else if section == StartMenuSection::Actions {
                 self.set_shell_focus();
             }
             self.start_menu_nav_pending = true;
@@ -1240,34 +1389,35 @@ impl HomeState {
         }
 
         if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Down })) {
-            if self.start_menu_section == StartMenuSection::Shell {
-                self.set_actions_focus();
-            } else if self.start_menu_section == StartMenuSection::Actions {
-                self.set_content_focus(recents, 0);
-            } else if self.launcher_category == LauncherCategory::Apps {
-                if content_len > 0 {
-                    let next = self.start_menu_index + APP_GRID_COLS;
-                    if next < content_len {
-                        self.set_content_focus(recents, next);
-                    }
+            if section == StartMenuSection::Shell {
+                let result = handle_status_bar_button(
+                    preferred_status_bar_focus(StatusBarButtons {
+                        home_enabled: false,
+                        menu_enabled: true,
+                    }),
+                    StatusBarButtons {
+                        home_enabled: false,
+                        menu_enabled: true,
+                    },
+                    ButtonId::Down,
+                );
+                if result.focus.is_none() {
+                    self.set_actions_focus();
                 }
-            } else if content_len > 0 && self.start_menu_index + 1 < content_len {
-                self.set_content_focus(recents, self.start_menu_index + 1);
+            } else if section == StartMenuSection::Actions {
+                self.set_content_focus(recents, 0);
+            } else if content_len > 0 {
+                let _ = self.move_launcher_table_selection(recents, 1);
             }
             self.start_menu_nav_pending = true;
             return HomeAction::None;
         }
 
         if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Left })) {
-            if self.start_menu_section == StartMenuSection::Recents {
+            if section == StartMenuSection::Recents {
                 if self.launcher_category == LauncherCategory::Apps {
-                    if content_len > 0 {
-                        let row_start = (self.start_menu_index / APP_GRID_COLS) * APP_GRID_COLS;
-                        if self.start_menu_index > row_start {
-                            self.set_content_focus(recents, self.start_menu_index - 1);
-                            self.start_menu_nav_pending = true;
-                        }
-                    }
+                    self.start_menu_nav_pending =
+                        self.move_launcher_table_selection_horizontal(recents, -1);
                 } else {
                     self.set_actions_focus();
                     self.start_menu_nav_pending = true;
@@ -1277,45 +1427,54 @@ impl HomeState {
         }
 
         if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Right })) {
-            if self.start_menu_section == StartMenuSection::Actions {
+            if section == StartMenuSection::Actions {
                 self.set_content_focus(recents, self.start_menu_index);
                 self.start_menu_nav_pending = true;
-            } else if self.start_menu_section == StartMenuSection::Recents
+            } else if section == StartMenuSection::Recents
                 && self.launcher_category == LauncherCategory::Apps
                 && content_len > 0
             {
-                let row_start = (self.start_menu_index / APP_GRID_COLS) * APP_GRID_COLS;
-                let row_end = (row_start + APP_GRID_COLS).min(content_len).saturating_sub(1);
-                if self.start_menu_index < row_end {
-                    self.set_content_focus(recents, self.start_menu_index + 1);
-                    self.start_menu_nav_pending = true;
-                }
+                self.start_menu_nav_pending =
+                    self.move_launcher_table_selection_horizontal(recents, 1);
             }
             return HomeAction::None;
         }
 
         if matches!(event, Some(UiEvent::ButtonDown { button: ButtonId::Confirm })) {
-            if self.start_menu_section == StartMenuSection::Shell {
-                self.category_menu_open = true;
-                self.category_menu_index = categories
-                    .iter()
-                    .position(|c| *c == self.launcher_category)
-                    .unwrap_or(0);
-                self.ui_runtime
-                    .invalidation
-                    .record_new_rect(self.current_category_popup_rect(), RefreshMode::Fast);
-                self.sync_start_menu_ui(recents);
-                self.start_menu_nav_pending = true;
-                return HomeAction::None;
-            } else if self.start_menu_section == StartMenuSection::Actions {
-                self.category_menu_open = true;
-                self.category_menu_index = categories
-                    .iter()
-                    .position(|c| *c == self.launcher_category)
-                    .unwrap_or(0);
-                self.ui_runtime
-                    .invalidation
-                    .record_new_rect(self.current_category_popup_rect(), RefreshMode::Fast);
+            if section == StartMenuSection::Shell {
+                let result = handle_status_bar_button(
+                    preferred_status_bar_focus(StatusBarButtons {
+                        home_enabled: false,
+                        menu_enabled: true,
+                    }),
+                    StatusBarButtons {
+                        home_enabled: false,
+                        menu_enabled: true,
+                    },
+                    ButtonId::Confirm,
+                );
+                if result.activated == Some(StatusBarHit::Menu) {
+                    self.set_category_popup_state(
+                        true,
+                        categories
+                            .iter()
+                            .position(|c| *c == self.launcher_category)
+                            .unwrap_or(0),
+                        RefreshMode::Fast,
+                    );
+                    self.sync_start_menu_ui(recents);
+                    self.start_menu_nav_pending = true;
+                    return HomeAction::None;
+                }
+            } else if section == StartMenuSection::Actions {
+                self.set_category_popup_state(
+                    true,
+                    categories
+                        .iter()
+                        .position(|c| *c == self.launcher_category)
+                        .unwrap_or(0),
+                    RefreshMode::Fast,
+                );
                 self.sync_start_menu_ui(recents);
                 self.start_menu_nav_pending = true;
                 return HomeAction::None;
@@ -1603,7 +1762,7 @@ impl HomeState {
         };
         status_bar.menu = StatusBarActionState {
             enabled: true,
-            focused: self.start_menu_section == StartMenuSection::Shell,
+            focused: self.current_start_menu_section() == StartMenuSection::Shell,
         };
         status_bar.render(
             &mut shell_ui,
@@ -1678,13 +1837,13 @@ impl HomeState {
             width,
             category_label,
             &["Recents", "Apps", "Books", "Images"],
-            self.selected_category_menu_index().unwrap_or(self.category_menu_index),
-            self.category_menu_open,
+            self.selected_category_menu_index().unwrap_or(self.category_menu_index()),
+            self.category_menu_open(),
             ctx.palm_fonts,
         );
         popup.trigger_focused = self.action_trigger_focused();
         self.last_category_trigger_rect = Some(popup.trigger_rect);
-        if self.category_menu_open {
+        if self.category_menu_open() {
             self.last_category_popup_rect = Some(popup.popup_rect);
             self.sync_category_popup_bounds_from_view(&popup);
         }
@@ -1698,7 +1857,9 @@ impl HomeState {
                 | LauncherCategory::Books
                 | LauncherCategory::Images
         ) {
-            let model = self.build_launcher_table_model(&self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>());
+            let model = self.launcher_table_model_from_runtime(
+                &self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>(),
+            );
             draw_count = model.rows.len();
             if draw_count == 0 {
                 let msg = match self.launcher_category {
@@ -1893,14 +2054,14 @@ impl HomeState {
             width,
             category_label,
             &["Recents", "Apps", "Books", "Images"],
-            self.selected_category_menu_index().unwrap_or(self.category_menu_index),
-            self.category_menu_open,
+            self.selected_category_menu_index().unwrap_or(self.category_menu_index()),
+            self.category_menu_open(),
             ctx.palm_fonts,
         );
 
         let repaint_trigger = dirty_rects.iter().any(|rect| rect.intersects(popup.trigger_rect));
         let repaint_popup =
-            self.category_menu_open && dirty_rects.iter().any(|rect| rect.intersects(popup.popup_rect));
+            self.category_menu_open() && dirty_rects.iter().any(|rect| rect.intersects(popup.popup_rect));
 
         let content_h = (mid_y - list_top).max(1);
         let has_scrollbar = matches!(
@@ -1920,7 +2081,9 @@ impl HomeState {
             scrollbar_w.saturating_sub(1),
             content_h - 8,
         );
-        let model = self.build_launcher_table_model(&self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>());
+        let model = self.launcher_table_model_from_runtime(
+            &self.start_menu_cache.iter().map(|p| p.path.clone()).collect::<Vec<_>>(),
+        );
         let draw_count = model.rows.len();
         if draw_count == 0 {
             return (false, 0);
@@ -1938,7 +2101,7 @@ impl HomeState {
             };
             status_bar.menu = StatusBarActionState {
                 enabled: true,
-                focused: self.start_menu_section == StartMenuSection::Shell,
+                focused: self.current_start_menu_section() == StartMenuSection::Shell,
             };
             let mut shell_ui = UiContext {
                 buffers: ctx.display_buffers,
@@ -2341,7 +2504,7 @@ impl HomeState {
         let category = self.launcher_category;
         let (target_index, path) = match category {
             LauncherCategory::Books => {
-                let top_row = self.books_top_row;
+                let top_row = self.launcher_top_row_for_category(category);
                 let visible_rows = Self::launcher_visible_rows_for_category(category);
                 let end = (top_row + visible_rows).min(self.books_cache.len());
                 let idx = (top_row..end).find(|&idx| self.books_cache[idx].image.is_none());
@@ -2351,7 +2514,7 @@ impl HomeState {
                 (idx, self.books_cache[idx].path.clone())
             }
             LauncherCategory::Images => {
-                let top_row = self.images_top_row;
+                let top_row = self.launcher_top_row_for_category(category);
                 let visible_rows = Self::launcher_visible_rows_for_category(category);
                 let end = (top_row + visible_rows).min(self.images_cache.len());
                 let idx = (top_row..end).find(|&idx| self.images_cache[idx].image.is_none());

@@ -332,6 +332,7 @@ impl<'a> TableView<'a> {
             return None;
         }
         let old_selected = self.model.selected_row.map(|row| row as usize);
+        let old_selected_col = self.model.selected_col.map(|col| col as usize);
         let mut new_selected = old_selected.unwrap_or(self.model.top_row as usize);
         if delta < 0 {
             if new_selected == 0 {
@@ -358,16 +359,56 @@ impl<'a> TableView<'a> {
             }
         }
 
-        Some(self.interaction_for_state_change(rect, scrollbar_rect, old_selected, Some(new_selected), top_row, false))
+        Some(self.interaction_for_state_change(
+            rect,
+            scrollbar_rect,
+            old_selected,
+            old_selected_col,
+            Some(new_selected),
+            old_selected_col,
+            top_row,
+            false,
+        ))
+    }
+
+    pub fn move_selection_horizontal(
+        &self,
+        rect: Rect,
+        delta: i32,
+        scrollbar_rect: Option<Rect>,
+    ) -> Option<TableInteraction> {
+        if self.model.rows.is_empty() || self.model.cols <= 1 || delta == 0 {
+            return None;
+        }
+        let row = self.model.selected_row.map(|row| row as usize)?;
+        let old_col = self.model.selected_col.unwrap_or(0) as usize;
+        let col_count = self.model.cols.max(1) as usize;
+        let new_col = old_col as i32 + delta;
+        if new_col < 0 || new_col >= col_count as i32 {
+            return None;
+        }
+        Some(self.interaction_for_state_change(
+            rect,
+            scrollbar_rect,
+            Some(row),
+            Some(old_col),
+            Some(row),
+            Some(new_col as usize),
+            self.model.top_row as usize,
+            false,
+        ))
     }
 
     pub fn activate_selection(&self, rect: Rect, scrollbar_rect: Option<Rect>) -> Option<TableInteraction> {
         let selected = self.model.selected_row.map(|row| row as usize)?;
+        let selected_col = self.model.selected_col.map(|col| col as usize);
         Some(self.interaction_for_state_change(
             rect,
             scrollbar_rect,
             Some(selected),
+            selected_col,
             Some(selected),
+            selected_col,
             self.model.top_row as usize,
             true,
         ))
@@ -405,6 +446,7 @@ impl<'a> TableView<'a> {
         }
 
         let old_selected = self.model.selected_row.map(|row| row as usize);
+        let old_selected_col = self.model.selected_col.map(|col| col as usize);
         let mut selected = old_selected;
         if let Some(row) = selected {
             let bottom = top_row.saturating_add(visible_rows.saturating_sub(1));
@@ -419,26 +461,33 @@ impl<'a> TableView<'a> {
             rect,
             Some(scrollbar_rect),
             old_selected,
+            old_selected_col,
             selected,
+            old_selected_col,
             top_row,
             false,
         ))
     }
 
-    pub fn select_row(
+    pub fn select_cell(
         &self,
         rect: Rect,
         scrollbar_rect: Option<Rect>,
         row: usize,
+        col: usize,
         activated: bool,
     ) -> Option<TableInteraction> {
         let row = row.min(self.model.rows.len().saturating_sub(1));
         let old_selected = self.model.selected_row.map(|selected| selected as usize);
+        let old_selected_col = self.model.selected_col.map(|selected| selected as usize);
+        let col = col.min(self.model.cols.saturating_sub(1) as usize);
         Some(self.interaction_for_state_change(
             rect,
             scrollbar_rect,
             old_selected,
+            old_selected_col,
             Some(row),
+            Some(col),
             self.model.top_row as usize,
             activated,
         ))
@@ -449,7 +498,9 @@ impl<'a> TableView<'a> {
         rect: Rect,
         scrollbar_rect: Option<Rect>,
         old_selected: Option<usize>,
+        old_selected_col: Option<usize>,
         new_selected: Option<usize>,
+        new_selected_col: Option<usize>,
         top_row: usize,
         activated: bool,
     ) -> TableInteraction {
@@ -467,10 +518,15 @@ impl<'a> TableView<'a> {
             if let Some(new_row) = new_selected.and_then(|row| self.row_rect_from(rect, top_row, row)) {
                 dirty_rects.push(new_row);
             }
+            if old_selected == new_selected && old_selected_col != new_selected_col {
+                if let Some(row_rect) = new_selected.and_then(|row| self.row_rect_from(rect, top_row, row)) {
+                    dirty_rects.push(row_rect);
+                }
+            }
         }
         TableInteraction {
             selected_row: new_selected,
-            selected_col: Some(self.model.selected_col.unwrap_or(0) as usize),
+            selected_col: new_selected_col,
             top_row,
             activated,
             dirty_rects,

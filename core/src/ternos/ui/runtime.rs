@@ -8,6 +8,8 @@ use crate::{
     ternos::ui::{event::UiEvent, geom::Rect},
 };
 
+use super::table_view::TableInteraction;
+
 pub type FormId = u16;
 pub type ObjectId = u16;
 pub type ObjectIndex = u16;
@@ -61,6 +63,49 @@ pub struct HelpDialogState {
     pub title: alloc::string::String,
     pub message: alloc::string::String,
     pub scroll: i16,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UiTableState {
+    pub top_row: u16,
+    pub selected_row: Option<u16>,
+    pub selected_col: Option<u16>,
+}
+
+impl UiTableState {
+    pub fn from_model(model: &UiTableModel) -> Self {
+        Self {
+            top_row: model.top_row,
+            selected_row: model.selected_row,
+            selected_col: model.selected_col,
+        }
+    }
+
+    pub fn apply_to_model(&self, model: &mut UiTableModel) {
+        model.top_row = self.top_row;
+        model.selected_row = self.selected_row;
+        model.selected_col = self.selected_col;
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UiPopupState {
+    pub open: bool,
+    pub selected_index: Option<u16>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UiTableStateEntry {
+    pub form_id: FormId,
+    pub object_id: ObjectId,
+    pub state: UiTableState,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UiPopupStateEntry {
+    pub form_id: FormId,
+    pub object_id: ObjectId,
+    pub state: UiPopupState,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -236,6 +281,17 @@ impl UiObject {
             | Self::Custom { bounds, .. } => bounds,
         }
     }
+
+    pub fn is_focusable(&self) -> bool {
+        matches!(
+            self,
+            Self::Button { .. }
+                | Self::Field { .. }
+                | Self::List { .. }
+                | Self::Table { .. }
+                | Self::Custom { .. }
+        )
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -255,6 +311,8 @@ pub struct UiRuntime {
     pub help: Option<HelpDialogState>,
     pub queue: EventQueue,
     pub invalidation: InvalidationState,
+    pub table_states: Vec<UiTableStateEntry>,
+    pub popup_states: Vec<UiPopupStateEntry>,
 }
 
 impl UiRuntime {
@@ -283,8 +341,10 @@ impl UiRuntime {
     }
 
     pub fn upsert_form(&mut self, form: UiForm) {
+        let form_id = form.form_id;
         if let Some(existing) = self.forms.iter_mut().find(|entry| entry.form_id == form.form_id) {
             if existing.title == form.title && existing.objects == form.objects {
+                self.sync_component_state_for_form(form.form_id);
                 return;
             }
             for old_object in &existing.objects {
@@ -322,6 +382,7 @@ impl UiRuntime {
             }
             self.forms.push(form);
         }
+        self.sync_component_state_for_form(form_id);
     }
 
     pub fn set_focus(&mut self, form_id: FormId, object_id: Option<ObjectId>) {
@@ -360,6 +421,264 @@ impl UiRuntime {
             .find(|form| form.form_id == form_id)
             .and_then(|form| form.objects.iter().find(|object| object.id() == object_id))
             .map(UiObject::bounds)
+    }
+
+    pub fn focusable_object_ids(&self, form_id: FormId) -> Vec<ObjectId> {
+        self.forms
+            .iter()
+            .find(|form| form.form_id == form_id)
+            .map(|form| {
+                form.objects
+                    .iter()
+                    .filter(|object| object.is_focusable())
+                    .map(UiObject::id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn adjacent_focusable_object(
+        &self,
+        form_id: FormId,
+        current: Option<ObjectId>,
+        reverse: bool,
+    ) -> Option<ObjectId> {
+        let ids = self.focusable_object_ids(form_id);
+        if ids.is_empty() {
+            return None;
+        }
+        let Some(current) = current else {
+            return if reverse {
+                ids.last().copied()
+            } else {
+                ids.first().copied()
+            };
+        };
+        let Some(index) = ids.iter().position(|id| *id == current) else {
+            return if reverse {
+                ids.last().copied()
+            } else {
+                ids.first().copied()
+            };
+        };
+        if reverse {
+            index.checked_sub(1).and_then(|idx| ids.get(idx)).copied()
+        } else {
+            ids.get(index + 1).copied()
+        }
+    }
+
+    pub fn move_focus_linear(&mut self, form_id: FormId, reverse: bool) -> bool {
+        let next = self.adjacent_focusable_object(form_id, self.focus.object_id, reverse);
+        if next == self.focus.object_id {
+            return false;
+        }
+        if next.is_some() {
+            self.set_focus(form_id, next);
+            return true;
+        }
+        false
+    }
+
+    pub fn table_state(&self, form_id: FormId, object_id: ObjectId) -> Option<&UiTableState> {
+        self.table_states
+            .iter()
+            .find(|entry| entry.form_id == form_id && entry.object_id == object_id)
+            .map(|entry| &entry.state)
+    }
+
+    pub fn popup_state(&self, form_id: FormId, object_id: ObjectId) -> Option<&UiPopupState> {
+        self.popup_states
+            .iter()
+            .find(|entry| entry.form_id == form_id && entry.object_id == object_id)
+            .map(|entry| &entry.state)
+    }
+
+    pub fn table_model_with_state(&self, form_id: FormId, object_id: ObjectId) -> Option<UiTableModel> {
+        let form = self.forms.iter().find(|form| form.form_id == form_id)?;
+        let mut model = match form.objects.iter().find(|object| object.id() == object_id)? {
+            UiObject::Table { model, .. } => model.clone(),
+            _ => return None,
+        };
+        if let Some(state) = self.table_state(form_id, object_id) {
+            state.apply_to_model(&mut model);
+        }
+        Some(model)
+    }
+
+    pub fn set_table_state(
+        &mut self,
+        form_id: FormId,
+        object_id: ObjectId,
+        next_state: UiTableState,
+        dirty_rects: &[Rect],
+        refresh: RefreshMode,
+    ) -> bool {
+        let entry_index = if let Some(index) = self
+            .table_states
+            .iter()
+            .position(|entry| entry.form_id == form_id && entry.object_id == object_id)
+        {
+            index
+        } else {
+            self.table_states.push(UiTableStateEntry {
+                form_id,
+                object_id,
+                state: next_state.clone(),
+            });
+            self.table_states.len() - 1
+        };
+        if self.table_states[entry_index].state == next_state {
+            return false;
+        }
+        self.table_states[entry_index].state = next_state.clone();
+        if let Some(UiObject::Table { model, .. }) = self
+            .forms
+            .iter_mut()
+            .find(|form| form.form_id == form_id)
+            .and_then(|form| form.objects.iter_mut().find(|object| object.id() == object_id))
+        {
+            next_state.apply_to_model(model);
+        }
+        for rect in dirty_rects.iter().copied() {
+            self.invalidation.push_rect(rect, refresh);
+        }
+        true
+    }
+
+    pub fn update_table_state(
+        &mut self,
+        form_id: FormId,
+        object_id: ObjectId,
+        dirty_rects: &[Rect],
+        refresh: RefreshMode,
+        update: impl FnOnce(&mut UiTableState),
+    ) -> bool {
+        let Some(current) = self.table_state(form_id, object_id).cloned() else {
+            return false;
+        };
+        let mut next = current;
+        update(&mut next);
+        self.set_table_state(form_id, object_id, next, dirty_rects, refresh)
+    }
+
+    pub fn set_popup_state(
+        &mut self,
+        form_id: FormId,
+        object_id: ObjectId,
+        next_state: UiPopupState,
+        old_rect: Option<Rect>,
+        new_rect: Option<Rect>,
+        refresh: RefreshMode,
+    ) -> bool {
+        let entry_index = if let Some(index) = self
+            .popup_states
+            .iter()
+            .position(|entry| entry.form_id == form_id && entry.object_id == object_id)
+        {
+            index
+        } else {
+            self.popup_states.push(UiPopupStateEntry {
+                form_id,
+                object_id,
+                state: next_state.clone(),
+            });
+            self.popup_states.len() - 1
+        };
+        if self.popup_states[entry_index].state == next_state {
+            return false;
+        }
+        self.popup_states[entry_index].state = next_state;
+        self.invalidation.record_transition(old_rect, new_rect, refresh);
+        true
+    }
+
+    pub fn set_popup_state_and_focus(
+        &mut self,
+        form_id: FormId,
+        object_id: ObjectId,
+        next_state: UiPopupState,
+        old_rect: Option<Rect>,
+        new_rect: Option<Rect>,
+        refresh: RefreshMode,
+        focus_object_id: Option<ObjectId>,
+    ) -> bool {
+        let changed = self.set_popup_state(
+            form_id,
+            object_id,
+            next_state,
+            old_rect,
+            new_rect,
+            refresh,
+        );
+        self.set_focus(form_id, focus_object_id);
+        changed
+    }
+
+    pub fn apply_table_interaction(
+        &mut self,
+        form_id: FormId,
+        object_id: ObjectId,
+        interaction: &TableInteraction,
+        refresh: RefreshMode,
+    ) -> bool {
+        self.set_table_state(
+            form_id,
+            object_id,
+            UiTableState {
+                top_row: interaction.top_row as u16,
+                selected_row: interaction.selected_row.map(|row| row as u16),
+                selected_col: interaction.selected_col.map(|col| col as u16),
+            },
+            interaction.dirty_rects.as_slice(),
+            refresh,
+        )
+    }
+
+    fn sync_component_state_for_form(&mut self, form_id: FormId) {
+        let Some(form) = self.forms.iter_mut().find(|form| form.form_id == form_id) else {
+            self.table_states.retain(|entry| entry.form_id != form_id);
+            self.popup_states.retain(|entry| entry.form_id != form_id);
+            return;
+        };
+
+        for object in &mut form.objects {
+            match object {
+                UiObject::Table { id, model, .. } => {
+                    let state = if let Some(existing) = self
+                        .table_states
+                        .iter()
+                        .find(|entry| entry.form_id == form_id && entry.object_id == *id)
+                        .map(|entry| entry.state.clone())
+                    {
+                        existing
+                    } else {
+                        let state = UiTableState::from_model(model);
+                        self.table_states.push(UiTableStateEntry {
+                            form_id,
+                            object_id: *id,
+                            state: state.clone(),
+                        });
+                        state
+                    };
+                    state.apply_to_model(model);
+                }
+                UiObject::Button { id, .. } | UiObject::Custom { id, .. } => {
+                    if self
+                        .popup_states
+                        .iter()
+                        .all(|entry| !(entry.form_id == form_id && entry.object_id == *id))
+                    {
+                        self.popup_states.push(UiPopupStateEntry {
+                            form_id,
+                            object_id: *id,
+                            state: UiPopupState::default(),
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 }
 
@@ -422,4 +741,84 @@ fn form_bounds(form: &UiForm) -> Option<Rect> {
         });
     }
     bounds
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec;
+
+    fn sample_form() -> UiForm {
+        UiForm {
+            form_id: 1,
+            title: None,
+            objects: vec![UiObject::Table {
+                id: 10,
+                bounds: Rect::new(0, 0, 100, 100),
+                model: UiTableModel {
+                    cols: 1,
+                    columns: Vec::new(),
+                    rows: vec![UiTableRow {
+                        id: 1,
+                        height: 12,
+                        usable: true,
+                        selectable: true,
+                        data: 0,
+                        cells: vec![UiTableCell {
+                            text: "A".into(),
+                        }],
+                    }],
+                    top_row: 0,
+                    selected_row: Some(0),
+                    selected_col: Some(0),
+                },
+            }],
+        }
+    }
+
+    #[test]
+    fn syncs_table_state_from_form_and_applies_runtime_updates() {
+        let mut runtime = UiRuntime::default();
+        runtime.upsert_form(sample_form());
+        runtime.invalidation.finish_frame();
+        assert_eq!(
+            runtime.table_state(1, 10),
+            Some(&UiTableState {
+                top_row: 0,
+                selected_row: Some(0),
+                selected_col: Some(0),
+            })
+        );
+
+        let changed = runtime.set_table_state(
+            1,
+            10,
+            UiTableState {
+                top_row: 2,
+                selected_row: Some(3),
+                selected_col: Some(0),
+            },
+            &[Rect::new(1, 2, 3, 4)],
+            RefreshMode::Fast,
+        );
+
+        assert!(changed);
+        assert_eq!(
+            runtime.table_model_with_state(1, 10).map(|model| (model.top_row, model.selected_row)),
+            Some((2, Some(3)))
+        );
+        assert_eq!(runtime.invalidation.dirty_rects, vec![Rect::new(1, 2, 3, 4)]);
+    }
+
+    #[test]
+    fn keeps_table_state_when_object_temporarily_removed() {
+        let mut runtime = UiRuntime::default();
+        runtime.upsert_form(sample_form());
+        runtime.upsert_form(UiForm {
+            form_id: 1,
+            title: None,
+            objects: Vec::new(),
+        });
+        assert!(runtime.table_state(1, 10).is_some());
+    }
 }

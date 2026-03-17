@@ -101,6 +101,8 @@ pub struct SystemState {
     pub battery_percent: Option<u8>,
 }
 
+const LAUNCHER_RECENT_LIMIT: usize = 10;
+
 impl SystemState {
     pub fn new(
         resume_name: Option<String>,
@@ -209,14 +211,14 @@ impl SystemState {
             }
         }
         for (name, _) in &self.book_positions {
-            if recent.len() >= 5 {
+            if recent.len() >= LAUNCHER_RECENT_LIMIT {
                 break;
             }
             if !recent.iter().any(|existing| existing == name) {
                 recent.push(name.clone());
             }
         }
-        recent.truncate(5);
+        recent.truncate(LAUNCHER_RECENT_LIMIT);
         recent
     }
 

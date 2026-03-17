@@ -326,7 +326,7 @@ impl ModalFormController {
                 let before = self.focused_id();
                 self.ui_runtime.set_focus(spec.form_id, Some(table_id));
                 let interaction = self.with_table_view(model, cell_style, fonts, |table| {
-                    table.select_row(*bounds, scrollbar_bounds(spec, table_id), row, false)
+                    table.select_cell(*bounds, scrollbar_bounds(spec, table_id), row, 0, false)
                 });
                 if let Some(ref interaction) = interaction {
                     for rect in &interaction.dirty_rects {
@@ -376,7 +376,7 @@ impl ModalFormController {
                 };
                 self.ui_runtime.set_focus(spec.form_id, Some(table_id));
                 let interaction = self.with_table_view(model, cell_style, fonts, |table| {
-                    table.select_row(*bounds, scrollbar_bounds(spec, table_id), row, true)
+                    table.select_cell(*bounds, scrollbar_bounds(spec, table_id), row, 0, true)
                 });
                 if let Some(interaction) = interaction {
                     for rect in interaction.dirty_rects.clone() {

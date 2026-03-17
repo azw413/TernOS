@@ -2,7 +2,7 @@ use crate::{
     framebuffer::DisplayBuffers,
     palm::{form_preview::FormPreview, runtime::PalmFont},
     render_policy::RenderPolicy,
-    ternos::ui::{Rect, StatusBarActionState, StatusBarView, UiContext, View},
+    ternos::ui::{preferred_status_bar_focus, Point, Rect, StatusBarActionState, StatusBarButtons, StatusBarHit, StatusBarView, UiContext, View},
 };
 use embedded_graphics::geometry::OriginDimensions;
 
@@ -10,6 +10,44 @@ use embedded_graphics::geometry::OriginDimensions;
 pub enum PrcStatusBarFocus {
     Home,
     Menu,
+}
+
+pub fn to_status_hit(focus: Option<PrcStatusBarFocus>) -> Option<StatusBarHit> {
+    match focus {
+        Some(PrcStatusBarFocus::Home) => Some(StatusBarHit::Home),
+        Some(PrcStatusBarFocus::Menu) => Some(StatusBarHit::Menu),
+        None => None,
+    }
+}
+
+pub fn from_status_hit(hit: Option<StatusBarHit>) -> Option<PrcStatusBarFocus> {
+    match hit {
+        Some(StatusBarHit::Home) => Some(PrcStatusBarFocus::Home),
+        Some(StatusBarHit::Menu) => Some(PrcStatusBarFocus::Menu),
+        None => None,
+    }
+}
+
+pub fn preferred_focus(menu_enabled: bool) -> Option<PrcStatusBarFocus> {
+    from_status_hit(preferred_status_bar_focus(StatusBarButtons {
+        home_enabled: true,
+        menu_enabled,
+    }))
+}
+
+pub fn status_bar_hit(
+    screen_width: i32,
+    menu_enabled: bool,
+    point: Point,
+) -> Option<PrcStatusBarFocus> {
+    match StatusBarView::hit_test(
+        Rect::new(0, 0, screen_width, StatusBarView::HEIGHT),
+        point,
+    ) {
+        Some(StatusBarHit::Home) => Some(PrcStatusBarFocus::Home),
+        Some(StatusBarHit::Menu) if menu_enabled => Some(PrcStatusBarFocus::Menu),
+        _ => None,
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

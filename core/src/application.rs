@@ -5,11 +5,10 @@ use alloc::vec::Vec;
 
 use embedded_graphics::{
     Drawable,
-    Pixel,
     mono_font::{MonoTextStyle, ascii::FONT_10X20},
     pixelcolor::BinaryColor,
     prelude::{DrawTarget, OriginDimensions, Point, Primitive, Size},
-    primitives::{Circle, PrimitiveStyle, Rectangle},
+    primitives::{PrimitiveStyle, Rectangle},
     text::Text,
 };
 
@@ -45,6 +44,7 @@ use crate::{
             HomeRenderContext,
             HomeState,
         },
+        reader_shell::{self, ReaderStatusBarFocus},
         image_viewer::{ImageViewerContext, ImageViewerState},
         settings::{draw_settings, SettingsContext},
         system::{ApplyResumeOutcome, ResumeContext, SleepWallpaperIcons, SystemRenderContext, SystemState},
@@ -57,8 +57,9 @@ use crate::{
     platform::PlatformInputEvent,
     palm,
     render_policy::RenderPolicy,
-    ternos::ui::{flush_queue, ModalHit, Rect, RenderQueue, StatusBarActionState, StatusBarHit, StatusBarView, UiContext, View},
+    ternos::ui::{flush_queue, handle_status_bar_button, preferred_status_bar_focus, ModalHit, Rect, RenderQueue, StatusBarActionState, StatusBarButtons, StatusBarHit, StatusBarView, UiContext, View},
 };
+use crate::palm::shell::PrcStatusBarFocus;
 
 const LIST_MARGIN_X: i32 = 16;
 const HEADER_Y: i32 = 24;
@@ -140,18 +141,6 @@ enum ExitFrom {
     Book,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PrcStatusBarFocus {
-    Home,
-    Menu,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ReaderStatusBarFocus {
-    Home,
-    Menu,
-}
-
 impl<'a, S: AppSource> Application<'a, S> {
     const PALM_KEY_LEFT: u16 = 0x001C;
     const PALM_KEY_RIGHT: u16 = 0x001D;
@@ -170,6 +159,231 @@ impl<'a, S: AppSource> Application<'a, S> {
     fn runtime_prc_form(&self) -> Option<palm::form_preview::FormPreview> {
         let fid = self.prc_runtime_form_id?;
         self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
+    }
+
+    fn nav_button_from_buttons(buttons: &input::ButtonState) -> Option<crate::platform::ButtonId> {
+        use crate::input::Buttons;
+        if buttons.is_pressed(Buttons::Left) {
+            Some(crate::platform::ButtonId::Left)
+        } else if buttons.is_pressed(Buttons::Right) {
+            Some(crate::platform::ButtonId::Right)
+        } else if buttons.is_pressed(Buttons::Up) {
+            Some(crate::platform::ButtonId::Up)
+        } else if buttons.is_pressed(Buttons::Down) {
+            Some(crate::platform::ButtonId::Down)
+        } else if buttons.is_pressed(Buttons::Confirm) {
+            Some(crate::platform::ButtonId::Confirm)
+        } else if buttons.is_pressed(Buttons::Back) {
+            Some(crate::platform::ButtonId::Back)
+        } else {
+            None
+        }
+    }
+
+    fn reader_status_hit(&self) -> Option<StatusBarHit> {
+        reader_shell::to_status_hit(self.reader_status_bar_focus)
+    }
+
+    fn prc_status_hit(&self) -> Option<StatusBarHit> {
+        palm::shell::to_status_hit(self.prc_status_bar_focus)
+    }
+
+    fn set_reader_status_from_hit(&mut self, hit: Option<StatusBarHit>) {
+        self.reader_status_bar_focus = reader_shell::from_status_hit(hit);
+    }
+
+    fn set_prc_status_from_hit(&mut self, hit: Option<StatusBarHit>) {
+        self.prc_status_bar_focus = palm::shell::from_status_hit(hit);
+    }
+
+    fn handle_reader_status_bar_button(&mut self, button: crate::platform::ButtonId) -> bool {
+        let result = handle_status_bar_button(
+            self.reader_status_hit(),
+            StatusBarButtons {
+                home_enabled: true,
+                menu_enabled: true,
+            },
+            button,
+        );
+        if !result.consumed {
+            return false;
+        }
+        self.set_reader_status_from_hit(result.focus);
+        if let Some(hit) = result.activated {
+            match hit {
+                StatusBarHit::Home => {
+                    self.exit_from = ExitFrom::Book;
+                    self.exit_overlay_drawn = false;
+                    self.state = AppState::ExitingPending;
+                    self.dirty = true;
+                }
+                StatusBarHit::Menu => {
+                    if self.reader_menu_controller.open() {
+                        self.dirty = true;
+                    }
+                }
+            }
+        } else {
+            self.dirty = true;
+        }
+        true
+    }
+
+    fn handle_prc_status_bar_button(&mut self, button: crate::platform::ButtonId) -> bool {
+        let result = handle_status_bar_button(
+            self.prc_status_hit(),
+            StatusBarButtons {
+                home_enabled: true,
+                menu_enabled: self.prc_menu_controller.menu_count() > 0,
+            },
+            button,
+        );
+        if !result.consumed {
+            return false;
+        }
+        self.set_prc_status_from_hit(result.focus);
+        self.prc_touch_pressed_status = None;
+        if let Some(hit) = result.activated {
+            match hit {
+                StatusBarHit::Home => self.exit_prc_viewer_to_origin(),
+                StatusBarHit::Menu => {
+                    if self.prc_menu_controller.open() {
+                        self.dirty = true;
+                    }
+                }
+            }
+        } else {
+            self.dirty = true;
+        }
+        true
+    }
+
+    fn handle_reader_help_buttons(
+        &mut self,
+        buttons: &input::ButtonState,
+        elapsed_ms: u32,
+    ) -> bool {
+        let Some(dialog) = self.book_reader.help_dialog() else {
+            return false;
+        };
+        self.reader_help_controller.sync(&dialog);
+        if let Some(event) = reader_shell::nav_event_from_buttons(buttons) {
+            let result = self.book_reader.apply_help_action(
+                self.reader_help_controller
+                    .on_event(&dialog, self.home_system_fonts.as_slice(), event),
+            );
+            if result.dirty {
+                self.dirty = true;
+            }
+        } else if self.system.add_idle(elapsed_ms) {
+            self.start_sleep_request();
+        }
+        true
+    }
+
+    fn handle_reader_menu_buttons(
+        &mut self,
+        buttons: &input::ButtonState,
+        elapsed_ms: u32,
+    ) -> bool {
+        if !self.reader_menu_controller.is_active() {
+            return false;
+        }
+        if let Some(event) = reader_shell::nav_event_from_buttons(buttons) {
+            match self.reader_menu_controller.on_event(event) {
+                palm::controller::MenuAction::Activate(item_id) => {
+                    self.apply_reader_menu_command(item_id);
+                }
+                palm::controller::MenuAction::Redraw | palm::controller::MenuAction::Closed => {
+                    self.reader_touch_pressed_menu = None;
+                    self.dirty = true;
+                }
+                palm::controller::MenuAction::None => {}
+            }
+        } else if self.system.add_idle(elapsed_ms) {
+            self.start_sleep_request();
+        }
+        true
+    }
+
+    fn handle_reader_status_bar_buttons(
+        &mut self,
+        buttons: &input::ButtonState,
+        elapsed_ms: u32,
+    ) -> bool {
+        if self.reader_status_bar_focus.is_none() {
+            return false;
+        }
+        if let Some(button) = Self::nav_button_from_buttons(buttons) {
+            let _ = self.handle_reader_status_bar_button(button);
+        } else if self.system.add_idle(elapsed_ms) {
+            self.start_sleep_request();
+        }
+        true
+    }
+
+    fn handle_reader_shell_buttons(
+        &mut self,
+        buttons: &input::ButtonState,
+        elapsed_ms: u32,
+        toc: bool,
+    ) {
+        if self.handle_reader_help_buttons(buttons, elapsed_ms) {
+            return;
+        }
+        if self.book_reader.has_overlay() {
+            let result = self
+                .book_reader
+                .handle_overlay_input(buttons, self.home_system_fonts.as_slice());
+            if result.jumped {
+                self.set_state_book_viewing();
+            } else if result.dirty {
+                self.dirty = true;
+            } else if self.system.add_idle(elapsed_ms) {
+                self.start_sleep_request();
+            }
+            return;
+        }
+        if self.handle_reader_menu_buttons(buttons, elapsed_ms) {
+            return;
+        }
+        if self.handle_reader_status_bar_buttons(buttons, elapsed_ms) {
+            return;
+        }
+        if !toc && buttons.is_pressed(input::Buttons::Confirm) {
+            self.set_reader_status_from_hit(preferred_status_bar_focus(StatusBarButtons {
+                home_enabled: true,
+                menu_enabled: true,
+            }));
+            self.dirty = true;
+            return;
+        }
+        if toc {
+            let result = self
+                .book_reader
+                .handle_toc_input(buttons, self.home_system_fonts.as_slice());
+            if result.exit || result.jumped {
+                self.set_state_book_viewing();
+            } else if result.dirty {
+                self.dirty = true;
+            } else if self.system.add_idle(elapsed_ms) {
+                self.start_sleep_request();
+            }
+        } else {
+            let result = self.book_reader.handle_view_input(self.source, buttons);
+            if result.exit {
+                self.exit_from = ExitFrom::Book;
+                self.exit_overlay_drawn = false;
+                self.state = AppState::ExitingPending;
+                self.dirty = true;
+            } else if result.open_toc {
+                self.set_state_toc();
+            } else if result.dirty {
+                self.dirty = true;
+            } else if self.system.add_idle(elapsed_ms) {
+                self.start_sleep_request();
+            }
+        }
     }
 
     fn prc_pane_layout(&self) -> Option<(palm::form_preview::FormPreview, i32, i32, i32)> {
@@ -206,36 +420,30 @@ impl<'a, S: AppSource> Application<'a, S> {
             return false;
         };
 
-        let status_rect = Rect::new(0, 0, self.display_buffers.size().width as i32, StatusBarView::HEIGHT);
-        if let Some(hit) = StatusBarView::hit_test(status_rect, crate::ternos::ui::Point::new(x, y)) {
-            let shell_hit = match hit {
-                StatusBarHit::Home => Some(PrcStatusBarFocus::Home),
-                StatusBarHit::Menu if self.prc_menu_controller.menu_count() > 0 => {
-                    Some(PrcStatusBarFocus::Menu)
-                }
-                StatusBarHit::Menu => None,
-            };
-            if let Some(shell_hit) = shell_hit {
-                self.prc_status_bar_focus = Some(shell_hit);
-                if is_down {
-                    self.prc_touch_pressed_status = Some(shell_hit);
-                    self.dirty = true;
-                    return true;
-                }
-                if is_up && self.prc_touch_pressed_status == Some(shell_hit) {
-                    self.prc_touch_pressed_status = None;
-                    match shell_hit {
-                        PrcStatusBarFocus::Home => {
-                            self.exit_prc_viewer_to_origin();
-                        }
-                        PrcStatusBarFocus::Menu => {
-                            if self.prc_menu_controller.open() {
-                                self.dirty = true;
-                            }
+        if let Some(shell_hit) = palm::shell::status_bar_hit(
+            self.display_buffers.size().width as i32,
+            self.prc_menu_controller.menu_count() > 0,
+            crate::ternos::ui::Point::new(x, y),
+        ) {
+            self.prc_status_bar_focus = Some(shell_hit);
+            if is_down {
+                self.prc_touch_pressed_status = Some(shell_hit);
+                self.dirty = true;
+                return true;
+            }
+            if is_up && self.prc_touch_pressed_status == Some(shell_hit) {
+                self.prc_touch_pressed_status = None;
+                match shell_hit {
+                    PrcStatusBarFocus::Home => {
+                        self.exit_prc_viewer_to_origin();
+                    }
+                    PrcStatusBarFocus::Menu => {
+                        if self.prc_menu_controller.open() {
+                            self.dirty = true;
                         }
                     }
-                    return true;
                 }
+                return true;
             }
         } else if is_up {
             self.prc_touch_pressed_status = None;
@@ -461,15 +669,12 @@ impl<'a, S: AppSource> Application<'a, S> {
             PlatformInputEvent::TouchUp { x, y } => (x, y, false, true),
             _ => return false,
         };
+        let point = crate::ternos::ui::Point::new(x, y);
 
         if let Some(dialog) = self.book_reader.help_dialog() {
-            let rect = Rect::new(18, StatusBarView::HEIGHT + 8, 448, 236);
-            if let Some(hit) = palm::ui::hit_test_help_overlay_native(
-                &dialog,
-                self.home_system_fonts.as_slice(),
-                rect,
-                crate::ternos::ui::Point::new(x, y),
-            ) {
+            if let Some(hit) =
+                reader_shell::help_overlay_hit(&dialog, self.home_system_fonts.as_slice(), point)
+            {
                 self.reader_help_controller.focus_control(hit);
                 match hit {
                     palm::ui::HelpOverlayHit::Done => {
@@ -520,7 +725,6 @@ impl<'a, S: AppSource> Application<'a, S> {
 
         if self.book_reader.has_overlay() {
             if let Some(spec) = self.book_reader.overlay_spec() {
-                let point = crate::ternos::ui::Point::new(x, y);
                 if let Some(hit) = self
                     .book_reader
                     .overlay_form
@@ -559,7 +763,6 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
 
         if matches!(self.state, AppState::Toc) {
-            let point = crate::ternos::ui::Point::new(x, y);
             if let Some(hit) = self.book_reader.toc_hit_test(point, self.home_system_fonts.as_slice()) {
                 if is_down {
                     self.reader_touch_pressed_toc = Some(hit);
@@ -593,14 +796,12 @@ impl<'a, S: AppSource> Application<'a, S> {
 
         if self.reader_menu_controller.is_active() {
             if let Some((menu, active_menu_index, _)) = self.reader_menu_controller.overlay() {
-                let hit = palm::ui::hit_test_menu_overlay_native(
+                let hit = reader_shell::menu_overlay_hit(
                     menu,
                     active_menu_index,
                     self.home_system_fonts.as_slice(),
-                    0,
-                    StatusBarView::HEIGHT + 5,
                     self.display_buffers.size().width as i32,
-                    crate::ternos::ui::Point::new(x, y),
+                    point,
                 );
                 match hit {
                     Some(palm::ui::MenuOverlayHit::Title(menu_index)) => {
@@ -677,15 +878,9 @@ impl<'a, S: AppSource> Application<'a, S> {
             return false;
         }
 
-        let status_rect = Rect::new(
-            0,
-            0,
+        let Some(hit) = reader_shell::status_bar_hit(
             self.display_buffers.size().width as i32,
-            StatusBarView::HEIGHT,
-        );
-        let Some(hit) = StatusBarView::hit_test(
-            status_rect,
-            crate::ternos::ui::Point::new(x, y),
+            point,
         ) else {
             if is_up {
                 self.reader_touch_pressed_status = None;
@@ -773,57 +968,6 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
         let max_x = (size.width as i32 - btn - 4).max(0);
         Rect::new(x.min(max_x), y, btn, btn)
-    }
-
-    fn draw_prc_soft_menu_button(&mut self, rect: Rect) {
-        let focused = self.prc_soft_menu_focused;
-        let circle_d = (rect.w - 12).max(24);
-        let cx = rect.x + (rect.w - circle_d) / 2;
-        let cy = rect.y + (rect.h - circle_d) / 2;
-        let _ = Circle::new(Point::new(cx, cy), circle_d as u32)
-            .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
-            .draw(self.display_buffers);
-        let _ = Circle::new(Point::new(cx, cy), circle_d as u32)
-            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::Off, 1))
-            .draw(self.display_buffers);
-
-        let mut draw_symbol_px = |x: i32, y: i32| {
-            if focused || ((x + y) & 1) == 0 {
-                let _ = Pixel(Point::new(x, y), BinaryColor::Off).draw(self.display_buffers);
-            }
-        };
-
-        let lx = cx + 9;
-        let ly = cy + 10;
-        for x in (lx - 2)..(lx + 20) {
-            draw_symbol_px(x, ly - 5);
-        }
-        for i in 0..3 {
-            let y = ly + i * 9;
-            for x in lx..(lx + 14) {
-                draw_symbol_px(x, y);
-                draw_symbol_px(x, y + 1);
-            }
-            draw_symbol_px(lx, y + 4);
-            draw_symbol_px(lx + 1, y + 4);
-            draw_symbol_px(lx, y + 5);
-            draw_symbol_px(lx + 1, y + 5);
-        }
-
-        let ax = cx + circle_d - 17;
-        let ay = cy + 17;
-        for y in ay..(ay + 12) {
-            draw_symbol_px(ax + 2, y);
-            draw_symbol_px(ax + 3, y);
-        }
-        for row in 0..5 {
-            let start = ax - row;
-            let w = 6 + row * 2;
-            let y = ay + 12 + row;
-            for x in start..(start + w) {
-                draw_symbol_px(x, y);
-            }
-        }
     }
 
     pub fn new(
@@ -1097,246 +1241,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
             }
             AppState::BookViewing => {
-                if let Some(dialog) = self.book_reader.help_dialog() {
-                    self.reader_help_controller.sync(&dialog);
-                    let event = if buttons.is_pressed(input::Buttons::Up) {
-                        Some(palm::ui_component::UiNavEvent::Up)
-                    } else if buttons.is_pressed(input::Buttons::Down) {
-                        Some(palm::ui_component::UiNavEvent::Down)
-                    } else if buttons.is_pressed(input::Buttons::Left) {
-                        Some(palm::ui_component::UiNavEvent::Left)
-                    } else if buttons.is_pressed(input::Buttons::Right) {
-                        Some(palm::ui_component::UiNavEvent::Right)
-                    } else if buttons.is_pressed(input::Buttons::Back) {
-                        Some(palm::ui_component::UiNavEvent::Back)
-                    } else if buttons.is_pressed(input::Buttons::Confirm) {
-                        Some(palm::ui_component::UiNavEvent::Confirm)
-                    } else {
-                        None
-                    };
-                    if let Some(event) = event {
-                        let result = self.book_reader.apply_help_action(
-                            self.reader_help_controller
-                                .on_event(&dialog, self.home_system_fonts.as_slice(), event),
-                        );
-                        if result.dirty {
-                            self.dirty = true;
-                        }
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                } else if self.book_reader.has_overlay() {
-                    let result = self
-                        .book_reader
-                        .handle_overlay_input(buttons, self.home_system_fonts.as_slice());
-                    if result.jumped {
-                        self.set_state_book_viewing();
-                    } else if result.dirty {
-                        self.dirty = true;
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                } else if self.reader_menu_controller.is_active() {
-                    let event = if buttons.is_pressed(input::Buttons::Back) {
-                        Some(palm::ui_component::UiNavEvent::Back)
-                    } else if buttons.is_pressed(input::Buttons::Left) {
-                        Some(palm::ui_component::UiNavEvent::Left)
-                    } else if buttons.is_pressed(input::Buttons::Right) {
-                        Some(palm::ui_component::UiNavEvent::Right)
-                    } else if buttons.is_pressed(input::Buttons::Up) {
-                        Some(palm::ui_component::UiNavEvent::Up)
-                    } else if buttons.is_pressed(input::Buttons::Down) {
-                        Some(palm::ui_component::UiNavEvent::Down)
-                    } else if buttons.is_pressed(input::Buttons::Confirm) {
-                        Some(palm::ui_component::UiNavEvent::Confirm)
-                    } else {
-                        None
-                    };
-                    if let Some(event) = event {
-                        match self.reader_menu_controller.on_event(event) {
-                            palm::controller::MenuAction::Activate(item_id) => {
-                                self.apply_reader_menu_command(item_id);
-                            }
-                            palm::controller::MenuAction::Redraw
-                            | palm::controller::MenuAction::Closed => {
-                                self.reader_touch_pressed_menu = None;
-                                self.dirty = true;
-                            }
-                            palm::controller::MenuAction::None => {}
-                        }
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                } else if let Some(shell_focus) = self.reader_status_bar_focus {
-                    if buttons.is_pressed(input::Buttons::Left) {
-                        if shell_focus == ReaderStatusBarFocus::Menu {
-                            self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Home);
-                            self.dirty = true;
-                        }
-                    } else if buttons.is_pressed(input::Buttons::Right) {
-                        if shell_focus == ReaderStatusBarFocus::Home {
-                            self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Menu);
-                            self.dirty = true;
-                        }
-                    } else if buttons.is_pressed(input::Buttons::Down)
-                        || buttons.is_pressed(input::Buttons::Back)
-                    {
-                        self.reader_status_bar_focus = None;
-                        self.dirty = true;
-                    } else if buttons.is_pressed(input::Buttons::Confirm) {
-                        match shell_focus {
-                            ReaderStatusBarFocus::Home => {
-                                self.exit_from = ExitFrom::Book;
-                                self.exit_overlay_drawn = false;
-                                self.state = AppState::ExitingPending;
-                                self.dirty = true;
-                            }
-                            ReaderStatusBarFocus::Menu => {
-                                if self.reader_menu_controller.open() {
-                                    self.dirty = true;
-                                }
-                            }
-                        }
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                } else if buttons.is_pressed(input::Buttons::Confirm) {
-                    self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Menu);
-                    self.dirty = true;
-                } else {
-                    let result = self.book_reader.handle_view_input(self.source, buttons);
-                    if result.exit {
-                        self.exit_from = ExitFrom::Book;
-                        self.exit_overlay_drawn = false;
-                        self.state = AppState::ExitingPending;
-                        self.dirty = true;
-                    } else if result.open_toc {
-                        self.set_state_toc();
-                    } else if result.dirty {
-                        self.dirty = true;
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                }
+                self.handle_reader_shell_buttons(buttons, elapsed_ms, false);
             }
             AppState::Toc => {
-                if let Some(dialog) = self.book_reader.help_dialog() {
-                    self.reader_help_controller.sync(&dialog);
-                    let event = if buttons.is_pressed(input::Buttons::Up) {
-                        Some(palm::ui_component::UiNavEvent::Up)
-                    } else if buttons.is_pressed(input::Buttons::Down) {
-                        Some(palm::ui_component::UiNavEvent::Down)
-                    } else if buttons.is_pressed(input::Buttons::Left) {
-                        Some(palm::ui_component::UiNavEvent::Left)
-                    } else if buttons.is_pressed(input::Buttons::Right) {
-                        Some(palm::ui_component::UiNavEvent::Right)
-                    } else if buttons.is_pressed(input::Buttons::Back) {
-                        Some(palm::ui_component::UiNavEvent::Back)
-                    } else if buttons.is_pressed(input::Buttons::Confirm) {
-                        Some(palm::ui_component::UiNavEvent::Confirm)
-                    } else {
-                        None
-                    };
-                    if let Some(event) = event {
-                        let result = self.book_reader.apply_help_action(
-                            self.reader_help_controller
-                                .on_event(&dialog, self.home_system_fonts.as_slice(), event),
-                        );
-                        if result.dirty {
-                            self.dirty = true;
-                        }
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                } else if self.book_reader.has_overlay() {
-                    let result = self
-                        .book_reader
-                        .handle_overlay_input(buttons, self.home_system_fonts.as_slice());
-                    if result.jumped {
-                        self.set_state_book_viewing();
-                    } else if result.dirty {
-                        self.dirty = true;
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                } else if self.reader_menu_controller.is_active() {
-                    let event = if buttons.is_pressed(input::Buttons::Back) {
-                        Some(palm::ui_component::UiNavEvent::Back)
-                    } else if buttons.is_pressed(input::Buttons::Left) {
-                        Some(palm::ui_component::UiNavEvent::Left)
-                    } else if buttons.is_pressed(input::Buttons::Right) {
-                        Some(palm::ui_component::UiNavEvent::Right)
-                    } else if buttons.is_pressed(input::Buttons::Up) {
-                        Some(palm::ui_component::UiNavEvent::Up)
-                    } else if buttons.is_pressed(input::Buttons::Down) {
-                        Some(palm::ui_component::UiNavEvent::Down)
-                    } else if buttons.is_pressed(input::Buttons::Confirm) {
-                        Some(palm::ui_component::UiNavEvent::Confirm)
-                    } else {
-                        None
-                    };
-                    if let Some(event) = event {
-                        match self.reader_menu_controller.on_event(event) {
-                            palm::controller::MenuAction::Activate(item_id) => {
-                                self.apply_reader_menu_command(item_id);
-                            }
-                            palm::controller::MenuAction::Redraw
-                            | palm::controller::MenuAction::Closed => {
-                                self.reader_touch_pressed_menu = None;
-                                self.dirty = true;
-                            }
-                            palm::controller::MenuAction::None => {}
-                        }
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                } else if let Some(shell_focus) = self.reader_status_bar_focus {
-                    if buttons.is_pressed(input::Buttons::Left) {
-                        if shell_focus == ReaderStatusBarFocus::Menu {
-                            self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Home);
-                            self.dirty = true;
-                        }
-                    } else if buttons.is_pressed(input::Buttons::Right) {
-                        if shell_focus == ReaderStatusBarFocus::Home {
-                            self.reader_status_bar_focus = Some(ReaderStatusBarFocus::Menu);
-                            self.dirty = true;
-                        }
-                    } else if buttons.is_pressed(input::Buttons::Down)
-                        || buttons.is_pressed(input::Buttons::Back)
-                    {
-                        self.reader_status_bar_focus = None;
-                        self.dirty = true;
-                    } else if buttons.is_pressed(input::Buttons::Confirm) {
-                        match shell_focus {
-                            ReaderStatusBarFocus::Home => {
-                                self.exit_from = ExitFrom::Book;
-                                self.exit_overlay_drawn = false;
-                                self.state = AppState::ExitingPending;
-                                self.dirty = true;
-                            }
-                            ReaderStatusBarFocus::Menu => {
-                                if self.reader_menu_controller.open() {
-                                    self.dirty = true;
-                                }
-                            }
-                        }
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                } else {
-                    let result =
-                        self.book_reader
-                            .handle_toc_input(buttons, self.home_system_fonts.as_slice());
-                    if result.exit {
-                        self.set_state_book_viewing();
-                    } else if result.jumped {
-                        self.set_state_book_viewing();
-                    } else if result.dirty {
-                        self.dirty = true;
-                    } else if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
-                }
+                self.handle_reader_shell_buttons(buttons, elapsed_ms, true);
             }
             AppState::PrcViewing => {
                 {
@@ -1464,10 +1372,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                     return;
                 }
                 if buttons.is_pressed(input::Buttons::Left) {
-                    if self.prc_status_bar_focus == Some(PrcStatusBarFocus::Menu) {
-                        self.prc_status_bar_focus = Some(PrcStatusBarFocus::Home);
-                        self.dirty = true;
-                        return;
+                    if self.prc_status_bar_focus.is_some() {
+                        if self.handle_prc_status_bar_button(crate::platform::ButtonId::Left) {
+                            return;
+                        }
                     } else if self.prc_status_bar_focus.is_none() {
                         let form = self.runtime_prc_form();
                         if self.prc_ui_controller.move_focus_direction(
@@ -1488,12 +1396,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                         }
                     }
                 } else if buttons.is_pressed(input::Buttons::Right) {
-                    if self.prc_status_bar_focus == Some(PrcStatusBarFocus::Home)
-                        && self.prc_menu_controller.menu_count() > 0
-                    {
-                        self.prc_status_bar_focus = Some(PrcStatusBarFocus::Menu);
-                        self.dirty = true;
-                        return;
+                    if self.prc_status_bar_focus.is_some() {
+                        if self.handle_prc_status_bar_button(crate::platform::ButtonId::Right) {
+                            return;
+                        }
                     } else if self.prc_status_bar_focus.is_none() {
                         let form = self.runtime_prc_form();
                         if self.prc_ui_controller.move_focus_direction(
@@ -1524,11 +1430,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                     } else if self.prc_status_bar_focus.is_none() {
                         self.prc_status_bar_last_control =
                             self.prc_ui_controller.focused_control_id();
-                        self.prc_status_bar_focus = if self.prc_menu_controller.menu_count() > 0 {
-                            Some(PrcStatusBarFocus::Menu)
-                        } else {
-                            Some(PrcStatusBarFocus::Home)
-                        };
+                        self.set_prc_status_from_hit(preferred_status_bar_focus(StatusBarButtons {
+                            home_enabled: true,
+                            menu_enabled: self.prc_menu_controller.menu_count() > 0,
+                        }));
                         self.dirty = true;
                     } else if let Some(session) = self.prc_session.as_mut() {
                         session.inject_event_now(
@@ -1544,26 +1449,26 @@ impl<'a, S: AppSource> Application<'a, S> {
                 } else if buttons.is_pressed(input::Buttons::Down) {
                     let form = self.runtime_prc_form();
                     if self.prc_status_bar_focus.is_some() {
-                        let target_id = self
-                            .prc_ui_controller
-                            .first_button_id(form.as_ref())
-                            .or_else(|| self.prc_ui_controller.first_control_id(form.as_ref()));
-                        let restored = if let Some(id) = target_id {
-                            let _ = self.prc_ui_controller.select_control_id(form.as_ref(), id);
-                            self.prc_ui_controller.focused_control_id() == Some(id)
-                        } else {
-                            false
-                        };
-                        self.prc_status_bar_focus = None;
-                        self.prc_touch_pressed_status = None;
-                        if !restored {
-                            let _ = self.prc_ui_controller.move_focus_direction(
-                                form.as_ref(),
-                                palm::controller::FocusDirection::Down,
-                            );
+                        if self.handle_prc_status_bar_button(crate::platform::ButtonId::Down) {
+                            let target_id = self
+                                .prc_ui_controller
+                                .first_button_id(form.as_ref())
+                                .or_else(|| self.prc_ui_controller.first_control_id(form.as_ref()));
+                            let restored = if let Some(id) = target_id {
+                                let _ = self.prc_ui_controller.select_control_id(form.as_ref(), id);
+                                self.prc_ui_controller.focused_control_id() == Some(id)
+                            } else {
+                                false
+                            };
+                            if !restored {
+                                let _ = self.prc_ui_controller.move_focus_direction(
+                                    form.as_ref(),
+                                    palm::controller::FocusDirection::Down,
+                                );
+                            }
+                            self.dirty = true;
+                            return;
                         }
-                        self.dirty = true;
-                        return;
                     } else if self.prc_ui_controller.move_focus_direction(
                         form.as_ref(),
                         palm::controller::FocusDirection::Down,
@@ -1584,16 +1489,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 } else if buttons.is_pressed(input::Buttons::Confirm) {
                     if let Some(shell_focus) = self.prc_status_bar_focus {
-                        match shell_focus {
-                            PrcStatusBarFocus::Home => {
-                                self.exit_prc_viewer_to_origin();
-                            }
-                            PrcStatusBarFocus::Menu => {
-                                if self.prc_menu_controller.open() {
-                                    self.dirty = true;
-                                }
-                            }
-                        }
+                        let _ = shell_focus;
+                        self.handle_prc_status_bar_button(crate::platform::ButtonId::Confirm);
                         return;
                     } else {
                         let form = self.runtime_prc_form();
@@ -2414,11 +2311,6 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.dirty = true;
     }
 
-    fn set_state_settings(&mut self) {
-        self.state = AppState::Settings;
-        self.dirty = true;
-    }
-
     fn release_prc_resources(&mut self) {
         self.prc_active_entry = None;
         self.prc_session = None;
@@ -3094,66 +2986,5 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.system.start_sleep_request(self.state == AppState::StartMenu);
         self.state = AppState::SleepingPending;
         self.dirty = true;
-    }
-}
-
-fn fill_gray2_rect(
-    rotation: Rotation,
-    gray2_lsb: &mut [u8],
-    gray2_msb: &mut [u8],
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-    lsb_on: bool,
-    msb_on: bool,
-) {
-    let x0 = x.max(0);
-    let y0 = y.max(0);
-    let x1 = (x + w).min(crate::framebuffer::HEIGHT as i32);
-    let y1 = (y + h).min(crate::framebuffer::WIDTH as i32);
-    if x1 <= x0 || y1 <= y0 {
-        return;
-    }
-    for py in y0..y1 {
-        for px in x0..x1 {
-            let Some((fx, fy)) = map_display_point(rotation, px, py) else {
-                continue;
-            };
-            let idx = fy * crate::framebuffer::WIDTH + fx;
-            let byte = idx / 8;
-            let bit = 7 - (idx % 8);
-            let mask = 1 << bit;
-            if lsb_on {
-                gray2_lsb[byte] |= mask;
-            } else {
-                gray2_lsb[byte] &= !mask;
-            }
-            if msb_on {
-                gray2_msb[byte] |= mask;
-            } else {
-                gray2_msb[byte] &= !mask;
-            }
-        }
-    }
-}
-
-fn map_display_point(rotation: Rotation, x: i32, y: i32) -> Option<(usize, usize)> {
-    if x < 0 || y < 0 {
-        return None;
-    }
-    let (x, y) = match rotation {
-        Rotation::Rotate0 => (x as usize, y as usize),
-        Rotation::Rotate90 => (y as usize, crate::framebuffer::HEIGHT - 1 - x as usize),
-        Rotation::Rotate180 => (
-            crate::framebuffer::WIDTH - 1 - x as usize,
-            crate::framebuffer::HEIGHT - 1 - y as usize,
-        ),
-        Rotation::Rotate270 => (crate::framebuffer::WIDTH - 1 - y as usize, x as usize),
-    };
-    if x >= crate::framebuffer::WIDTH || y >= crate::framebuffer::HEIGHT {
-        None
-    } else {
-        Some((x, y))
     }
 }

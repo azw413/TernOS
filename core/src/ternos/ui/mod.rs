@@ -6,10 +6,12 @@ pub mod list_view;
 pub mod modal_form;
 pub mod prc_alert;
 pub mod popup_view;
+pub mod popup_controller;
 pub mod reader_view;
 pub mod resource;
 pub mod runtime;
 pub mod status_bar_view;
+pub mod status_bar_controller;
 pub mod text;
 pub mod text_view;
 pub mod table_view;
@@ -33,14 +35,16 @@ pub use modal_form::{
     ModalTableCellStyle, ModalWidget,
 };
 pub use popup_view::{PopupHit, PopupMenuView};
+pub use popup_controller::{handle_button as handle_popup_menu_button, PopupMenuAction};
 pub use reader_view::ReaderView;
 pub use resource::{FormResource, ObjectResource};
 pub use runtime::{
     DamageFrame, DisplayProfile, EventQueue, FocusState, FormId, HelpDialogState, InvalidationState,
-    MenuState, ObjectId, ObjectIndex, UiForm, UiObject, UiRuntime, UiTableCell, UiTableColumn,
-    UiTableModel, UiTableRow,
+    MenuState, ObjectId, ObjectIndex, UiForm, UiObject, UiPopupState, UiRuntime, UiTableCell,
+    UiTableColumn, UiTableModel, UiTableRow, UiTableState,
 };
 pub use status_bar_view::{StatusBarActionState, StatusBarHit, StatusBarView};
+pub use status_bar_controller::{handle_button as handle_status_bar_button, preferred_focus as preferred_status_bar_focus, StatusBarButtons, StatusBarNavResult};
 pub use table_view::{
     PalmWrappedTextCellRenderer, TableCellRenderer, TableHit, TableInteraction,
     TableScrollBarHit, TableScrollBarView, TableView,
