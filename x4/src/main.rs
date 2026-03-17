@@ -172,6 +172,7 @@ async fn main(_spawner: Spawner) {
         let usb_status = usb_mode.status();
         if usb_state != last_usb_state {
             usb_ui_dirty = true;
+            usb_ui_cooldown_ms = 500;
             last_usb_state = usb_state;
         }
         if usb_status != last_usb_status {
@@ -210,7 +211,9 @@ async fn main(_spawner: Spawner) {
                     );
                     usb_ui_dirty = false;
                 }
-                if buttons.is_pressed(Buttons::Back) {
+                if usb_ui_cooldown_ms == 0
+                    && (buttons.is_pressed(Buttons::Back) || buttons.is_pressed(Buttons::Confirm))
+                {
                     usb_mode.set_state(usb_mode::UsbModeState::Idle);
                     usb_ui_dirty = true;
                 }
@@ -227,7 +230,9 @@ async fn main(_spawner: Spawner) {
                     );
                     usb_ui_dirty = false;
                 }
-                if buttons.is_pressed(Buttons::Back) {
+                if usb_ui_cooldown_ms == 0
+                    && (buttons.is_pressed(Buttons::Back) || buttons.is_pressed(Buttons::Confirm))
+                {
                     usb_mode.set_state(usb_mode::UsbModeState::Idle);
                     usb_ui_dirty = true;
                 }

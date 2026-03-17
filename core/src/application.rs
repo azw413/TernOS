@@ -46,7 +46,9 @@ use crate::{
         },
         reader_shell::{self, ReaderStatusBarFocus},
         image_viewer::{ImageViewerContext, ImageViewerState},
-        settings::{draw_settings, SettingsContext},
+        settings::{
+            about_modal_spec, about_ok_id, home_menu_bar, home_menu_command, HomeMenuCommand,
+        },
         system::{ApplyResumeOutcome, ResumeContext, SleepWallpaperIcons, SystemRenderContext, SystemState},
     },
     build_info,
@@ -57,7 +59,7 @@ use crate::{
     platform::PlatformInputEvent,
     palm,
     render_policy::RenderPolicy,
-    ternos::ui::{flush_queue, handle_status_bar_button, preferred_status_bar_focus, ModalHit, Rect, RenderQueue, StatusBarActionState, StatusBarButtons, StatusBarHit, StatusBarView, UiContext, View},
+    ternos::ui::{flush_queue, handle_status_bar_button, preferred_status_bar_focus, ModalFormController, ModalFormSpec, ModalFormView, ModalHit, ModalWidget, ObjectId, Rect, RenderQueue, StatusBarActionState, StatusBarButtons, StatusBarHit, StatusBarView, UiContext, View},
 };
 use crate::palm::shell::PrcStatusBarFocus;
 
@@ -93,6 +95,8 @@ pub struct Application<'a, S: AppSource> {
     home_system_fonts: Vec<palm::runtime::PalmFont>,
     prc_menu_controller: palm::controller::PrcMenuController,
     reader_menu_controller: palm::controller::PrcMenuController,
+    home_menu_controller: palm::controller::PrcMenuController,
+    home_about_form: ModalFormController,
     prc_help_controller: palm::controller::PrcHelpDialogController,
     reader_help_controller: palm::controller::PrcHelpDialogController,
     prc_active_entry: Option<ImageEntry>,
@@ -107,8 +111,11 @@ pub struct Application<'a, S: AppSource> {
     reader_status_bar_focus: Option<ReaderStatusBarFocus>,
     reader_touch_pressed_status: Option<ReaderStatusBarFocus>,
     reader_touch_pressed_menu: Option<palm::ui::MenuOverlayHit>,
+    home_touch_pressed_menu: Option<palm::ui::MenuOverlayHit>,
+    home_touch_pressed_about: Option<ObjectId>,
     reader_touch_pressed_overlay: Option<crate::ternos::ui::ObjectId>,
     reader_touch_pressed_toc: Option<ModalHit>,
+    home_menu_last_rect: Option<Rect>,
     reader_menu_last_rect: Option<Rect>,
     prc_return_to_start_menu: bool,
     prc_reserved_gray_initialized: bool,
@@ -119,12 +126,12 @@ pub struct Application<'a, S: AppSource> {
     render_policy: RenderPolicy,
     exit_from: ExitFrom,
     exit_overlay_drawn: bool,
+    home_about_open: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum AppState {
     StartMenu,
-    Settings,
     Viewing,
     BookViewing,
     ExitingPending,
@@ -296,6 +303,31 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
                 palm::controller::MenuAction::Redraw | palm::controller::MenuAction::Closed => {
                     self.reader_touch_pressed_menu = None;
+                    self.dirty = true;
+                }
+                palm::controller::MenuAction::None => {}
+            }
+        } else if self.system.add_idle(elapsed_ms) {
+            self.start_sleep_request();
+        }
+        true
+    }
+
+    fn handle_home_menu_buttons(
+        &mut self,
+        buttons: &input::ButtonState,
+        elapsed_ms: u32,
+    ) -> bool {
+        if !self.home_menu_controller.is_active() {
+            return false;
+        }
+        if let Some(event) = reader_shell::nav_event_from_buttons(buttons) {
+            match self.home_menu_controller.on_event(event) {
+                palm::controller::MenuAction::Activate(item_id) => {
+                    self.apply_home_menu_command(item_id);
+                }
+                palm::controller::MenuAction::Redraw | palm::controller::MenuAction::Closed => {
+                    self.home_touch_pressed_menu = None;
                     self.dirty = true;
                 }
                 palm::controller::MenuAction::None => {}
@@ -629,11 +661,146 @@ impl<'a, S: AppSource> Application<'a, S> {
         ) {
             return false;
         }
+        let (x, y, is_down, is_up) = match *event {
+            PlatformInputEvent::TouchDown { x, y } => (x, y, true, false),
+            PlatformInputEvent::TouchUp { x, y } => (x, y, false, true),
+            _ => return false,
+        };
+        let point = crate::ternos::ui::Point::new(x, y);
+
+        if self.home_about_open {
+            let spec = about_modal_spec(
+                build_info::VERSION,
+                build_info::BUILD_TIME,
+                self.display_buffers.size().width as i32,
+            );
+            if let Some(hit) = self
+                .home_about_form
+                .hit_test(&spec, point, self.home_system_fonts.as_slice())
+            {
+                let ModalHit::Widget(id) = hit else {
+                    return true;
+                };
+                let changed = self.home_about_form.select_id(&spec, id);
+                if is_down {
+                    self.home_touch_pressed_about = Some(id);
+                    if changed {
+                        self.dirty = true;
+                    }
+                } else if is_up {
+                    let pressed = self.home_touch_pressed_about.take();
+                    if pressed == Some(id) && id == about_ok_id() {
+                        self.home_about_open = false;
+                        self.home_about_form.reset();
+                        self.dirty = true;
+                    } else if changed {
+                        self.dirty = true;
+                    }
+                }
+                return true;
+            }
+            if is_up {
+                self.home_touch_pressed_about = None;
+            }
+            return true;
+        }
+
+        if self.home_menu_controller.is_active() {
+            if let Some((menu, active_menu_index, _)) = self.home_menu_controller.overlay() {
+                let hit = palm::ui::hit_test_menu_overlay_native(
+                    menu,
+                    active_menu_index,
+                    self.home_system_fonts.as_slice(),
+                    0,
+                    StatusBarView::HEIGHT + 5,
+                    self.display_buffers.size().width as i32,
+                    point,
+                );
+                match hit {
+                    Some(palm::ui::MenuOverlayHit::Title(menu_index)) => {
+                        if is_down {
+                            self.home_touch_pressed_menu =
+                                Some(palm::ui::MenuOverlayHit::Title(menu_index));
+                            if self.home_menu_controller.select_menu(menu_index) {
+                                self.dirty = true;
+                            }
+                        } else if is_up {
+                            let _ = self.home_menu_controller.select_menu(menu_index);
+                            self.home_touch_pressed_menu = None;
+                            self.dirty = true;
+                        }
+                        return true;
+                    }
+                    Some(palm::ui::MenuOverlayHit::Item {
+                        menu_index,
+                        item_index,
+                    }) => {
+                        if is_down {
+                            self.home_touch_pressed_menu = Some(palm::ui::MenuOverlayHit::Item {
+                                menu_index,
+                                item_index,
+                            });
+                            let mut changed = self.home_menu_controller.select_menu(menu_index);
+                            changed |= self.home_menu_controller.select_item(item_index);
+                            if changed {
+                                self.dirty = true;
+                            }
+                        } else if is_up {
+                            let mut changed = self.home_menu_controller.select_menu(menu_index);
+                            changed |= self.home_menu_controller.select_item(item_index);
+                            let pressed = self.home_touch_pressed_menu.take();
+                            if pressed
+                                == Some(palm::ui::MenuOverlayHit::Item {
+                                    menu_index,
+                                    item_index,
+                                })
+                            {
+                                match self
+                                    .home_menu_controller
+                                    .on_event(palm::ui_component::UiNavEvent::Confirm)
+                                {
+                                    palm::controller::MenuAction::Activate(item_id) => {
+                                        self.apply_home_menu_command(item_id);
+                                    }
+                                    palm::controller::MenuAction::Redraw
+                                    | palm::controller::MenuAction::Closed => {
+                                        self.dirty = true;
+                                    }
+                                    palm::controller::MenuAction::None => {
+                                        if changed {
+                                            self.dirty = true;
+                                        }
+                                    }
+                                }
+                            } else if changed {
+                                self.dirty = true;
+                            }
+                        }
+                        return true;
+                    }
+                    None => {
+                        if is_down || is_up {
+                            self.home_touch_pressed_menu = None;
+                            self.home_menu_controller.close();
+                            self.dirty = true;
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
         let size = self.display_buffers.size();
         match self
             .home
             .handle_start_menu_touch(recents, event, size.width as i32, size.height as i32)
         {
+            HomeAction::OpenMenu => {
+                if self.home_menu_controller.open() {
+                    self.dirty = true;
+                }
+                true
+            }
             HomeAction::OpenRecent(path) => {
                 if path.to_ascii_lowercase().ends_with(".tdb")
                     || path.to_ascii_lowercase().ends_with(".prc")
@@ -951,6 +1118,21 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
     }
 
+    fn apply_home_menu_command(&mut self, item_id: u16) {
+        let Some(command) = home_menu_command(item_id) else {
+            return;
+        };
+        self.home_menu_controller.close();
+        self.home_touch_pressed_menu = None;
+        match command {
+            HomeMenuCommand::About => {
+                self.home_about_open = true;
+                self.home_about_form.reset();
+                self.dirty = true;
+            }
+        }
+    }
+
     fn prc_form_by_id(&self, fid: u16) -> Option<palm::form_preview::FormPreview> {
         self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
     }
@@ -1014,6 +1196,12 @@ impl<'a, S: AppSource> Application<'a, S> {
                 controller.set_menu_bar(Some(reader_menu_bar()));
                 controller
             },
+            home_menu_controller: {
+                let mut controller = palm::controller::PrcMenuController::default();
+                controller.set_menu_bar(Some(home_menu_bar()));
+                controller
+            },
+            home_about_form: ModalFormController::default(),
             prc_help_controller: palm::controller::PrcHelpDialogController::default(),
             reader_help_controller: palm::controller::PrcHelpDialogController::default(),
             prc_active_entry: None,
@@ -1028,8 +1216,11 @@ impl<'a, S: AppSource> Application<'a, S> {
             reader_status_bar_focus: None,
             reader_touch_pressed_status: None,
             reader_touch_pressed_menu: None,
+            home_touch_pressed_menu: None,
+            home_touch_pressed_about: None,
             reader_touch_pressed_overlay: None,
             reader_touch_pressed_toc: None,
+            home_menu_last_rect: None,
             reader_menu_last_rect: None,
             prc_return_to_start_menu: false,
             prc_reserved_gray_initialized: false,
@@ -1040,6 +1231,7 @@ impl<'a, S: AppSource> Application<'a, S> {
             render_policy,
             exit_from: ExitFrom::Image,
             exit_overlay_drawn: false,
+            home_about_open: false,
         };
         app.try_resume();
         app
@@ -1172,8 +1364,29 @@ impl<'a, S: AppSource> Application<'a, S> {
 
         match self.state {
             AppState::StartMenu => {
+                if self.home_about_open {
+                    if buttons.is_pressed(input::Buttons::Back)
+                        || buttons.is_pressed(input::Buttons::Confirm)
+                    {
+                        self.home_about_open = false;
+                        self.home_about_form.reset();
+                        self.home_touch_pressed_about = None;
+                        self.dirty = true;
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                    return;
+                }
+                if self.handle_home_menu_buttons(buttons, elapsed_ms) {
+                    return;
+                }
                 let recents = self.system.collect_recent_paths(self.last_viewed_entry.as_ref());
                 match self.home.handle_start_menu_input(&recents, buttons) {
+                    HomeAction::OpenMenu => {
+                        if self.home_menu_controller.open() {
+                            self.dirty = true;
+                        }
+                    }
                     HomeAction::OpenRecent(path) => {
                         if path.to_ascii_lowercase().ends_with(".tdb")
                             || path.to_ascii_lowercase().ends_with(".prc")
@@ -1207,17 +1420,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                     && self.system.add_idle(elapsed_ms)
                 {
                     self.start_sleep_request();
-                }
-            }
-            AppState::Settings => {
-                if buttons.is_pressed(input::Buttons::Back)
-                    || buttons.is_pressed(input::Buttons::Confirm)
-                {
-                    self.set_state_start_menu(true);
-                } else {
-                    if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
                 }
             }
             AppState::Viewing => {
@@ -1557,7 +1759,6 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.dirty = false;
         match self.state {
             AppState::StartMenu => self.draw_start_menu(display),
-            AppState::Settings => self.draw_settings(display),
             AppState::Viewing => self.draw_image_viewer(display),
             AppState::BookViewing => {
                 if let Some(indicator) = self.book_reader.take_page_turn_indicator() {
@@ -2299,6 +2500,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.state = AppState::StartMenu;
         self.home.start_menu_need_base_refresh = need_base_refresh;
         self.install_scan_elapsed_ms = 2000;
+        self.home_menu_last_rect = None;
         self.dirty = true;
     }
 
@@ -2338,12 +2540,20 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn set_state_viewing(&mut self) {
         self.state = AppState::Viewing;
+        self.home_about_open = false;
+        self.home_about_form.reset();
+        self.home_menu_controller.close();
+        self.home_menu_last_rect = None;
         self.system.full_refresh = true;
         self.dirty = true;
     }
 
     fn set_state_book_viewing(&mut self) {
         self.state = AppState::BookViewing;
+        self.home_about_open = false;
+        self.home_about_form.reset();
+        self.home_menu_controller.close();
+        self.home_menu_last_rect = None;
         self.reader_status_bar_focus = None;
         self.reader_touch_pressed_status = None;
         self.reader_touch_pressed_menu = None;
@@ -2358,6 +2568,10 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn set_state_toc(&mut self) {
         self.state = AppState::Toc;
+        self.home_about_open = false;
+        self.home_about_form.reset();
+        self.home_menu_controller.close();
+        self.home_menu_last_rect = None;
         self.reader_status_bar_focus = None;
         self.reader_touch_pressed_status = None;
         self.reader_touch_pressed_menu = None;
@@ -2371,6 +2585,10 @@ impl<'a, S: AppSource> Application<'a, S> {
 
     fn set_state_prc_viewing(&mut self) {
         self.state = AppState::PrcViewing;
+        self.home_about_open = false;
+        self.home_about_form.reset();
+        self.home_menu_controller.close();
+        self.home_menu_last_rect = None;
         self.prc_soft_menu_focused = false;
         self.prc_soft_menu_last_control = None;
         self.prc_status_bar_focus = None;
@@ -2413,6 +2631,67 @@ impl<'a, S: AppSource> Application<'a, S> {
             draw_trbk_image,
         };
         self.home.draw_start_menu(&mut ctx, display, &recents);
+        if self.home_about_open {
+            self.home_menu_last_rect = None;
+            let spec = about_modal_spec(
+                build_info::VERSION,
+                build_info::BUILD_TIME,
+                self.display_buffers.size().width as i32,
+            );
+            self.home_about_form.sync(&spec);
+            let mut form_view = ModalFormView {
+                spec: &spec,
+                fonts: self.home_system_fonts.as_slice(),
+                focused_id: self.home_about_form.focused_id(),
+            };
+            let mut ui = UiContext {
+                buffers: self.display_buffers,
+                render_policy: self.render_policy,
+                gray2: None,
+            };
+            form_view.render(&mut ui, spec.bounds, &mut RenderQueue::default());
+            let mut rq = RenderQueue::default();
+            rq.push(
+                Rect::new(
+                    spec.bounds.x - 1,
+                    spec.bounds.y - 1,
+                    spec.bounds.w + 2,
+                    spec.bounds.h + 3,
+                ),
+                RefreshMode::Half,
+            );
+            flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Half);
+            return;
+        }
+        if let Some(overlay) = self.home_menu_controller.overlay() {
+            let rect = palm::ui::draw_menu_overlay_native(
+                self.display_buffers,
+                overlay.0,
+                overlay.1,
+                overlay.2,
+                self.home_system_fonts.as_slice(),
+                0,
+                StatusBarView::HEIGHT + 5,
+                self.display_buffers.size().width as i32,
+            );
+            let dirty = if let Some(prev) = self.home_menu_last_rect {
+                let x0 = prev.x.min(rect.x);
+                let y0 = prev.y.min(rect.y);
+                let x1 = (prev.x + prev.w).max(rect.x + rect.w);
+                let y1 = (prev.y + prev.h).max(rect.y + rect.h);
+                Rect::new(x0, y0, x1 - x0, y1 - y0)
+            } else {
+                rect
+            };
+            self.home_menu_last_rect = Some(rect);
+            let mut rq = RenderQueue::default();
+            rq.push(dirty, RefreshMode::Fast);
+            flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Fast);
+        } else if let Some(prev) = self.home_menu_last_rect.take() {
+            let mut rq = RenderQueue::default();
+            rq.push(prev, RefreshMode::Fast);
+            flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Fast);
+        }
     }
 
     fn ensure_home_system_fonts(&mut self) {
@@ -2426,24 +2705,95 @@ impl<'a, S: AppSource> Application<'a, S> {
 
 
     fn draw_error(&mut self, display: &mut impl crate::display::Display) {
-        const ERROR_LIST_TOP: i32 = 60;
         self.display_buffers.clear(BinaryColor::On).ok();
-        let header_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
-        Text::new("Error", Point::new(LIST_MARGIN_X, HEADER_Y), header_style)
-            .draw(self.display_buffers)
-            .ok();
-        if let Some(message) = &self.error_message {
-            Text::new(message, Point::new(LIST_MARGIN_X, ERROR_LIST_TOP), header_style)
+        const ERROR_MODAL_FORM_ID: u16 = 0x4552;
+        const ERROR_MESSAGE_ID: ObjectId = 1;
+        const ERROR_HINT_ID: ObjectId = 2;
+        const ERROR_OK_ID: ObjectId = 3;
+
+        let width = self.display_buffers.size().width as i32;
+        let form_x = 18;
+        let form_w = (width - 36).max(1);
+        let form_h = 184;
+        let form_y = 108;
+        let button_w = 96;
+        let button_h = 34;
+        let button_x = form_x + form_w - button_w - 16;
+        let button_y = form_y + form_h - button_h - 14;
+        let message = self
+            .error_message
+            .as_deref()
+            .unwrap_or("Unknown error");
+
+        let mut widgets = Vec::new();
+        widgets.push(ModalWidget::Label {
+            id: ERROR_MESSAGE_ID,
+            bounds: Rect::new(form_x + 18, form_y + 56, form_w - 36, 26),
+            text: message.to_string(),
+            font_id: 0,
+        });
+        widgets.push(ModalWidget::Label {
+            id: ERROR_HINT_ID,
+            bounds: Rect::new(form_x + 18, button_y - 30, form_w - 36, 20),
+            text: "Press Back or OK".to_string(),
+            font_id: 0,
+        });
+        widgets.push(ModalWidget::Button {
+            id: ERROR_OK_ID,
+            bounds: Rect::new(button_x, button_y, button_w, button_h),
+            text: "OK".to_string(),
+            font_id: 0,
+            style: 1,
+            no_frame: false,
+        });
+
+        let spec = ModalFormSpec {
+            form_id: ERROR_MODAL_FORM_ID,
+            bounds: Rect::new(form_x, form_y, form_w, form_h),
+            title: "Error".to_string(),
+            widgets,
+            default_focus: Some(ERROR_OK_ID),
+        };
+
+        let fonts = if !self.home_system_fonts.is_empty() {
+            self.home_system_fonts.as_slice()
+        } else if !self.prc_system_fonts.is_empty() {
+            self.prc_system_fonts.as_slice()
+        } else {
+            &[]
+        };
+
+        if fonts.is_empty() {
+            let header_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
+            Text::new("Error", Point::new(LIST_MARGIN_X, HEADER_Y), header_style)
                 .draw(self.display_buffers)
                 .ok();
+            Text::new(message, Point::new(LIST_MARGIN_X, 60), header_style)
+                .draw(self.display_buffers)
+                .ok();
+            Text::new(
+                "Press Back to return",
+                Point::new(LIST_MARGIN_X, 100),
+                header_style,
+            )
+            .draw(self.display_buffers)
+            .ok();
+        } else {
+            let mut controller = ModalFormController::default();
+            controller.sync(&spec);
+            let mut ui = UiContext {
+                buffers: self.display_buffers,
+                render_policy: self.render_policy,
+                gray2: None,
+            };
+            let mut rq = RenderQueue::default();
+            ModalFormView {
+                spec: &spec,
+                fonts,
+                focused_id: controller.focused_id(),
+            }
+            .render(&mut ui, spec.bounds, &mut rq);
         }
-        Text::new(
-            "Press Back to return",
-            Point::new(LIST_MARGIN_X, ERROR_LIST_TOP + 40),
-            header_style,
-        )
-        .draw(self.display_buffers)
-        .ok();
         let size = self.display_buffers.size();
         let mut rq = RenderQueue::default();
         rq.push(
@@ -2577,23 +2927,6 @@ impl<'a, S: AppSource> Application<'a, S> {
         flush_queue(display, self.display_buffers, &mut rq, mode);
     }
 
-    fn draw_settings(&mut self, display: &mut impl crate::display::Display) {
-        self.ensure_gray2_buffers();
-        let mut ctx = SettingsContext {
-            display_buffers: self.display_buffers,
-            gray2_lsb: self.gray2_lsb.as_mut_slice(),
-            gray2_msb: self.gray2_msb.as_mut_slice(),
-            render_policy: self.render_policy,
-            logo_w: generated_icons::LOGO_WIDTH as i32,
-            logo_h: generated_icons::LOGO_HEIGHT as i32,
-            logo_dark: generated_icons::LOGO_DARK_MASK,
-            logo_light: generated_icons::LOGO_LIGHT_MASK,
-            version: build_info::VERSION,
-            build_time: build_info::BUILD_TIME,
-        };
-        draw_settings(&mut ctx, display);
-    }
-
     pub fn draw_usb_modal(
         &mut self,
         display: &mut impl crate::display::Display,
@@ -2603,24 +2936,128 @@ impl<'a, S: AppSource> Application<'a, S> {
         footer: &str,
     ) {
         self.display_buffers.clear(BinaryColor::On).ok();
-        let style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
-        Text::new(title, Point::new(16, 24), style)
+        const USB_MODAL_FORM_ID: u16 = 0x5542;
+        const USB_MODAL_STATUS_ID: ObjectId = 1;
+        const USB_MODAL_MESSAGE_ID: ObjectId = 2;
+        const USB_MODAL_FOOTER_ID: ObjectId = 3;
+        const USB_MODAL_DISCONNECT_ID: ObjectId = 4;
+
+        let width = self.display_buffers.size().width as i32;
+        let form_x = 12;
+        let form_w = (width - 24).max(1);
+        let form_h = if status.is_some() { 244 } else { 212 };
+        let form_y = 74;
+        let button_w = 132;
+        let button_h = 34;
+        let button_x = form_x + form_w - button_w - 16;
+        let button_y = form_y + form_h - button_h - 14;
+
+        let mut widgets = Vec::new();
+        widgets.push(ModalWidget::Label {
+            id: USB_MODAL_MESSAGE_ID,
+            bounds: Rect::new(form_x + 18, form_y + 52, form_w - 36, 28),
+            text: message.to_string(),
+            font_id: 0,
+        });
+        widgets.push(ModalWidget::Label {
+            id: USB_MODAL_FOOTER_ID,
+            bounds: Rect::new(form_x + 18, button_y - 34, form_w - 36, 24),
+            text: footer.to_string(),
+            font_id: 0,
+        });
+        widgets.push(ModalWidget::Button {
+            id: USB_MODAL_DISCONNECT_ID,
+            bounds: Rect::new(button_x, button_y, button_w, button_h),
+            text: "Disconnect".to_string(),
+            font_id: 0,
+            style: 1,
+            no_frame: false,
+        });
+        if let Some(status) = status {
+            widgets.push(ModalWidget::Label {
+                id: USB_MODAL_STATUS_ID,
+                bounds: Rect::new(form_x + 18, form_y + 86, form_w - 36, 44),
+                text: status.to_string(),
+                font_id: 0,
+            });
+        }
+
+        let spec = ModalFormSpec {
+            form_id: USB_MODAL_FORM_ID,
+            bounds: Rect::new(form_x, form_y, form_w, form_h),
+            title: title.to_string(),
+            widgets,
+            default_focus: Some(USB_MODAL_DISCONNECT_ID),
+        };
+        let fonts = if !self.home_system_fonts.is_empty() {
+            self.home_system_fonts.as_slice()
+        } else if !self.prc_system_fonts.is_empty() {
+            self.prc_system_fonts.as_slice()
+        } else {
+            &[]
+        };
+        if fonts.is_empty() {
+            let header_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::Off);
+            let outline = PrimitiveStyle::with_stroke(BinaryColor::Off, 2);
+            let clear = PrimitiveStyle::with_fill(BinaryColor::On);
+            Rectangle::new(
+                Point::new(form_x, form_y),
+                Size::new(form_w as u32, form_h as u32),
+            )
+            .into_styled(clear)
             .draw(self.display_buffers)
             .ok();
-        Text::new(message, Point::new(16, 60), style)
+            Rectangle::new(
+                Point::new(form_x, form_y),
+                Size::new(form_w as u32, form_h as u32),
+            )
+            .into_styled(outline)
             .draw(self.display_buffers)
             .ok();
-        let footer_y = if let Some(status) = status {
-            Text::new(status, Point::new(16, 80), style)
+            Text::new(title, Point::new(form_x + 18, form_y + 30), header_style)
                 .draw(self.display_buffers)
                 .ok();
-            120
-        } else {
-            100
-        };
-        Text::new(footer, Point::new(16, footer_y), style)
+            Text::new(message, Point::new(form_x + 18, form_y + 68), header_style)
+                .draw(self.display_buffers)
+                .ok();
+            if let Some(status) = status {
+                Text::new(status, Point::new(form_x + 18, form_y + 98), header_style)
+                    .draw(self.display_buffers)
+                    .ok();
+            }
+            Text::new(footer, Point::new(form_x + 18, button_y - 12), header_style)
+                .draw(self.display_buffers)
+                .ok();
+            Rectangle::new(
+                Point::new(button_x, button_y),
+                Size::new(button_w as u32, button_h as u32),
+            )
+            .into_styled(outline)
             .draw(self.display_buffers)
             .ok();
+            Text::new(
+                "Disconnect",
+                Point::new(button_x + 10, button_y + 22),
+                header_style,
+            )
+            .draw(self.display_buffers)
+            .ok();
+        } else {
+            let mut controller = ModalFormController::default();
+            controller.sync(&spec);
+            let mut ui = UiContext {
+                buffers: self.display_buffers,
+                render_policy: self.render_policy,
+                gray2: None,
+            };
+            let mut rq = RenderQueue::default();
+            ModalFormView {
+                spec: &spec,
+                fonts,
+                focused_id: controller.focused_id(),
+            }
+            .render(&mut ui, spec.bounds, &mut rq);
+        }
         display.display(self.display_buffers, RefreshMode::Full);
     }
 

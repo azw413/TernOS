@@ -2226,7 +2226,11 @@ where
         dst_x: i32,
         dst_y: i32,
     ) -> Result<(), ImageError> {
-        use tern_core::framebuffer::{HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
+        use tern_core::framebuffer::{BUFFER_SIZE, HEIGHT as FB_HEIGHT, WIDTH as FB_WIDTH};
+
+        if base.len() < BUFFER_SIZE || lsb.len() < BUFFER_SIZE || msb.len() < BUFFER_SIZE {
+            return Err(ImageError::Decode);
+        }
 
         fn map_point(
             rotation: tern_core::framebuffer::Rotation,
@@ -2252,14 +2256,18 @@ where
             let idx = y * FB_WIDTH + x;
             let byte = idx / 8;
             let bit = 7 - (idx % 8);
-            buf[byte] |= 1 << bit;
+            if byte < buf.len() {
+                buf[byte] |= 1 << bit;
+            }
         }
 
         fn clear_bit(buf: &mut [u8], x: usize, y: usize) {
             let idx = y * FB_WIDTH + x;
             let byte = idx / 8;
             let bit = 7 - (idx % 8);
-            buf[byte] &= !(1 << bit);
+            if byte < buf.len() {
+                buf[byte] &= !(1 << bit);
+            }
         }
 
         let mut load_from_reader = |reader: &mut dyn Read<Error = <F::File<'_> as embedded_io::ErrorType>::Error>|

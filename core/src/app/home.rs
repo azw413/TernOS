@@ -92,6 +92,7 @@ pub struct HomeState {
     pub last_scrollbar_rect: Option<Rect>,
     pub last_category_trigger_rect: Option<Rect>,
     pub last_category_popup_rect: Option<Rect>,
+    pub last_install_dialog_rect: Option<Rect>,
     pub start_menu_nav_pending: bool,
     pub start_menu_need_base_refresh: bool,
     pub install_dialog: Option<InstallDialogState>,
@@ -100,6 +101,7 @@ pub struct HomeState {
 pub enum HomeAction {
     None,
     OpenRecent(String),
+    OpenMenu,
 }
 
 pub struct HomeIcons<'a> {
@@ -349,7 +351,7 @@ impl HomeState {
 
     fn launcher_table_row_height(category: LauncherCategory) -> i32 {
         match category {
-            LauncherCategory::Apps => 120,
+            LauncherCategory::Apps => 96,
             LauncherCategory::Recents | LauncherCategory::Books | LauncherCategory::Images => 99,
         }
     }
@@ -762,18 +764,8 @@ impl HomeState {
                     }
                     if is_up && self.touch_pressed_status == Some(StatusBarHit::Menu) {
                         self.touch_pressed_status = None;
-                        self.set_category_popup_state(
-                            true,
-                            categories
-                                .iter()
-                                .position(|c| *c == self.launcher_category)
-                                .unwrap_or(0),
-                            RefreshMode::Fast,
-                        );
-                        self.start_menu_need_base_refresh = true;
                         self.start_menu_nav_pending = true;
-                        self.sync_start_menu_focus(recents);
-                        return HomeAction::None;
+                        return HomeAction::OpenMenu;
                     }
                 }
             }
@@ -922,6 +914,7 @@ impl HomeState {
             last_scrollbar_rect: None,
             last_category_trigger_rect: None,
             last_category_popup_rect: None,
+            last_install_dialog_rect: None,
             start_menu_nav_pending: false,
             start_menu_need_base_refresh: true,
             install_dialog: None,
@@ -1087,7 +1080,7 @@ impl HomeState {
                     .enumerate()
                     .map(|(row_idx, apps)| UiTableRow {
                         id: row_idx as u16,
-                        height: 120,
+                        height: 96,
                         usable: true,
                         selectable: true,
                         data: (row_idx * APP_GRID_COLS) as u32,
@@ -1328,6 +1321,11 @@ impl HomeState {
                     button: ButtonId::Confirm | ButtonId::Back
                 })
             ) {
+                if let Some(rect) = self.last_install_dialog_rect.take() {
+                    self.ui_runtime
+                        .invalidation
+                        .record_exposed_rect(rect, RefreshMode::Fast);
+                }
                 self.install_dialog = None;
                 self.start_menu_need_base_refresh = true;
                 self.sync_start_menu_ui(recents);
@@ -1454,17 +1452,8 @@ impl HomeState {
                     ButtonId::Confirm,
                 );
                 if result.activated == Some(StatusBarHit::Menu) {
-                    self.set_category_popup_state(
-                        true,
-                        categories
-                            .iter()
-                            .position(|c| *c == self.launcher_category)
-                            .unwrap_or(0),
-                        RefreshMode::Fast,
-                    );
-                    self.sync_start_menu_ui(recents);
                     self.start_menu_nav_pending = true;
-                    return HomeAction::None;
+                    return HomeAction::OpenMenu;
                 }
             } else if section == StartMenuSection::Actions {
                 self.set_category_popup_state(
@@ -2023,7 +2012,15 @@ impl HomeState {
         }
 
         if let Some(dialog) = self.install_dialog.as_ref() {
-            self.draw_install_dialog(ctx.display_buffers, dialog, ctx.palm_fonts, width, mid_y);
+            self.last_install_dialog_rect = Some(self.draw_install_dialog(
+                ctx.display_buffers,
+                dialog,
+                ctx.palm_fonts,
+                width,
+                mid_y,
+            ));
+        } else {
+            self.last_install_dialog_rect = None;
         }
 
         (gray2_used, draw_count)
@@ -2195,6 +2192,19 @@ impl HomeState {
             let mut popup_view = popup;
             popup_view.render(&mut popup_ui, popup_view.popup_rect, &mut RenderQueue::default());
         }
+        if let Some(dialog) = self.install_dialog.as_ref()
+            && let Some(rect) = self.last_install_dialog_rect
+            && dirty_rects.iter().any(|dirty| dirty.intersects(rect))
+        {
+            self.last_install_dialog_rect = Some(self.draw_install_dialog(
+                ctx.display_buffers,
+                dialog,
+                ctx.palm_fonts,
+                width,
+                mid_y,
+            ));
+        }
+
         (gray2_used, draw_count)
     }
 
@@ -2205,7 +2215,7 @@ impl HomeState {
         fonts: &[crate::palm::runtime::PalmFont],
         width: i32,
         content_bottom: i32,
-    ) {
+    ) -> Rect {
         let w = ((width * 9) / 10).max(120);
         let x = (width - w) / 2;
         let y = 26;
@@ -2308,10 +2318,11 @@ impl HomeState {
                 btn_label,
                 Point::new(text_x, text_y + 9),
                 MonoTextStyle::new(&FONT_6X10, BinaryColor::Off),
-            )
-            .draw(target)
-            .ok();
+                )
+                .draw(target)
+                .ok();
         }
+        Rect::new(x, y, w, h)
     }
 
     fn ensure_start_menu_cache<S: AppSource>(
