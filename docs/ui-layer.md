@@ -27,6 +27,39 @@ Apps must not own:
 - popup, menu, table, or modal draw order
 - low-level hit-testing for shared controls
 
+## Status
+
+| Palm-style component | Level | Notes |
+| --- | --- | --- |
+| Forms | Partial | `UiRuntime`/`UiForm` exist, but full form composition is not yet centralized for every screen. |
+| Controls / buttons | Partial | Standard activation/focus works in launcher and Palm paths, but shared control coverage is not yet complete. |
+| Fields | Partial | Palm field behavior exists in compatibility paths, but canonical shared field ownership is not finished. |
+| Lists | Partial | Basic list concepts exist, but most current work has gone into tables rather than a full Palm `ListType` equivalent. |
+| Tables | Partial | Canonical table state, selection, viewport, geometry, scrollbar, and launcher use are working; broader Palm table parity is still incomplete. |
+| Scrollbars | Partial | Palm-style table scrollbar behavior exists for launcher tables; wider shared use is still limited. |
+| Popup triggers / popup lists | Partial | Shared popup/dropdown geometry, hit-testing, layering, and rendering now work in the launcher. |
+| Menus | Partial | Palm menus work for basic interaction, but full shared menu runtime coverage is still incomplete. |
+| Alerts / dialogs | Partial | Palm help/dialog overlays work, and native dialog composition exists in places, but generalized shared alert/dialog support is not complete. |
+| Help overlays | Partial | Palm `FrmHelp` interaction works, but this is still a specialized compatibility path rather than a fully generalized shared component. |
+| Titles / form chrome | Partial | Shared Palm-like chrome primitives exist, but full form/chrome ownership is not yet entirely inside `ternos::ui`. |
+
+- Complete
+  - `ternos::ui` now exists as the Tern-owned canonical UI layer.
+  - Shared retained UI state is in place via `UiRuntime`, `UiForm`, `UiObject`, and canonical `UiEvent` types.
+  - Shared native UI resources exist for forms and objects, and native apps can declare `FormResource` / `ObjectResource` instead of drawing everything ad hoc.
+  - Shared table support exists with canonical table state, selection, viewport (`top_row`), row/cell geometry, and a Palm-style scrollbar.
+  - Shared popup/dropdown support exists, including geometry, hit-testing, rendering, and overlay layering.
+  - Home screen launcher is now using the shared UI layer for table/popup/scrollbar composition instead of its own one-off UI system.
+  - Damage tracking and partial-present instrumentation exist, with desktop debug overlays for old/new/exposed/presented regions.
+  - Home screen partial repaint + partial present now works cleanly on device.
+
+- Outstanding
+  - `UiRuntime` is not yet a full form compositor/scene graph for every screen; some screen composition still lives in app code.
+  - Reader and image-viewer shell chrome are not yet fully migrated onto shared `ternos::ui` components.
+  - Palm form/menu/control rendering is only partially routed through the canonical shared UI runtime.
+  - More Palm-compatible widgets still need to be finished and generalized: forms, menus, fields, lists, controls, tables, alerts, help overlays.
+  - Device partial-refresh policy for X4/M5 still needs to be reintroduced carefully on top of the new damage model.
+
 ## Core Shared UI Modules
 
 ### `core/src/ternos/ui/runtime.rs`

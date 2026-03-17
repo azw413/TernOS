@@ -1631,7 +1631,7 @@ fn draw_help_dialog_on_canvas(
     );
 
     for (hit, rect) in help_overlay_control_rects(dialog, fonts) {
-        let (label, enabled) = match hit {
+        let (label, _enabled) = match hit {
             HelpOverlayHit::Done => continue,
             HelpOverlayHit::ScrollUp => (if scroll > 0 { "^" } else { "~" }, scroll > 0),
             HelpOverlayHit::ScrollDown => (if scroll < max_scroll { "v" } else { "V" }, scroll < max_scroll),

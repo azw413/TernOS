@@ -4,10 +4,10 @@ use std::path::Path;
 use std::process::Command;
 
 fn git_tag() -> String {
-    if let Ok(tag) = env::var("TRUSTY_VERSION") {
-        if !tag.trim().is_empty() {
-            return tag;
-        }
+    if let Ok(tag) = env::var("TRUSTY_VERSION")
+        && !tag.trim().is_empty()
+    {
+        return tag;
     }
     let output = Command::new("git")
         .args(["describe", "--tags", "--dirty", "--always"])
@@ -27,7 +27,7 @@ fn build_time() -> String {
 }
 
 fn pack_mask(bits: &[bool]) -> Vec<u8> {
-    let mut out = vec![0u8; (bits.len() + 7) / 8];
+    let mut out = vec![0u8; bits.len().div_ceil(8)];
     for (i, &bit) in bits.iter().enumerate() {
         if bit {
             let byte = i / 8;
@@ -118,7 +118,7 @@ fn write_icons(out_dir: &Path) {
             for byte in chunk {
                 out.push_str(&format!("0x{byte:02X}, "));
             }
-            out.push_str("\n");
+            out.push('\n');
         }
         out.push_str("];\n");
     };

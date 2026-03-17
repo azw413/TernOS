@@ -987,7 +987,7 @@ fn parse_trimg(data: &[u8]) -> Result<ImageData, ImageError> {
     let width = u16::from_le_bytes([data[6], data[7]]) as u32;
     let height = u16::from_le_bytes([data[8], data[9]]) as u32;
     let payload = &data[16..];
-    let plane = ((width as usize * height as usize) + 7) / 8;
+    let plane = (width as usize * height as usize).div_ceil(8);
     match (data[4], data[5]) {
         (1, 1) => {
             if payload.len() != plane {
@@ -1032,7 +1032,7 @@ fn serialize_thumbnail(image: &ImageData) -> Option<Vec<u8>> {
         ImageData::Gray2 { width, height, data } => (*width, *height, data.as_slice()),
         _ => return None,
     };
-    let expected = ((width as usize * height as usize) + 7) / 8;
+    let expected = (width as usize * height as usize).div_ceil(8);
     if bits.len() != expected {
         return None;
     }

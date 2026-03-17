@@ -35,7 +35,7 @@ pub fn execute(
     // Guard by addressing mode first so EXT.W/EXT.L (0x488x/0x48Cx) are
     // not mis-decoded as MOVEM and accidentally skip the following opcode.
     let movem_mode = (word >> 3) & 0x0007;
-    if ((word & 0xFB80) == 0x4880 || (word & 0xFB80) == 0x4C80)
+    if (word & 0xFB80) == 0x4880
         && matches!(movem_mode, 2 | 3 | 4 | 5)
     {
         let mode = movem_mode;

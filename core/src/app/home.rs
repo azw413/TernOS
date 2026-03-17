@@ -971,7 +971,7 @@ impl HomeState {
     }
 
     fn category_index_from_object_id(object_id: ObjectId) -> Option<usize> {
-        if object_id >= HOME_OBJ_CATEGORY_MENU_BASE && object_id < HOME_OBJ_CATEGORY_MENU_BASE + 16 {
+        if (HOME_OBJ_CATEGORY_MENU_BASE..HOME_OBJ_CATEGORY_MENU_BASE + 16).contains(&object_id) {
             Some((object_id - HOME_OBJ_CATEGORY_MENU_BASE) as usize)
         } else {
             None
@@ -1490,10 +1490,10 @@ impl HomeState {
                 if let Some(book) = self.books_cache.get(self.start_menu_index) {
                     return HomeAction::OpenRecent(book.path.clone());
                 }
-            } else if self.launcher_category == LauncherCategory::Images {
-                if let Some(image) = self.images_cache.get(self.start_menu_index) {
-                    return HomeAction::OpenRecent(image.path.clone());
-                }
+            } else if self.launcher_category == LauncherCategory::Images
+                && let Some(image) = self.images_cache.get(self.start_menu_index)
+            {
+                return HomeAction::OpenRecent(image.path.clone());
             }
         }
 
@@ -2380,11 +2380,11 @@ impl HomeState {
         let signature = paths.join("\n");
         let cached_catalog = ctx.source.load_book_catalog();
         let mut cached_titles = alloc::collections::BTreeMap::new();
-        if let Some((cached_sig, entries)) = cached_catalog {
-            if cached_sig == signature {
-                for (path, title) in entries {
-                    cached_titles.insert(path, title);
-                }
+        if let Some((cached_sig, entries)) = cached_catalog
+            && cached_sig == signature
+        {
+            for (path, title) in entries {
+                cached_titles.insert(path, title);
             }
         }
 
@@ -2448,11 +2448,11 @@ impl HomeState {
         let signature = paths.join("\n");
         let cached_catalog = ctx.source.load_image_catalog();
         let mut cached_labels = alloc::collections::BTreeMap::new();
-        if let Some((cached_sig, entries)) = cached_catalog {
-            if cached_sig == signature {
-                for (path, label) in entries {
-                    cached_labels.insert(path, label);
-                }
+        if let Some((cached_sig, entries)) = cached_catalog
+            && cached_sig == signature
+        {
+            for (path, label) in entries {
+                cached_labels.insert(path, label);
             }
         }
 
@@ -2604,11 +2604,11 @@ impl HomeState {
                         || *height != START_MENU_RECENT_THUMB as u32
                 }
             };
-            if needs_resize {
-                if let Some(thumb) = thumbnail_from_image(&image, START_MENU_RECENT_THUMB as u32) {
-                    ctx.source.save_thumbnail(path, &thumb);
-                    return (title, Some(thumb));
-                }
+            if needs_resize
+                && let Some(thumb) = thumbnail_from_image(&image, START_MENU_RECENT_THUMB as u32)
+            {
+                ctx.source.save_thumbnail(path, &thumb);
+                return (title, Some(thumb));
             }
             return (title, Some(image));
         }
@@ -2627,17 +2627,17 @@ impl HomeState {
                 kind: crate::image_viewer::EntryKind::File,
             };
             if let Ok(image) = ctx.source.load(&parts, &entry) {
-                if let ImageData::Gray2Stream { width, height, key } = &image {
-                    if let Some(thumb) = ctx.source.load_gray2_stream_thumbnail(
+                if let ImageData::Gray2Stream { width, height, key } = &image
+                    && let Some(thumb) = ctx.source.load_gray2_stream_thumbnail(
                         key,
                         *width,
                         *height,
                         74,
                         74,
-                    ) {
-                        ctx.source.save_thumbnail(path, &thumb);
-                        return (label_fallback, Some(thumb));
-                    }
+                    )
+                {
+                    ctx.source.save_thumbnail(path, &thumb);
+                    return (label_fallback, Some(thumb));
                 }
                 if let Some(thumb) = thumbnail_from_image(&image, 74) {
                     ctx.source.save_thumbnail(path, &thumb);
@@ -2696,16 +2696,16 @@ impl HomeState {
         };
         let preview = if !info.images.is_empty() {
             ctx.source.trbk_image(0).ok().and_then(|image| {
-                if let ImageData::Gray2Stream { width, height, key } = &image {
-                    if let Some(thumb) = ctx.source.load_gray2_stream_thumbnail(
+                if let ImageData::Gray2Stream { width, height, key } = &image
+                    && let Some(thumb) = ctx.source.load_gray2_stream_thumbnail(
                         key,
                         *width,
                         *height,
                         START_MENU_RECENT_THUMB as u32,
                         START_MENU_RECENT_THUMB as u32,
-                    ) {
-                        return Some(thumb);
-                    }
+                    )
+                {
+                    return Some(thumb);
                 }
                 thumbnail_from_image(&image, START_MENU_RECENT_THUMB as u32)
             })
@@ -2718,6 +2718,12 @@ impl HomeState {
             ctx.source.save_thumbnail_title(path, &title);
         }
         (title, preview)
+    }
+}
+
+impl Default for HomeState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2742,7 +2748,7 @@ pub fn draw_icon_gray2(
     }
     let width_u = width as usize;
     let height_u = height as usize;
-    let expected = (width_u * height_u + 7) / 8;
+    let expected = (width_u * height_u).div_ceil(8);
     if dark_mask.len() != expected || light_mask.len() != expected {
         return;
     }
@@ -2828,7 +2834,7 @@ fn thumbnail_from_image(image: &ImageData, size: u32) -> Option<ImageData> {
     }
     let dst_w = size;
     let dst_h = size;
-    let dst_len = ((dst_w as usize * dst_h as usize) + 7) / 8;
+    let dst_len = (dst_w as usize * dst_h as usize).div_ceil(8);
     let grayscale_src = !matches!(image, ImageData::Mono1 { .. });
     let mut base = vec![0xFF; dst_len];
     let mut lsb = vec![0u8; dst_len];
@@ -2852,7 +2858,7 @@ fn thumbnail_from_image(image: &ImageData, size: u32) -> Option<ImageData> {
                     let idx = (sy * (*width) + sx) as usize;
                     let byte = idx / 8;
                     let bit = 7 - (idx % 8);
-                    let plane_len = (((*width) as usize * (*height) as usize) + 7) / 8;
+                    let plane_len = ((*width) as usize * (*height) as usize).div_ceil(8);
                     if data.len() < plane_len * 3 {
                         255
                     } else {
@@ -2923,11 +2929,7 @@ fn thumbnail_from_image(image: &ImageData, size: u32) -> Option<ImageData> {
 
 fn adjust_thumbnail_luma(lum: u8) -> u8 {
     let mut value = ((lum as i32 - 128) * 13) / 10 + 128;
-    if value < 0 {
-        value = 0;
-    } else if value > 255 {
-        value = 255;
-    }
+    value = value.clamp(0, 255);
     value as u8
 }
 

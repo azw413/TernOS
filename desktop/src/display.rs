@@ -11,6 +11,7 @@ use tern_core::{
 
 const BUFFER_SIZE: usize = WIDTH * HEIGHT / 8;
 const DISPLAY_BUFFER_SIZE: usize = WIDTH * HEIGHT;
+const DEBUG_OVERLAYS_ENABLED: bool = cfg!(feature = "debug-overlays");
 
 pub struct MinifbDisplay {
     is_grayscale: bool,
@@ -69,10 +70,12 @@ impl MinifbDisplay {
     }
 
     pub fn update_display(&mut self /*, window: &mut minifb::Window */) {
-        self.restore_damage_overlay();
-        self.draw_damage_overlay();
-        self.restore_cursor_overlay();
-        self.draw_cursor_overlay();
+        if DEBUG_OVERLAYS_ENABLED {
+            self.restore_damage_overlay();
+            self.draw_damage_overlay();
+            self.restore_cursor_overlay();
+            self.draw_cursor_overlay();
+        }
         self.window
             .update_with_buffer(&self.display_buffer, HEIGHT, WIDTH)
             .unwrap();
@@ -502,7 +505,9 @@ impl tern_core::display::Display for MinifbDisplay {
     }
     fn set_damage_overlay(&mut self, overlay: &[DamageOverlayRect]) {
         self.damage_overlay.clear();
-        self.damage_overlay.extend_from_slice(overlay);
+        if DEBUG_OVERLAYS_ENABLED {
+            self.damage_overlay.extend_from_slice(overlay);
+        }
     }
     fn copy_to_lsb(&mut self, buffers: &[u8; BUFFER_SIZE]) {
         self.lsb_buffer.copy_from_slice(buffers);

@@ -4,6 +4,10 @@ edition.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[features]
+default = []
+debug-overlays = []
+
 [dependencies]
 tern_core = { path = "../core" }
 env_logger = "0.11.8"

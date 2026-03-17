@@ -157,7 +157,7 @@ impl DmApi {
             return data.to_vec();
         }
         let len8 = data[0] as usize;
-        if len8 > 0 && len8 + 1 <= data.len() {
+        if len8 > 0 && len8 < data.len() {
             let mut out = data[1..1 + len8].to_vec();
             out.push(0);
             return out;

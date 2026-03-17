@@ -205,7 +205,7 @@ impl BookReaderState {
     }
 
     fn toc_rows(&self) -> Vec<UiTableRow> {
-        let labels = self.toc_labels.as_ref().map(Vec::as_slice).unwrap_or(&[]);
+        let labels = self.toc_labels.as_deref().unwrap_or(&[]);
         labels
             .iter()
             .enumerate()
@@ -221,7 +221,7 @@ impl BookReaderState {
     }
 
     fn toc_table_model(&self) -> UiTableModel {
-        let labels = self.toc_labels.as_ref().map(Vec::as_slice).unwrap_or(&[]);
+        let labels = self.toc_labels.as_deref().unwrap_or(&[]);
         UiTableModel {
             rows: self.toc_rows(),
             cols: 1,
@@ -326,19 +326,19 @@ impl BookReaderState {
         if buttons.is_pressed(input::Buttons::Right)
             || buttons.is_pressed(input::Buttons::Down)
         {
-            if let Some(book) = &self.current_book {
-                if self.current_page + 1 < book.page_count {
-                    self.current_page += 1;
-                    if let Some(next_ops) = self.next_page_ops.take() {
-                        self.current_page_ops = Some(next_ops);
-                    } else {
-                        self.current_page_ops = None;
-                    }
-                    self.next_page_ops = None;
-                    self.book_turns_since_full = self.book_turns_since_full.saturating_add(1);
-                    self.page_turn_indicator = Some(PageTurnIndicator::Forward);
-                    result.dirty = true;
+            if let Some(book) = &self.current_book
+                && self.current_page + 1 < book.page_count
+            {
+                self.current_page += 1;
+                if let Some(next_ops) = self.next_page_ops.take() {
+                    self.current_page_ops = Some(next_ops);
+                } else {
+                    self.current_page_ops = None;
                 }
+                self.next_page_ops = None;
+                self.book_turns_since_full = self.book_turns_since_full.saturating_add(1);
+                self.page_turn_indicator = Some(PageTurnIndicator::Forward);
+                result.dirty = true;
             }
             return result;
         }
@@ -407,8 +407,9 @@ impl BookReaderState {
                             result.close = true;
                             result.dirty = true;
                         }
-                        id if id >= READER_OVERLAY_DIGIT_UP_BASE
-                            && id < READER_OVERLAY_DIGIT_UP_BASE + 16 =>
+                        id if (READER_OVERLAY_DIGIT_UP_BASE
+                            ..READER_OVERLAY_DIGIT_UP_BASE + 16)
+                            .contains(&id) =>
                         {
                             let digits = page_jump_digit_count(page_count);
                             let index = (id - READER_OVERLAY_DIGIT_UP_BASE) as usize;
@@ -426,8 +427,9 @@ impl BookReaderState {
                                 result.dirty = true;
                             }
                         }
-                        id if id >= READER_OVERLAY_DIGIT_DOWN_BASE
-                            && id < READER_OVERLAY_DIGIT_DOWN_BASE + 16 =>
+                        id if (READER_OVERLAY_DIGIT_DOWN_BASE
+                            ..READER_OVERLAY_DIGIT_DOWN_BASE + 16)
+                            .contains(&id) =>
                         {
                             let digits = page_jump_digit_count(page_count);
                             let index = (id - READER_OVERLAY_DIGIT_DOWN_BASE) as usize;
@@ -448,14 +450,15 @@ impl BookReaderState {
                         _ => {}
                     }
                 }
-                Some(ReaderOverlay::Stats) => {
-                    if id == READER_OVERLAY_BTN_OK || id == READER_OVERLAY_BTN_CANCEL {
-                        self.overlay = None;
-                        self.overlay_form.reset();
-                        result.close = true;
-                        result.dirty = true;
-                    }
+                Some(ReaderOverlay::Stats)
+                    if id == READER_OVERLAY_BTN_OK || id == READER_OVERLAY_BTN_CANCEL =>
+                {
+                    self.overlay = None;
+                    self.overlay_form.reset();
+                    result.close = true;
+                    result.dirty = true;
                 }
+                Some(ReaderOverlay::Stats) => {}
                 Some(ReaderOverlay::Help(_)) => {}
                 None => {}
             },
@@ -544,14 +547,14 @@ impl BookReaderState {
     pub fn open_menu_command(&mut self, command: ReaderMenuCommand) -> bool {
         match command {
             ReaderMenuCommand::Contents => {
-                if let Some(book) = &self.current_book {
-                    if !book.toc.is_empty() {
-                        self.toc_selected = find_toc_selection(book, self.current_page);
-                        self.toc_top_row = self.toc_selected.saturating_sub(2);
-                        self.toc_labels = None;
-                        self.toc_form.reset();
-                        return true;
-                    }
+                if let Some(book) = &self.current_book
+                    && !book.toc.is_empty()
+                {
+                    self.toc_selected = find_toc_selection(book, self.current_page);
+                    self.toc_top_row = self.toc_selected.saturating_sub(2);
+                    self.toc_labels = None;
+                    self.toc_form.reset();
+                    return true;
                 }
                 false
             }
@@ -821,17 +824,16 @@ impl BookReaderState {
                     }
                     self.toc_top_row = top_row;
                     result.dirty = true;
-                    if activated {
-                        if let Some(book) = self.current_book.as_ref().cloned() {
-                            if let Some(entry) = book.toc.get(self.toc_selected) {
-                                self.current_page = entry.page_index as usize;
-                                self.current_page_ops = None;
-                                self.next_page_ops = None;
-                                self.last_rendered_page = None;
-                                self.book_turns_since_full = 0;
-                                result.jumped = true;
-                            }
-                        }
+                    if activated
+                        && let Some(book) = self.current_book.as_ref()
+                        && let Some(entry) = book.toc.get(self.toc_selected)
+                    {
+                        self.current_page = entry.page_index as usize;
+                        self.current_page_ops = None;
+                        self.next_page_ops = None;
+                        self.last_rendered_page = None;
+                        self.book_turns_since_full = 0;
+                        result.jumped = true;
                     }
                 }
             }
@@ -1199,6 +1201,12 @@ impl BookReaderState {
 
 }
 
+impl Default for BookReaderState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn reader_menu_bar() -> MenuBarPreview {
     MenuBarPreview {
         resource_id: 1,
@@ -1360,7 +1368,7 @@ pub(crate) fn draw_trbk_image(
             height,
             data,
         } => {
-            let plane = ((*width as usize * *height as usize) + 7) / 8;
+            let plane = (*width as usize * *height as usize).div_ceil(8);
             if data.len() < plane * 3 {
                 return;
             }
@@ -1555,11 +1563,11 @@ fn map_display_point(rotation: Rotation, x: i32, y: i32) -> Option<(usize, usize
     }
 }
 
-fn find_glyph<'a>(
-    glyphs: &'a [crate::trbk::TrbkGlyph],
+fn find_glyph(
+    glyphs: &[crate::trbk::TrbkGlyph],
     style: u8,
     codepoint: u32,
-) -> Option<&'a crate::trbk::TrbkGlyph> {
+) -> Option<&crate::trbk::TrbkGlyph> {
     glyphs
         .iter()
         .find(|glyph| glyph.style == style && glyph.codepoint == codepoint)
@@ -1607,32 +1615,29 @@ fn draw_glyph(
             }
             if let (Some(lsb), Some(msb)) =
                 (glyph.bitmap_lsb.as_ref(), glyph.bitmap_msb.as_ref())
+                && let Some((gray2_lsb, gray2_msb, gray2_used)) = gray2.as_mut()
             {
-                if let Some((gray2_lsb, gray2_msb, gray2_used)) = gray2.as_mut() {
-                    if gray2_lsb.len() < BUFFER_SIZE || gray2_msb.len() < BUFFER_SIZE {
-                        continue;
-                    }
-                    **gray2_used = true;
-                    if byte < lsb.len() && (lsb[byte] & (1 << bit)) != 0 {
-                        if let Some((fx, fy)) =
-                            map_display_point(rotation, start_x + col, start_y + row)
-                        {
-                            let dst_idx = fy * FB_WIDTH + fx;
-                            let dst_byte = dst_idx / 8;
-                            let dst_bit = 7 - (dst_idx % 8);
-                            gray2_lsb[dst_byte] |= 1 << dst_bit;
-                        }
-                    }
-                    if byte < msb.len() && (msb[byte] & (1 << bit)) != 0 {
-                        if let Some((fx, fy)) =
-                            map_display_point(rotation, start_x + col, start_y + row)
-                        {
-                            let dst_idx = fy * FB_WIDTH + fx;
-                            let dst_byte = dst_idx / 8;
-                            let dst_bit = 7 - (dst_idx % 8);
-                            gray2_msb[dst_byte] |= 1 << dst_bit;
-                        }
-                    }
+                if gray2_lsb.len() < BUFFER_SIZE || gray2_msb.len() < BUFFER_SIZE {
+                    continue;
+                }
+                **gray2_used = true;
+                if byte < lsb.len() && (lsb[byte] & (1 << bit)) != 0
+                    && let Some((fx, fy)) =
+                        map_display_point(rotation, start_x + col, start_y + row)
+                {
+                    let dst_idx = fy * FB_WIDTH + fx;
+                    let dst_byte = dst_idx / 8;
+                    let dst_bit = 7 - (dst_idx % 8);
+                    gray2_lsb[dst_byte] |= 1 << dst_bit;
+                }
+                if byte < msb.len() && (msb[byte] & (1 << bit)) != 0
+                    && let Some((fx, fy)) =
+                        map_display_point(rotation, start_x + col, start_y + row)
+                {
+                    let dst_idx = fy * FB_WIDTH + fx;
+                    let dst_byte = dst_idx / 8;
+                    let dst_bit = 7 - (dst_idx % 8);
+                    gray2_msb[dst_byte] |= 1 << dst_bit;
                 }
             }
             idx += 1;

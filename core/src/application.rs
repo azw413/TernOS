@@ -481,24 +481,22 @@ impl<'a, S: AppSource> Application<'a, S> {
                     palm::ui::HelpOverlayHit::ScrollUp => {
                         self.prc_help_controller
                             .focus_control(palm::ui::HelpOverlayHit::ScrollUp);
-                        if is_down {
-                            if let Some(session) = self.prc_session.as_mut() {
-                                if session.scroll_help_dialog(-self.prc_help_controller.scroll_step_lines) {
-                                    self.dirty = true;
-                                }
-                            }
+                        if is_down
+                            && let Some(session) = self.prc_session.as_mut()
+                            && session.scroll_help_dialog(-self.prc_help_controller.scroll_step_lines)
+                        {
+                            self.dirty = true;
                         }
                         return true;
                     }
                     palm::ui::HelpOverlayHit::ScrollDown => {
                         self.prc_help_controller
                             .focus_control(palm::ui::HelpOverlayHit::ScrollDown);
-                        if is_down {
-                            if let Some(session) = self.prc_session.as_mut() {
-                                if session.scroll_help_dialog(self.prc_help_controller.scroll_step_lines) {
-                                    self.dirty = true;
-                                }
-                            }
+                        if is_down
+                            && let Some(session) = self.prc_session.as_mut()
+                            && session.scroll_help_dialog(self.prc_help_controller.scroll_step_lines)
+                        {
+                            self.dirty = true;
                         }
                         return true;
                     }
@@ -723,43 +721,43 @@ impl<'a, S: AppSource> Application<'a, S> {
             return false;
         }
 
-        if self.book_reader.has_overlay() {
-            if let Some(spec) = self.book_reader.overlay_spec() {
-                if let Some(hit) = self
-                    .book_reader
-                    .overlay_form
-                    .hit_test(&spec, point, self.home_system_fonts.as_slice())
-                {
-                    let ModalHit::Widget(id) = hit else {
-                        return true;
-                    };
-                    let changed = self.book_reader.overlay_form.select_id(&spec, id);
-                    if is_down {
-                        self.reader_touch_pressed_overlay = Some(id);
-                        if changed {
-                            self.dirty = true;
-                        }
-                    } else if is_up {
-                        let pressed = self.reader_touch_pressed_overlay.take();
-                        if pressed == Some(id) {
-                            let action = self.book_reader.overlay_form.activate_id(&spec, id);
-                            let result = self.book_reader.apply_overlay_action(action);
-                            if result.jumped {
-                                self.set_state_book_viewing();
-                            } else if result.dirty || changed {
-                                self.dirty = true;
-                            }
-                        } else if changed {
-                            self.dirty = true;
-                        }
-                    }
+        if self.book_reader.has_overlay()
+            && let Some(spec) = self.book_reader.overlay_spec()
+        {
+            if let Some(hit) = self
+                .book_reader
+                .overlay_form
+                .hit_test(&spec, point, self.home_system_fonts.as_slice())
+            {
+                let ModalHit::Widget(id) = hit else {
                     return true;
-                }
-                if is_up {
-                    self.reader_touch_pressed_overlay = None;
+                };
+                let changed = self.book_reader.overlay_form.select_id(&spec, id);
+                if is_down {
+                    self.reader_touch_pressed_overlay = Some(id);
+                    if changed {
+                        self.dirty = true;
+                    }
+                } else if is_up {
+                    let pressed = self.reader_touch_pressed_overlay.take();
+                    if pressed == Some(id) {
+                        let action = self.book_reader.overlay_form.activate_id(&spec, id);
+                        let result = self.book_reader.apply_overlay_action(action);
+                        if result.jumped {
+                            self.set_state_book_viewing();
+                        } else if result.dirty || changed {
+                            self.dirty = true;
+                        }
+                    } else if changed {
+                        self.dirty = true;
+                    }
                 }
                 return true;
             }
+            if is_up {
+                self.reader_touch_pressed_overlay = None;
+            }
+            return true;
         }
 
         if matches!(self.state, AppState::Toc) {
@@ -1205,10 +1203,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                         }
                     }
                 }
-                if !Self::has_input(buttons) {
-                    if self.system.add_idle(elapsed_ms) {
-                        self.start_sleep_request();
-                    }
+                if !Self::has_input(buttons)
+                    && self.system.add_idle(elapsed_ms)
+                {
+                    self.start_sleep_request();
                 }
             }
             AppState::Settings => {
@@ -1280,10 +1278,10 @@ impl<'a, S: AppSource> Application<'a, S> {
                                 self.dirty = true;
                             }
                             palm::controller::HelpDialogAction::Scroll(delta) => {
-                                if let Some(session) = self.prc_session.as_mut() {
-                                    if session.scroll_help_dialog(delta) {
-                                        self.dirty = true;
-                                    }
+                                if let Some(session) = self.prc_session.as_mut()
+                                    && session.scroll_help_dialog(delta)
+                                {
+                                    self.dirty = true;
                                 }
                             }
                             palm::controller::HelpDialogAction::Dismiss => {
@@ -1374,7 +1372,7 @@ impl<'a, S: AppSource> Application<'a, S> {
                 if buttons.is_pressed(input::Buttons::Left) {
                     if self.prc_status_bar_focus.is_some() {
                         if self.handle_prc_status_bar_button(crate::platform::ButtonId::Left) {
-                            return;
+                            
                         }
                     } else if self.prc_status_bar_focus.is_none() {
                         let form = self.runtime_prc_form();
@@ -1392,13 +1390,12 @@ impl<'a, S: AppSource> Application<'a, S> {
                             self.prc_blocked_elapsed_ms = 0;
                             self.prc_blocked_timeout_ticks = 0;
                             self.resume_prc_runtime_session();
-                            return;
                         }
                     }
                 } else if buttons.is_pressed(input::Buttons::Right) {
                     if self.prc_status_bar_focus.is_some() {
                         if self.handle_prc_status_bar_button(crate::platform::ButtonId::Right) {
-                            return;
+                            
                         }
                     } else if self.prc_status_bar_focus.is_none() {
                         let form = self.runtime_prc_form();
@@ -1416,7 +1413,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                             self.prc_blocked_elapsed_ms = 0;
                             self.prc_blocked_timeout_ticks = 0;
                             self.resume_prc_runtime_session();
-                            return;
                         }
                     }
                 } else if buttons.is_pressed(input::Buttons::Up) {
@@ -1444,7 +1440,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.prc_blocked_elapsed_ms = 0;
                         self.prc_blocked_timeout_ticks = 0;
                         self.resume_prc_runtime_session();
-                        return;
                     }
                 } else if buttons.is_pressed(input::Buttons::Down) {
                     let form = self.runtime_prc_form();
@@ -1467,7 +1462,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                                 );
                             }
                             self.dirty = true;
-                            return;
                         }
                     } else if self.prc_ui_controller.move_focus_direction(
                         form.as_ref(),
@@ -1484,14 +1478,12 @@ impl<'a, S: AppSource> Application<'a, S> {
                             self.prc_blocked_elapsed_ms = 0;
                             self.prc_blocked_timeout_ticks = 0;
                             self.resume_prc_runtime_session();
-                            return;
                         }
                     }
                 } else if buttons.is_pressed(input::Buttons::Confirm) {
                     if let Some(shell_focus) = self.prc_status_bar_focus {
                         let _ = shell_focus;
                         self.handle_prc_status_bar_button(crate::platform::ButtonId::Confirm);
-                        return;
                     } else {
                         let form = self.runtime_prc_form();
                         if let (Some(control_id), Some(session)) =
@@ -1532,7 +1524,6 @@ impl<'a, S: AppSource> Application<'a, S> {
                                 self.prc_blocked_elapsed_ms = 0;
                                 self.prc_blocked_timeout_ticks = 0;
                                 self.resume_prc_runtime_session();
-                                return;
                             }
                         }
                     }
@@ -2513,32 +2504,31 @@ impl<'a, S: AppSource> Application<'a, S> {
             .draw(self.display_buffers)
             .ok();
             let dialog_framed = form.frame_type != 0 || (form.window_flags & 0x2000) != 0;
-            if dialog_framed {
-                if let Some(underlay_id) = self.prc_runtime_underlay_form_id {
-                    if let Some(underlay_form) = self.prc_form_by_id(underlay_id) {
-                        palm::ui::draw_form_preview(
-                            self.display_buffers,
-                            &underlay_form,
-                            &self.prc_system_fonts,
-                            &self.prc_bitmaps,
-                            &self.prc_runtime_bitmap_draws,
-                            &self.prc_runtime_field_draws,
-                            &self.prc_runtime_table_draws,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            pane_x,
-                            pane_y,
-                            pane_w,
-                            pane_h,
-                            scale.max(1),
-                            true,
-                            outline,
-                        );
-                    }
-                }
+            if dialog_framed
+                && let Some(underlay_id) = self.prc_runtime_underlay_form_id
+                && let Some(underlay_form) = self.prc_form_by_id(underlay_id)
+            {
+                palm::ui::draw_form_preview(
+                    self.display_buffers,
+                    &underlay_form,
+                    &self.prc_system_fonts,
+                    &self.prc_bitmaps,
+                    &self.prc_runtime_bitmap_draws,
+                    &self.prc_runtime_field_draws,
+                    &self.prc_runtime_table_draws,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    pane_x,
+                    pane_y,
+                    pane_w,
+                    pane_h,
+                    scale.max(1),
+                    true,
+                    outline,
+                );
             }
             palm::ui::draw_form_preview(
                 self.display_buffers,
@@ -2951,17 +2941,16 @@ impl<'a, S: AppSource> Application<'a, S> {
                     self.dirty = true;
                 }
                 let _ = self.open_path(&path);
-                if let Some(page) = page {
-                    if let Some(book) = &self.book_reader.current_book {
-                        if page < book.page_count {
-                            self.book_reader.current_page = page;
-                            self.book_reader.current_page_ops =
-                                self.source.trbk_page(self.book_reader.current_page).ok();
-                            self.system.full_refresh = true;
-                            self.book_reader.book_turns_since_full = 0;
-                            self.dirty = true;
-                        }
-                    }
+                if let Some(page) = page
+                    && let Some(book) = &self.book_reader.current_book
+                    && page < book.page_count
+                {
+                    self.book_reader.current_page = page;
+                    self.book_reader.current_page_ops =
+                        self.source.trbk_page(self.book_reader.current_page).ok();
+                    self.system.full_refresh = true;
+                    self.book_reader.book_turns_since_full = 0;
+                    self.dirty = true;
                 }
             }
         }

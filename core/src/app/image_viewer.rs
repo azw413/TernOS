@@ -90,7 +90,7 @@ impl ImageViewerState {
                 height,
                 data,
             } => {
-                let plane = ((*width as usize * *height as usize) + 7) / 8;
+                let plane = (*width as usize * *height as usize).div_ceil(8);
                 if data.len() < plane * 3 {
                     return Ok(());
                 }
@@ -128,7 +128,7 @@ impl ImageViewerState {
                 }
             }
             ImageData::Gray2Stream { width, height, key } => {
-                let plane = ((*width as usize * *height as usize) + 7) / 8;
+                let plane = (*width as usize * *height as usize).div_ceil(8);
                 if plane > BUFFER_SIZE {
                     return Err(ImageError::Message(
                         "Image size not supported on device.".into(),
@@ -194,6 +194,12 @@ impl ImageViewerState {
 
         self.current_image = Some(image);
         Ok(())
+    }
+}
+
+impl Default for ImageViewerState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
