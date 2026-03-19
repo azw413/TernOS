@@ -26,7 +26,7 @@ use crate::ternos::ui::{
     auto_button_layout_for_label,
     palm_text_height,
     palm_text_width,
-    ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalHit,
+    ModalChrome, ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalHit,
     ModalTableCellStyle, ModalWidget, ObjectId, Rect, RenderQueue, StatusBarActionState,
     StatusBarView, UiContext, UiTableCell, UiTableModel, UiTableRow, View,
 };
@@ -743,6 +743,7 @@ impl BookReaderState {
         Some(ModalFormSpec {
             form_id: READER_OVERLAY_FORM_ID,
             bounds,
+            chrome: ModalChrome::Alert,
             title: title.into(),
             widgets,
             default_focus: Some(default_focus),
@@ -759,6 +760,7 @@ impl BookReaderState {
         Some(ModalFormSpec {
             form_id: READER_TOC_FORM_ID,
             bounds: modal,
+            chrome: ModalChrome::Alert,
             title: "Table of Contents".into(),
             widgets: vec![
                 ModalWidget::Table {

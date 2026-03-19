@@ -2420,7 +2420,11 @@ impl HomeState {
             || books
                 .iter()
                 .zip(self.books_cache.iter())
-                .any(|(a, b)| a.path != b.path || a.title != b.title);
+                .any(|(a, b)| {
+                    a.path != b.path
+                        || a.title != b.title
+                        || a.image.is_some() != b.image.is_some()
+                });
         if changed {
             self.books_cache = books;
             self.start_menu_need_base_refresh = true;
@@ -2500,7 +2504,11 @@ impl HomeState {
             || images
                 .iter()
                 .zip(self.images_cache.iter())
-                .any(|(a, b)| a.path != b.path || a.title != b.title);
+                .any(|(a, b)| {
+                    a.path != b.path
+                        || a.title != b.title
+                        || a.image.is_some() != b.image.is_some()
+                });
         if changed {
             self.images_cache = images;
             self.start_menu_need_base_refresh = true;

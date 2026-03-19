@@ -2,6 +2,7 @@ pub mod dm;
 pub mod evt;
 pub mod fnt;
 pub mod frm;
+pub mod category;
 pub mod mem;
 pub mod sys;
 pub mod tbl;
@@ -25,6 +26,7 @@ pub enum TrapGroup {
     Str,
     Snd,
     Fnt,
+    Category,
     Lib,
     Unknown,
 }
@@ -47,6 +49,7 @@ impl TrapGroup {
             TrapGroup::Str => "str",
             TrapGroup::Snd => "snd",
             TrapGroup::Fnt => "fnt",
+            TrapGroup::Category => "category",
             TrapGroup::Lib => "lib",
             TrapGroup::Unknown => "unknown",
         }

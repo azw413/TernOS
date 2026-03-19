@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use alloc::{string::String, vec::Vec};
+use alloc::{string::String, vec, vec::Vec};
 
 use crate::palm::{
     cpu::{core::CpuState68k, memory::MemoryMap},
@@ -15,6 +15,8 @@ impl DmApi {
     const DM_ERR_INVALID_PARAM: u16 = 0x8000;
     const DM_ERR_ALREADY_EXISTS: u16 = 0x8001;
     const DM_ERR_CANT_FIND: u16 = 0x8002;
+    const DM_ALL_CATEGORIES: u16 = 0x00FF;
+    const DM_UNFILED_CATEGORY: u16 = 0x0000;
 
     pub fn handle_trap(
         cpu: &mut CpuState68k,
@@ -27,6 +29,14 @@ impl DmApi {
                 Self::dm_create_database(cpu, runtime, memory);
                 true
             }
+            0xA042 => {
+                Self::dm_delete_database(cpu, runtime, memory);
+                true
+            }
+            0xA044 => {
+                Self::dm_get_database(cpu, runtime, memory);
+                true
+            }
             0xA045 => {
                 Self::dm_find_database(cpu, runtime, memory);
                 true
@@ -37,6 +47,10 @@ impl DmApi {
             }
             0xA047 => {
                 Self::dm_set_database_info(cpu, runtime, memory);
+                true
+            }
+            0xA048 => {
+                Self::dm_num_databases(cpu, runtime, memory);
                 true
             }
             0xA049 => {
@@ -63,8 +77,24 @@ impl DmApi {
                 Self::dm_record_info(cpu, runtime, memory);
                 true
             }
+            0xA051 => {
+                Self::dm_set_record_info(cpu, runtime, memory);
+                true
+            }
+            0xA052 => {
+                Self::dm_attach_record(cpu, runtime, memory);
+                true
+            }
+            0xA053 => {
+                Self::dm_detach_record(cpu, runtime, memory);
+                true
+            }
             0xA055 => {
                 Self::dm_new_record(cpu, runtime, memory);
+                true
+            }
+            0xA059 => {
+                Self::dm_new_handle(cpu, runtime, memory);
                 true
             }
             0xA05B => {
@@ -93,6 +123,26 @@ impl DmApi {
             }
             0xA061 => {
                 cpu.d[0] = 0;
+                true
+            }
+            0xA070 => {
+                Self::dm_query_next_in_category(cpu, runtime, memory);
+                true
+            }
+            0xA071 => {
+                Self::dm_num_records_in_category(cpu, runtime, memory);
+                true
+            }
+            0xA072 => {
+                Self::dm_position_in_category(cpu, runtime, memory);
+                true
+            }
+            0xA073 => {
+                Self::dm_seek_record_in_category(cpu, runtime, memory);
+                true
+            }
+            0xA074 => {
+                Self::dm_get_next_database_by_type_creator(cpu, runtime, memory);
                 true
             }
             0xA075 => {
@@ -135,6 +185,59 @@ impl DmApi {
             let _ = memory.write_u8(ptr.saturating_add(i as u32), *b);
         }
         let _ = memory.write_u8(ptr.saturating_add(s.len() as u32), 0);
+    }
+
+    fn resolve_open_db_ref(
+        cpu: &CpuState68k,
+        runtime: &PrcRuntimeContext,
+        memory: &MemoryMap,
+    ) -> Option<u32> {
+        let sp = cpu.a[7];
+        for raw in [
+            memory.read_u32_be(sp).unwrap_or(0),
+            cpu.a[0],
+            cpu.d[0],
+            runtime.open_databases.last().map(|open| open.db_ref).unwrap_or(0),
+        ] {
+            if raw != 0 && runtime.open_databases.iter().any(|open| open.db_ref == raw) {
+                return Some(raw);
+            }
+        }
+        None
+    }
+
+    fn resolve_record_db_ref(
+        cpu: &CpuState68k,
+        runtime: &PrcRuntimeContext,
+        memory: &MemoryMap,
+    ) -> Option<u32> {
+        let sp = cpu.a[7];
+        for raw in [
+            memory.read_u32_be(sp).unwrap_or(0),
+            cpu.a[0],
+            cpu.d[0],
+            cpu.d[3],
+            cpu.a[1],
+            cpu.d[1],
+        ] {
+            if raw != 0 && runtime.open_databases.iter().any(|open| open.db_ref == raw) {
+                return Some(raw);
+            }
+        }
+        runtime.open_databases.last().map(|open| open.db_ref)
+    }
+
+    fn resolve_local_id_after_card_no(runtime: &PrcRuntimeContext, memory: &MemoryMap, sp: u32) -> u32 {
+        for raw in [
+            memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0),
+            memory.read_u32_be(sp).unwrap_or(0),
+            memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0),
+        ] {
+            if raw != 0 && db_runtime::db_by_local_id(runtime, raw).is_some() {
+                return raw;
+            }
+        }
+        memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0)
     }
 
     fn fourcc_name(db_type: u32) -> String {
@@ -431,6 +534,13 @@ impl DmApi {
         }
 
         db_runtime::create_database(runtime, name, db_type, creator, res_db);
+        log::info!(
+            "Palm DmCreateDatabase name={:?} type={:08X} creator={:08X} res_db={}",
+            Self::read_c_string(memory, name_p),
+            db_type,
+            creator,
+            res_db
+        );
         cpu.d[0] = 0;
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
     }
@@ -441,6 +551,9 @@ impl DmApi {
         let name_p = memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0);
         let name = Self::read_c_string(memory, name_p);
         let local_id = db_runtime::db_by_name(runtime, &name).map(|db| db.local_id).unwrap_or(0);
+        log::info!(
+            "Palm DmFindDatabase name={name:?} -> local_id=0x{local_id:08X}"
+        );
         cpu.d[0] = local_id;
         cpu.a[0] = local_id;
         if local_id == 0 {
@@ -448,6 +561,79 @@ impl DmApi {
         } else {
             db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
         }
+    }
+
+    fn dm_delete_database(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let _card_no = memory.read_u16_be(sp).unwrap_or(0);
+        let local_id = Self::resolve_local_id_after_card_no(runtime, memory, sp);
+        let target_name = db_runtime::db_by_local_id(runtime, local_id)
+            .map(|db| db.name.clone())
+            .unwrap_or_default();
+        let before = runtime.databases.len();
+        runtime.databases.retain(|db| db.local_id != local_id);
+        runtime.open_databases.retain(|open| open.local_id != local_id);
+        log::info!(
+            "Palm DmDeleteDatabase local_id=0x{local_id:08X} name={target_name:?} removed={}",
+            runtime.databases.len() != before
+        );
+        if runtime.databases.len() == before {
+            cpu.d[0] = Self::DM_ERR_CANT_FIND as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_CANT_FIND);
+            return;
+        }
+        cpu.d[0] = 0;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_get_database(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let _card_no = memory.read_u16_be(sp).unwrap_or(0);
+        let index = memory.read_u16_be(sp.saturating_add(2)).unwrap_or(0) as usize;
+        let local_id = runtime
+            .databases
+            .get(index)
+            .map(|db| db.local_id)
+            .unwrap_or(0);
+        let db_name = runtime
+            .databases
+            .get(index)
+            .map(|db| db.name.clone())
+            .unwrap_or_default();
+        log::info!(
+            "Palm DmGetDatabase index={} -> local_id=0x{local_id:08X} name={db_name:?}",
+            index
+        );
+        cpu.d[0] = local_id;
+        cpu.a[0] = local_id;
+        if local_id == 0 {
+            db_runtime::set_last_err(runtime, Self::DM_ERR_CANT_FIND);
+        } else {
+            db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+        }
+    }
+
+    fn dm_num_databases(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let _card_no = memory.read_u16_be(sp).unwrap_or(0);
+        log::info!(
+            "Palm DmNumDatabases -> {}",
+            runtime.databases.len()
+        );
+        cpu.d[0] = runtime.databases.len().min(u16::MAX as usize) as u32;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
     }
 
     fn dm_database_info(cpu: &mut CpuState68k, runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap) {
@@ -501,6 +687,14 @@ impl DmApi {
         if creator_p != 0 && memory.contains_addr(creator_p) {
             let _ = memory.write_u32_be(creator_p, db.creator);
         }
+        log::info!(
+            "Palm DmDatabaseInfo local_id=0x{local_id:08X} name={:?} type={:08X} creator={:08X} res_db={} records={}",
+            db.name,
+            db.db_type,
+            db.creator,
+            db.is_resource_db,
+            db.record_handles.len()
+        );
         cpu.d[0] = 0;
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
     }
@@ -516,14 +710,23 @@ impl DmApi {
             return;
         }
         let db_ref = db_runtime::open_ref_for_local_id(runtime, local_id, mode);
+        let db_name = db_runtime::db_by_local_id(runtime, local_id)
+            .map(|db| db.name.clone())
+            .unwrap_or_default();
+        log::info!(
+            "Palm DmOpenDatabase local_id=0x{local_id:08X} name={db_name:?} mode=0x{mode:04X} -> db_ref=0x{db_ref:08X}"
+        );
         cpu.a[0] = db_ref;
         cpu.d[0] = db_ref;
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
     }
 
     fn dm_close_database(cpu: &mut CpuState68k, runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap) {
-        let sp = cpu.a[7];
-        let db_ref = memory.read_u32_be(sp).unwrap_or(cpu.a[0]);
+        let Some(db_ref) = Self::resolve_open_db_ref(cpu, runtime, memory) else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
         if let Some(pos) = runtime.open_databases.iter().position(|o| o.db_ref == db_ref) {
             runtime.open_databases.remove(pos);
             cpu.d[0] = 0;
@@ -540,7 +743,11 @@ impl DmApi {
         memory: &mut MemoryMap,
     ) {
         let sp = cpu.a[7];
-        let db_ref = memory.read_u32_be(sp).unwrap_or(cpu.a[0]);
+        let Some(db_ref) = Self::resolve_open_db_ref(cpu, runtime, memory) else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
         let Some(open) = runtime.open_databases.iter().find(|o| o.db_ref == db_ref).cloned() else {
             cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
             db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
@@ -577,6 +784,18 @@ impl DmApi {
         if res_db_p != 0 && memory.contains_addr(res_db_p) {
             let _ = memory.write_u8(res_db_p, if db.is_resource_db { 1 } else { 0 });
         }
+        log::info!(
+            "Palm DmOpenDatabaseInfo db_ref=0x{db_ref:08X} local_id=0x{:08X} name={:?} open_count={} mode=0x{:04X}",
+            db.local_id,
+            db.name,
+            runtime
+                .open_databases
+                .iter()
+                .filter(|o| o.local_id == db.local_id)
+                .count()
+                .max(1),
+            open.mode
+        );
         cpu.d[0] = 0;
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
     }
@@ -590,11 +809,11 @@ impl DmApi {
         let db_type = memory.read_u32_be(sp).unwrap_or(cpu.d[0]);
         let creator = memory.read_u32_be(sp.saturating_add(4)).unwrap_or(cpu.d[1]);
         let mode = memory.read_u16_be(sp.saturating_add(8)).unwrap_or(0);
-        let Some(local_id) = runtime
+        let Some((local_id, name, records)) = runtime
             .databases
             .iter()
             .find(|db| db.db_type == db_type && db.creator == creator)
-            .map(|db| db.local_id)
+            .map(|db| (db.local_id, db.name.clone(), db.record_handles.len()))
         else {
             cpu.a[0] = 0;
             cpu.d[0] = 0;
@@ -602,8 +821,115 @@ impl DmApi {
             return;
         };
         let db_ref = db_runtime::open_ref_for_local_id(runtime, local_id, mode);
+        log::info!(
+            "Palm DmOpenDatabaseByTypeCreator type={db_type:08X} creator={creator:08X} -> db_ref=0x{db_ref:08X} local_id=0x{local_id:08X} name={name:?} records={records}"
+        );
+        if records > 0 && runtime.trace_traps {
+            runtime.trace_trap_budget = runtime.trace_trap_budget.max(256);
+            log::info!(
+                "Palm DmOpenDatabaseByTypeCreator armed focused trap trace for db_ref=0x{db_ref:08X} name={name:?}"
+            );
+        }
         cpu.a[0] = db_ref;
         cpu.d[0] = db_ref;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_get_next_database_by_type_creator(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let new_search = memory.read_u16_be(sp).unwrap_or(0) != 0;
+        let state_info_p = memory.read_u32_be(sp.saturating_add(2)).unwrap_or(0);
+        let db_type = memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0);
+        let creator = memory.read_u32_be(sp.saturating_add(10)).unwrap_or(0);
+        let only_latest = memory.read_u16_be(sp.saturating_add(14)).unwrap_or(0) != 0;
+        let card_no_p = memory.read_u32_be(sp.saturating_add(16)).unwrap_or(0);
+        let db_id_p = memory.read_u32_be(sp.saturating_add(20)).unwrap_or(0);
+
+        let search_pos = if new_search {
+            runtime
+                .db_search_states
+                .retain(|state| state.state_ptr != state_info_p);
+            runtime.db_search_states.push(crate::palm::runtime::RuntimeDbSearchState {
+                state_ptr: state_info_p,
+                db_type,
+                creator,
+                only_latest,
+                next_match_index: 0,
+            });
+            runtime.db_search_states.len().saturating_sub(1)
+        } else if let Some(pos) = runtime
+            .db_search_states
+            .iter()
+            .position(|state| state.state_ptr == state_info_p)
+        {
+            pos
+        } else {
+            runtime.db_search_states.push(crate::palm::runtime::RuntimeDbSearchState {
+                state_ptr: state_info_p,
+                db_type,
+                creator,
+                only_latest,
+                next_match_index: 0,
+            });
+            runtime.db_search_states.len().saturating_sub(1)
+        };
+
+        let start = runtime.db_search_states[search_pos].next_match_index;
+        let matched = if only_latest && db_type != 0 && creator != 0 {
+            runtime
+                .databases
+                .iter()
+                .enumerate()
+                .filter(|(_, db)| db.db_type == db_type && db.creator == creator)
+                .max_by_key(|(_, db)| (db.version, db.card_no, db.local_id))
+                .filter(|(idx, _)| *idx >= start)
+        } else {
+            runtime
+                .databases
+                .iter()
+                .enumerate()
+                .skip(start)
+                .find(|(_, db)| (db_type == 0 || db.db_type == db_type) && (creator == 0 || db.creator == creator))
+        };
+
+        let Some((match_index, db)) = matched else {
+            if card_no_p != 0 && memory.contains_addr(card_no_p) {
+                let _ = memory.write_u16_be(card_no_p, 0);
+            }
+            if db_id_p != 0 && memory.contains_addr(db_id_p) {
+                let _ = memory.write_u32_be(db_id_p, 0);
+            }
+            log::info!(
+                "Palm DmGetNextDatabaseByTypeCreator new_search={} type={db_type:08X} creator={creator:08X} latest={} -> not found",
+                new_search,
+                only_latest
+            );
+            cpu.d[0] = Self::DM_ERR_CANT_FIND as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_CANT_FIND);
+            return;
+        };
+
+        runtime.db_search_states[search_pos].next_match_index = match_index.saturating_add(1);
+        if card_no_p != 0 && memory.contains_addr(card_no_p) {
+            let _ = memory.write_u16_be(card_no_p, db.card_no);
+        }
+        if db_id_p != 0 && memory.contains_addr(db_id_p) {
+            let _ = memory.write_u32_be(db_id_p, db.local_id);
+        }
+        log::info!(
+            "Palm DmGetNextDatabaseByTypeCreator new_search={} type={db_type:08X} creator={creator:08X} latest={} -> local_id=0x{:08X} name={:?} card={} res_db={}",
+            new_search,
+            only_latest,
+            db.local_id,
+            db.name,
+            db.card_no,
+            db.is_resource_db
+        );
+        cpu.d[0] = 0;
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
     }
 
@@ -669,6 +995,157 @@ impl DmApi {
                 db.creator = v;
             }
         }
+        log::info!(
+            "Palm DmSetDatabaseInfo local_id=0x{local_id:08X} name={:?} type={:08X} creator={:08X} attrs=0x{:04X}",
+            db.name,
+            db.db_type,
+            db.creator,
+            db.attributes
+        );
+        cpu.d[0] = 0;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn category_matches(_category: u16) -> bool {
+        // The runtime DB bridge does not yet preserve Palm record category
+        // metadata, so treat all records as visible in any category for now.
+        true
+    }
+
+    fn dm_num_records_in_category(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let category = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(Self::DM_UNFILED_CATEGORY);
+        let count = if Self::category_matches(category) {
+            db_runtime::record_count(runtime, db_ref).unwrap_or(0)
+        } else {
+            0
+        };
+        cpu.d[0] = (count.min(u16::MAX as usize) as u16) as u32;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_position_in_category(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
+        let category = memory.read_u16_be(sp.saturating_add(6)).unwrap_or(Self::DM_UNFILED_CATEGORY);
+        let count = db_runtime::record_count(runtime, db_ref).unwrap_or(0);
+        let pos = if Self::category_matches(category) && index < count {
+            index
+        } else {
+            count
+        };
+        cpu.d[0] = (pos.min(u16::MAX as usize) as u16) as u32;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_query_next_in_category(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let index_p = memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0);
+        let category = memory.read_u16_be(sp.saturating_add(8)).unwrap_or(Self::DM_UNFILED_CATEGORY);
+        let mut index = memory.read_u16_be(index_p).unwrap_or(0) as usize;
+        let resolved = db_runtime::resolved_record_db(runtime, db_ref);
+        let count = db_runtime::record_count(runtime, db_ref).unwrap_or(0);
+        log::info!(
+            "Palm DmQueryNextInCategory db_ref=0x{db_ref:08X} index={} category={} count={} resolved={:?}",
+            index,
+            category,
+            count,
+            resolved.map(|db| (&db.name, db.local_id, db.is_resource_db))
+        );
+        if !Self::category_matches(category) {
+            cpu.a[0] = 0;
+            cpu.d[0] = 0;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_CANT_FIND);
+            return;
+        }
+        while index < count {
+            if let Some(handle) = db_runtime::record_handle_by_index(runtime, db_ref, index) {
+                let _ = memory.write_u16_be(index_p, index as u16);
+                log::info!(
+                    "Palm DmQueryNextInCategory -> index={} handle=0x{handle:08X}",
+                    index
+                );
+                cpu.a[0] = handle;
+                cpu.d[0] = handle;
+                db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+                return;
+            }
+            index += 1;
+        }
+        cpu.a[0] = 0;
+        cpu.d[0] = 0;
+        log::info!("Palm DmQueryNextInCategory -> not found");
+        db_runtime::set_last_err(runtime, Self::DM_ERR_CANT_FIND);
+    }
+
+    fn dm_seek_record_in_category(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let index_p = memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0);
+        let offset = memory.read_u16_be(sp.saturating_add(8)).unwrap_or(0) as i32;
+        let direction = memory
+            .read_u16_be(sp.saturating_add(10))
+            .map(|v| v as i16)
+            .unwrap_or(1) as i32;
+        let category = memory.read_u16_be(sp.saturating_add(12)).unwrap_or(Self::DM_UNFILED_CATEGORY);
+        let resolved = db_runtime::resolved_record_db(runtime, db_ref);
+        let count = db_runtime::record_count(runtime, db_ref).unwrap_or(0) as i32;
+        log::info!(
+            "Palm DmSeekRecordInCategory db_ref=0x{db_ref:08X} index={} offset={} direction={} category={} count={} resolved={:?}",
+            memory.read_u16_be(index_p).unwrap_or(0),
+            offset,
+            direction,
+            category,
+            count,
+            resolved.map(|db| (&db.name, db.local_id, db.is_resource_db))
+        );
+        if !Self::category_matches(category) || count <= 0 {
+            cpu.d[0] = Self::DM_ERR_CANT_FIND as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_CANT_FIND);
+            return;
+        }
+
+        let mut index = memory.read_u16_be(index_p).unwrap_or(0) as i32;
+        let step = if direction < 0 { -1 } else { 1 };
+        let mut remaining = offset.max(0);
+
+        while remaining > 0 {
+            index += step;
+            if index < 0 || index >= count {
+                cpu.d[0] = Self::DM_ERR_CANT_FIND as u32;
+                db_runtime::set_last_err(runtime, Self::DM_ERR_CANT_FIND);
+                return;
+            }
+            remaining -= 1;
+        }
+
+        if index < 0 || index >= count {
+            cpu.d[0] = Self::DM_ERR_CANT_FIND as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_CANT_FIND);
+            return;
+        }
+
+        let _ = memory.write_u16_be(index_p, index as u16);
+        log::info!("Palm DmSeekRecordInCategory -> index={}", index);
         cpu.d[0] = 0;
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
     }
@@ -694,14 +1171,38 @@ impl DmApi {
         if at_p != 0 && memory.contains_addr(at_p) {
             let _ = memory.write_u16_be(at_p, index as u16);
         }
+        let target = db_runtime::resolved_record_db(runtime, db_ref)
+            .map(|db| (db.name.clone(), db.local_id, db.record_handles.len()));
+        log::info!(
+            "Palm DmNewRecord db_ref=0x{db_ref:08X} target={target:?} size={} insert_at={} -> index={} handle=0x{handle:08X}",
+            size,
+            insert_at,
+            index
+        );
+        cpu.a[0] = handle;
+        cpu.d[0] = handle;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_new_handle(cpu: &mut CpuState68k, runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap) {
+        let sp = cpu.a[7];
+        let size = memory
+            .read_u32_be(sp)
+            .or_else(|| memory.read_u32_be(sp.saturating_add(4)))
+            .unwrap_or(0)
+            .clamp(16, 1_048_576);
+        let handle = db_runtime::alloc_mem(runtime, memory, vec![0u8; size as usize], None, None);
         cpu.a[0] = handle;
         cpu.d[0] = handle;
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
     }
 
     fn dm_num_records(cpu: &mut CpuState68k, runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap) {
-        let sp = cpu.a[7];
-        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let Some(stack_db_ref) = Self::resolve_record_db_ref(cpu, runtime, memory) else {
+            cpu.d[0] = 0;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
         let Ok(count) = db_runtime::record_count(runtime, stack_db_ref) else {
             cpu.d[0] = 0;
             db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
@@ -713,7 +1214,11 @@ impl DmApi {
 
     fn dm_record_info(cpu: &mut CpuState68k, runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap) {
         let sp = cpu.a[7];
-        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let Some(stack_db_ref) = Self::resolve_record_db_ref(cpu, runtime, memory) else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
         let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
         let attr_p = memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0);
         let unique_id_p = memory.read_u32_be(sp.saturating_add(10)).unwrap_or(0);
@@ -738,6 +1243,116 @@ impl DmApi {
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
     }
 
+    fn dm_set_record_info(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let Some(stack_db_ref) = Self::resolve_record_db_ref(cpu, runtime, memory) else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
+        let attr_p = memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0);
+        let unique_id_p = memory.read_u32_be(sp.saturating_add(10)).unwrap_or(0);
+        let Ok((_attributes, _unique_id, _handle)) =
+            db_runtime::record_info(runtime, stack_db_ref, index)
+        else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        let _ = attr_p;
+        let _ = unique_id_p;
+        cpu.d[0] = 0;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_attach_record(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let Some(stack_db_ref) = Self::resolve_record_db_ref(cpu, runtime, memory) else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        let at_p = memory.read_u32_be(sp.saturating_add(4)).unwrap_or(0);
+        let new_h_raw = memory.read_u32_be(sp.saturating_add(8)).unwrap_or(0);
+        let old_hp = memory.read_u32_be(sp.saturating_add(12)).unwrap_or(0);
+        let new_h = db_runtime::handle_from_any(runtime, new_h_raw).unwrap_or(new_h_raw);
+        let insert_at = memory.read_u16_be(at_p).unwrap_or(u16::MAX) as usize;
+        let replacing = old_hp != 0 && memory.contains_addr(old_hp);
+        let target = db_runtime::resolved_record_db(runtime, stack_db_ref)
+            .map(|db| (db.name.clone(), db.local_id, db.record_handles.len()));
+        let result = if replacing {
+            db_runtime::replace_record_handle(runtime, stack_db_ref, insert_at, new_h).map(|old| {
+                let _ = memory.write_u32_be(old_hp, old);
+                insert_at
+            })
+        } else {
+            db_runtime::attach_record_handle(runtime, stack_db_ref, insert_at, new_h)
+        };
+        let Ok(index) = result else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        if at_p != 0 && memory.contains_addr(at_p) {
+            let _ = memory.write_u16_be(at_p, index as u16);
+        }
+        if !replacing && old_hp != 0 && memory.contains_addr(old_hp) {
+            let _ = memory.write_u32_be(old_hp, 0);
+        }
+        let final_count = db_runtime::record_count(runtime, stack_db_ref).unwrap_or(0);
+        log::info!(
+            "Palm DmAttachRecord db_ref=0x{stack_db_ref:08X} target={target:?} at={} new_h=0x{new_h:08X} replacing={} -> index={} count={}",
+            insert_at,
+            replacing,
+            index,
+            final_count
+        );
+        cpu.d[0] = 0;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
+    fn dm_detach_record(
+        cpu: &mut CpuState68k,
+        runtime: &mut PrcRuntimeContext,
+        memory: &mut MemoryMap,
+    ) {
+        let sp = cpu.a[7];
+        let Some(stack_db_ref) = Self::resolve_record_db_ref(cpu, runtime, memory) else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
+        let old_hp = memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0);
+        let target = db_runtime::resolved_record_db(runtime, stack_db_ref)
+            .map(|db| (db.name.clone(), db.local_id, db.record_handles.len()));
+        let Ok(handle) = db_runtime::detach_record_handle(runtime, stack_db_ref, index) else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
+        if old_hp != 0 && memory.contains_addr(old_hp) {
+            let _ = memory.write_u32_be(old_hp, handle);
+        }
+        let final_count = db_runtime::record_count(runtime, stack_db_ref).unwrap_or(0);
+        log::info!(
+            "Palm DmDetachRecord db_ref=0x{stack_db_ref:08X} target={target:?} index={} -> handle=0x{handle:08X} count={}",
+            index,
+            final_count
+        );
+        cpu.d[0] = 0;
+        db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
+    }
+
     fn dm_query_record(
         cpu: &mut CpuState68k,
         runtime: &mut PrcRuntimeContext,
@@ -745,7 +1360,12 @@ impl DmApi {
         lock_record: bool,
     ) {
         let sp = cpu.a[7];
-        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let Some(stack_db_ref) = Self::resolve_record_db_ref(cpu, runtime, memory) else {
+            cpu.a[0] = 0;
+            cpu.d[0] = 0;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
         let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
         let Ok(handle) =
             db_runtime::query_record(runtime, memory, stack_db_ref, index, lock_record)
@@ -755,6 +1375,13 @@ impl DmApi {
             db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
             return;
         };
+        let target = db_runtime::resolved_record_db(runtime, stack_db_ref)
+            .map(|db| (db.name.clone(), db.local_id, db.record_handles.len()));
+        log::info!(
+            "Palm {} db_ref=0x{stack_db_ref:08X} target={target:?} index={} -> handle=0x{handle:08X}",
+            if lock_record { "DmGetRecord" } else { "DmQueryRecord" },
+            index
+        );
         cpu.a[0] = handle;
         cpu.d[0] = handle;
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
@@ -762,7 +1389,7 @@ impl DmApi {
 
     fn dm_resize_record(cpu: &mut CpuState68k, runtime: &mut PrcRuntimeContext, memory: &mut MemoryMap) {
         let sp = cpu.a[7];
-        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let stack_db_ref = Self::resolve_record_db_ref(cpu, runtime, memory).unwrap_or(0);
         let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
         let new_size = memory.read_u32_be(sp.saturating_add(6)).unwrap_or(0) as usize;
 
@@ -795,6 +1422,11 @@ impl DmApi {
             db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
             return;
         };
+        log::info!(
+            "Palm DmResizeRecord db_ref=0x{stack_db_ref:08X} index={} -> handle=0x{handle:08X} new_size={}",
+            index,
+            new_size
+        );
         cpu.a[0] = handle;
         cpu.d[0] = handle;
         db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
@@ -806,10 +1438,21 @@ impl DmApi {
         memory: &mut MemoryMap,
     ) {
         let sp = cpu.a[7];
-        let stack_db_ref = memory.read_u32_be(sp).unwrap_or(0);
+        let Some(stack_db_ref) = Self::resolve_record_db_ref(cpu, runtime, memory) else {
+            cpu.d[0] = Self::DM_ERR_INVALID_PARAM as u32;
+            db_runtime::set_last_err(runtime, Self::DM_ERR_INVALID_PARAM);
+            return;
+        };
         let index = memory.read_u16_be(sp.saturating_add(4)).unwrap_or(0) as usize;
         let dirty = memory.read_u16_be(sp.saturating_add(6)).unwrap_or(0) != 0;
         let Err(_) = db_runtime::release_record(runtime, stack_db_ref, index, dirty) else {
+            let target = db_runtime::resolved_record_db(runtime, stack_db_ref)
+                .map(|db| (db.name.clone(), db.local_id, db.record_handles.len()));
+            log::info!(
+                "Palm DmReleaseRecord db_ref=0x{stack_db_ref:08X} target={target:?} index={} dirty={}",
+                index,
+                dirty
+            );
             cpu.d[0] = 0;
             db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
             return;
@@ -842,6 +1485,11 @@ impl DmApi {
         let Err(_) =
             db_runtime::write_record_bytes(runtime, memory, record_p, offset, src_p, bytes)
         else {
+            log::info!(
+                "Palm DmWrite record_ptr=0x{record_p:08X} offset={} src=0x{src_p:08X} bytes={}",
+                offset,
+                bytes
+            );
             cpu.d[0] = 0;
             db_runtime::set_last_err(runtime, Self::DM_ERR_NONE);
             return;

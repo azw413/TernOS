@@ -47,8 +47,13 @@ pub struct PrcRuntimeContext {
     pub drawn_form_id: Option<u16>,
     pub drawn_bitmaps: alloc::vec::Vec<RuntimeBitmapDraw>,
     pub form_objects: alloc::vec::Vec<RuntimeFormObject>,
+    pub button_labels: alloc::vec::Vec<RuntimeButtonLabel>,
+    pub control_group_selections: alloc::vec::Vec<RuntimeControlGroupSelection>,
+    pub control_values: alloc::vec::Vec<RuntimeControlValue>,
     pub field_draws: alloc::vec::Vec<RuntimeFieldDraw>,
+    pub temp_fields: alloc::vec::Vec<RuntimeTempField>,
     pub table_states: alloc::vec::Vec<RuntimeTableState>,
+    pub active_table_cell_draw: Option<RuntimeTableCellRef>,
     pub help_dialog: Option<RuntimeHelpDialog>,
     pub blink_next_tick: u32,
     pub blink_phase: u8,
@@ -67,12 +72,15 @@ pub struct PrcRuntimeContext {
     pub dm_last_err: u16,
     pub databases: alloc::vec::Vec<RuntimeDatabase>,
     pub open_databases: alloc::vec::Vec<RuntimeOpenDatabase>,
+    pub db_search_states: alloc::vec::Vec<RuntimeDbSearchState>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RuntimeEvent {
     pub e_type: u16,
     pub data_u16: u16,
+    pub screen_x: u16,
+    pub screen_y: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -205,6 +213,10 @@ pub struct RuntimeFormObject {
     pub object_id: u16,
     pub kind: RuntimeFormObjectKind,
     pub ptr: u32,
+    pub x: i16,
+    pub y: i16,
+    pub w: i16,
+    pub h: i16,
     pub text_handle: u32,
     pub sel_start: u16,
     pub sel_end: u16,
@@ -213,10 +225,40 @@ pub struct RuntimeFormObject {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeButtonLabel {
+    pub form_id: u16,
+    pub object_id: u16,
+    pub text: alloc::string::String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeControlGroupSelection {
+    pub form_id: u16,
+    pub group_num: u8,
+    pub control_id: u16,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeControlValue {
+    pub form_id: u16,
+    pub control_id: u16,
+    pub value: u16,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeFieldDraw {
     pub form_id: u16,
     pub field_id: u16,
     pub text: alloc::string::String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeTempField {
+    pub ptr: u32,
+    pub text_handle: u32,
+    pub sel_start: u16,
+    pub sel_end: u16,
+    pub ins_pt: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -251,6 +293,15 @@ pub struct RuntimeTableCellState {
     pub int_value: i16,
     pub ptr_value: u32,
     pub font_id: u16,
+    pub text: alloc::string::String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RuntimeTableCellRef {
+    pub form_id: u16,
+    pub table_id: u16,
+    pub row: u16,
+    pub col: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -281,6 +332,15 @@ pub struct RuntimeOpenDatabase {
     pub db_ref: u32,
     pub local_id: u32,
     pub mode: u16,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeDbSearchState {
+    pub state_ptr: u32,
+    pub db_type: u32,
+    pub creator: u32,
+    pub only_latest: bool,
+    pub next_match_index: usize,
 }
 
 impl Default for PrcRuntimeContext {
@@ -317,8 +377,13 @@ impl Default for PrcRuntimeContext {
             drawn_form_id: None,
             drawn_bitmaps: alloc::vec::Vec::new(),
             form_objects: alloc::vec::Vec::new(),
+            button_labels: alloc::vec::Vec::new(),
+            control_group_selections: alloc::vec::Vec::new(),
+            control_values: alloc::vec::Vec::new(),
             field_draws: alloc::vec::Vec::new(),
+            temp_fields: alloc::vec::Vec::new(),
             table_states: alloc::vec::Vec::new(),
+            active_table_cell_draw: None,
             help_dialog: None,
             blink_next_tick: 175,
             blink_phase: 0,
@@ -332,11 +397,12 @@ impl Default for PrcRuntimeContext {
             code_handle: 0,
             globals_ptr: 0,
             prev_globals_ptr: 0,
-            next_local_id: 0x1000,
+            next_local_id: 1,
             next_db_ref: 0x5000_0000,
             dm_last_err: 0,
             databases: alloc::vec::Vec::new(),
             open_databases: alloc::vec::Vec::new(),
+            db_search_states: alloc::vec::Vec::new(),
         }
     }
 }

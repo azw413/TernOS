@@ -4,6 +4,8 @@ use alloc::string::String;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 
+use crate::ternos::services::db::DbKind;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EntryKind {
     Dir,
@@ -106,6 +108,21 @@ pub trait ImageSource {
     fn list_installed_apps(&mut self) -> Vec<InstalledAppEntry> {
         Vec::new()
     }
+
+    /// Optional installed-database catalog for the Records manager.
+    fn list_installed_databases(&mut self) -> Vec<InstalledDatabaseEntry> {
+        Vec::new()
+    }
+
+    /// Optional raw installed-database payload loader for Palm DB adapters.
+    fn load_installed_database_bytes(&mut self, _path: &str) -> Result<Vec<u8>, ImageError> {
+        Err(ImageError::Unsupported)
+    }
+
+    /// Optional installed-database delete hook for the Records manager.
+    fn delete_installed_database(&mut self, _path: &str) -> Result<(), ImageError> {
+        Err(ImageError::Unsupported)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -113,6 +130,17 @@ pub struct InstalledAppEntry {
     pub title: String,
     pub path: String,
     pub icon: Option<ImageData>,
+}
+
+#[derive(Clone, Debug)]
+pub struct InstalledDatabaseEntry {
+    pub title: String,
+    pub path: String,
+    pub type_code: String,
+    pub creator_code: String,
+    pub kind: DbKind,
+    pub size_bytes: u64,
+    pub can_delete: bool,
 }
 
 pub trait BookSource {

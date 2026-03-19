@@ -19,7 +19,10 @@ use crate::palm::{
     bitmap::PrcBitmap,
     form_preview::{FormPreview, FormPreviewObject},
     menu_preview::MenuBarPreview,
-    runner::{RuntimeBitmapDraw, RuntimeFieldDraw, RuntimeHelpDialog, RuntimeTableDraw},
+    runner::{
+        RuntimeBitmapDraw, RuntimeButtonLabel, RuntimeFieldDraw, RuntimeHelpDialog,
+        RuntimeSelectedControl, RuntimeTableDraw,
+    },
     runtime::PalmFont,
 };
 use crate::ternos::ui::{chrome, form, prc_alert, text, Point as UiPoint};
@@ -38,9 +41,16 @@ pub enum HelpOverlayHit {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormControlKind {
+    Control,
+    Field,
+    Table,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FormControlHit {
     pub id: u16,
-    pub is_field: bool,
+    pub kind: FormControlKind,
 }
 
 fn form_preview_coord_mapper(form: &FormPreview) -> (bool, impl Fn(i16) -> i32 + '_, impl Fn(i16) -> i32 + '_) {
@@ -169,7 +179,7 @@ pub fn hit_test_form_preview(form: &FormPreview, point: UiPoint) -> Option<FormC
                 if point.x >= bx && point.x < bx + bw && point.y >= by && point.y < by + bh {
                     return Some(FormControlHit {
                         id: *id,
-                        is_field: false,
+                        kind: FormControlKind::Control,
                     });
                 }
             }
@@ -181,7 +191,19 @@ pub fn hit_test_form_preview(form: &FormPreview, point: UiPoint) -> Option<FormC
                 if point.x >= bx && point.x < bx + bw && point.y >= by && point.y < by + bh {
                     return Some(FormControlHit {
                         id: *id,
-                        is_field: true,
+                        kind: FormControlKind::Field,
+                    });
+                }
+            }
+            FormPreviewObject::Table { id, x, y, w, h } => {
+                let bx = map_x(*x);
+                let by = map_y(*y);
+                let bw = (*w).max(8) as i32;
+                let bh = (*h).max(8) as i32;
+                if point.x >= bx && point.x < bx + bw && point.y >= by && point.y < by + bh {
+                    return Some(FormControlHit {
+                        id: *id,
+                        kind: FormControlKind::Table,
                     });
                 }
             }
@@ -688,6 +710,27 @@ fn find_field_text<'a>(
         .iter()
         .find(|f| f.form_id == form_id && f.field_id == field_id)
         .map(|f| f.text.as_str())
+}
+
+fn find_button_label<'a>(
+    button_labels: &'a [RuntimeButtonLabel],
+    form_id: u16,
+    object_id: u16,
+) -> Option<&'a str> {
+    button_labels
+        .iter()
+        .find(|b| b.form_id == form_id && b.object_id == object_id)
+        .map(|b| b.text.as_str())
+}
+
+fn is_selected_control(
+    selected_controls: &[RuntimeSelectedControl],
+    form_id: u16,
+    object_id: u16,
+) -> bool {
+    selected_controls
+        .iter()
+        .any(|c| c.form_id == form_id && c.object_id == object_id)
 }
 
 fn find_table_draw<'a>(
@@ -1660,6 +1703,8 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
     fonts: &[PalmFont],
     bitmaps: &[PrcBitmap],
     runtime_bitmap_draws: &[RuntimeBitmapDraw],
+    runtime_button_labels: &[RuntimeButtonLabel],
+    selected_controls: &[RuntimeSelectedControl],
     runtime_field_draws: &[RuntimeFieldDraw],
     runtime_table_draws: &[RuntimeTableDraw],
     focused_control_id: Option<u16>,
@@ -1899,7 +1944,19 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
                         bx = *adj_x;
                     }
                 }
+                let text = find_button_label(runtime_button_labels, form.form_id, *id).unwrap_or(text);
                 let focused = focused_control_id == Some(*id);
+                let selected = is_selected_control(selected_controls, form.form_id, *id);
+                if *style == 1 && form.form_id == 1000 {
+                    log::info!(
+                        "Palm PushButtonPaint form_id={} id=0x{:04X} selected={} focused={} text={:?}",
+                        form.form_id,
+                        *id,
+                        selected,
+                        focused,
+                        text
+                    );
+                }
                 if !*no_frame {
                     draw_button_outline(
                         &mut canvas,
@@ -1911,7 +1968,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
                         form::PalmDensity::Low,
                         outline,
                     );
-                    if focused && bw > 4 && bh > 4 {
+                    if (focused || selected) && bw > 4 && bh > 4 {
                         let _ = Rectangle::new(
                             Point::new(bx + 1, by + 1),
                             Size::new((bw - 2) as u32, (bh - 2) as u32),
@@ -1949,7 +2006,7 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
                     *font,
                     fonts,
                     1,
-                    if focused {
+                    if focused || selected {
                         BinaryColor::On
                     } else {
                         BinaryColor::Off
@@ -2046,6 +2103,50 @@ pub fn draw_form_preview<T: DrawTarget<Color = BinaryColor>>(
                 }
 
                 if let Some(s) = state {
+                    for (vr, row_idx) in visible_rows.iter().copied().enumerate() {
+                        for (vc, col_idx) in visible_cols.iter().copied().enumerate() {
+                            if let Some(cell) = s
+                                .cells
+                                .iter()
+                                .find(|cell| cell.row as usize == row_idx && cell.col as usize == col_idx)
+                            {
+                                if cell.text.is_empty() {
+                                    continue;
+                                }
+                                let mut left = tx + 1;
+                                for b in x_boundaries.iter().take(vc) {
+                                    left = *b + 1;
+                                }
+                                let right = if vc < x_boundaries.len() {
+                                    x_boundaries[vc] - 1
+                                } else {
+                                    tx + tw - 2
+                                };
+                                let mut top = ty + 1;
+                                for b in y_boundaries.iter().take(vr) {
+                                    top = *b + 1;
+                                }
+                                let bottom = if vr < y_boundaries.len() {
+                                    y_boundaries[vr] - 1
+                                } else {
+                                    ty + th - 2
+                                };
+                                if right > left && bottom > top {
+                                    draw_wrapped_text_in_rect(
+                                        &mut canvas,
+                                        &cell.text,
+                                        left + 1,
+                                        top + 1,
+                                        (right - left - 1).max(1),
+                                        (bottom - top - 1).max(1),
+                                        cell.font_id as u8,
+                                        fonts,
+                                        BinaryColor::Off,
+                                    );
+                                }
+                            }
+                        }
+                    }
                     if s.selected_row >= 0 && s.selected_col >= 0 {
                         let sel_r = s.selected_row as usize;
                         let sel_c = s.selected_col as usize;

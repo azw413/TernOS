@@ -47,14 +47,17 @@ use crate::{
         reader_shell::{self, ReaderStatusBarFocus},
         image_viewer::{ImageViewerContext, ImageViewerState},
         settings::{
-            about_modal_spec, about_ok_id, home_menu_bar, home_menu_command, HomeMenuCommand,
+            about_modal_spec, about_ok_id, home_menu_bar, home_menu_command,
+            record_detail_delete_id, record_detail_modal_spec, record_detail_ok_id,
+            records_table_id,
+            records_modal_spec, HomeMenuCommand,
         },
         system::{ApplyResumeOutcome, ResumeContext, SleepWallpaperIcons, SystemRenderContext, SystemState},
     },
     build_info,
     display::RefreshMode,
     framebuffer::{DisplayBuffers, Rotation},
-    image_viewer::{AppSource, EntryKind, ImageEntry, ImageError},
+    image_viewer::{AppSource, EntryKind, ImageEntry, ImageError, InstalledDatabaseEntry},
     input,
     platform::PlatformInputEvent,
     palm,
@@ -88,6 +91,8 @@ pub struct Application<'a, S: AppSource> {
     prc_runtime_underlay_form_id: Option<u16>,
     prc_ui_controller: palm::controller::PrcUiController,
     prc_runtime_bitmap_draws: Vec<palm::runner::RuntimeBitmapDraw>,
+    prc_runtime_button_labels: Vec<palm::runner::RuntimeButtonLabel>,
+    prc_runtime_selected_controls: Vec<palm::runner::RuntimeSelectedControl>,
     prc_runtime_field_draws: Vec<palm::runner::RuntimeFieldDraw>,
     prc_runtime_table_draws: Vec<palm::runner::RuntimeTableDraw>,
     prc_runtime_focused_field_id: Option<u16>,
@@ -97,6 +102,8 @@ pub struct Application<'a, S: AppSource> {
     reader_menu_controller: palm::controller::PrcMenuController,
     home_menu_controller: palm::controller::PrcMenuController,
     home_about_form: ModalFormController,
+    home_records_form: ModalFormController,
+    home_record_detail_form: ModalFormController,
     prc_help_controller: palm::controller::PrcHelpDialogController,
     reader_help_controller: palm::controller::PrcHelpDialogController,
     prc_active_entry: Option<ImageEntry>,
@@ -110,9 +117,13 @@ pub struct Application<'a, S: AppSource> {
     prc_status_bar_last_control: Option<u16>,
     reader_status_bar_focus: Option<ReaderStatusBarFocus>,
     reader_touch_pressed_status: Option<ReaderStatusBarFocus>,
+    records_status_bar_focus: Option<StatusBarHit>,
+    records_touch_pressed_status: Option<StatusBarHit>,
     reader_touch_pressed_menu: Option<palm::ui::MenuOverlayHit>,
     home_touch_pressed_menu: Option<palm::ui::MenuOverlayHit>,
     home_touch_pressed_about: Option<ObjectId>,
+    home_touch_pressed_records: Option<ModalHit>,
+    home_touch_pressed_record_detail: Option<ObjectId>,
     reader_touch_pressed_overlay: Option<crate::ternos::ui::ObjectId>,
     reader_touch_pressed_toc: Option<ModalHit>,
     home_menu_last_rect: Option<Rect>,
@@ -127,11 +138,17 @@ pub struct Application<'a, S: AppSource> {
     exit_from: ExitFrom,
     exit_overlay_drawn: bool,
     home_about_open: bool,
+    home_records_open: bool,
+    home_records: Vec<InstalledDatabaseEntry>,
+    home_records_selected_row: usize,
+    home_records_top_row: usize,
+    home_record_detail_index: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum AppState {
     StartMenu,
+    Records,
     Viewing,
     BookViewing,
     ExitingPending,
@@ -168,6 +185,117 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_forms.iter().find(|f| f.form_id == fid).cloned()
     }
 
+    fn prc_table_object(
+        &self,
+        form: &palm::form_preview::FormPreview,
+        control_id: u16,
+    ) -> Option<(u16, i16, i16, i16, i16)> {
+        form.objects.iter().find_map(|obj| match obj {
+            palm::form_preview::FormPreviewObject::Table { id, x, y, w, h }
+                if *id == control_id =>
+            {
+                Some((*id, *x, *y, *w, *h))
+            }
+            _ => None,
+        })
+    }
+
+    fn prc_table_draw(
+        &self,
+        form_id: u16,
+        table_id: u16,
+    ) -> Option<&palm::runner::RuntimeTableDraw> {
+        self.prc_runtime_table_draws
+            .iter()
+            .find(|t| t.form_id == form_id && t.table_id == table_id)
+    }
+
+    fn prc_table_first_selectable_row(
+        &self,
+        table: &palm::runner::RuntimeTableDraw,
+    ) -> Option<usize> {
+        (0..table.rows.max(table.row_usable.len() as u16) as usize).find(|row| {
+            table.row_usable.get(*row).copied().unwrap_or(true)
+                && table.row_selectable.get(*row).copied().unwrap_or(true)
+        })
+    }
+
+    fn prc_table_next_row(
+        &self,
+        table: &palm::runner::RuntimeTableDraw,
+        current: Option<usize>,
+        delta: i32,
+    ) -> Option<usize> {
+        let rows = table.rows.max(table.row_usable.len() as u16) as usize;
+        if rows == 0 {
+            return None;
+        }
+        let start = current.or_else(|| self.prc_table_first_selectable_row(table))?;
+        let mut row = start as i32;
+        loop {
+            row += delta;
+            if row < 0 || row >= rows as i32 {
+                return None;
+            }
+            let row_u = row as usize;
+            if table.row_usable.get(row_u).copied().unwrap_or(true)
+                && table.row_selectable.get(row_u).copied().unwrap_or(true)
+            {
+                return Some(row_u);
+            }
+        }
+    }
+
+    fn prc_table_pen_point(
+        &self,
+        table: &palm::runner::RuntimeTableDraw,
+        table_x: i16,
+        table_y: i16,
+        table_w: i16,
+        table_h: i16,
+        row: usize,
+    ) -> Option<(u16, u16)> {
+        let visible_rows: Vec<usize> = (0..table.rows.max(table.row_usable.len() as u16) as usize)
+            .filter(|r| table.row_usable.get(*r).copied().unwrap_or(true))
+            .collect();
+        let vr = visible_rows.iter().position(|r| *r == row)?;
+        let inner_h = (table_h as i32 - 2).max(1);
+        let row_hints = &table.row_height;
+        let row_heights: Vec<i32> = visible_rows
+            .iter()
+            .map(|idx| row_hints.get(*idx).copied().unwrap_or(11).max(1) as i32)
+            .collect();
+        let natural_h = row_heights.iter().sum::<i32>().max(1);
+        let mut y_cursor = table_y as i32 + 1;
+        for h in row_heights.iter().take(vr) {
+            y_cursor += ((*h * inner_h) / natural_h).max(1);
+        }
+        let row_px = ((row_heights[vr] * inner_h) / natural_h).max(1);
+        let y = (y_cursor + row_px / 2).clamp(0, u16::MAX as i32) as u16;
+        let x = (table_x as i32 + (table_w as i32 / 4).max(2)).clamp(0, u16::MAX as i32) as u16;
+        Some((x, y))
+    }
+
+    fn prc_sync_table_selection(
+        &mut self,
+        form_id: u16,
+        table_id: u16,
+        row: i16,
+        col: i16,
+    ) {
+        if let Some(table) = self
+            .prc_runtime_table_draws
+            .iter_mut()
+            .find(|t| t.form_id == form_id && t.table_id == table_id)
+        {
+            table.selected_row = row;
+            table.selected_col = col;
+        }
+        if let Some(session) = self.prc_session.as_mut() {
+            let _ = session.set_table_selection(form_id, table_id, row, col);
+        }
+    }
+
     fn nav_button_from_buttons(buttons: &input::ButtonState) -> Option<crate::platform::ButtonId> {
         use crate::input::Buttons;
         if buttons.is_pressed(Buttons::Left) {
@@ -195,12 +323,20 @@ impl<'a, S: AppSource> Application<'a, S> {
         palm::shell::to_status_hit(self.prc_status_bar_focus)
     }
 
+    fn records_status_hit(&self) -> Option<StatusBarHit> {
+        self.records_status_bar_focus
+    }
+
     fn set_reader_status_from_hit(&mut self, hit: Option<StatusBarHit>) {
         self.reader_status_bar_focus = reader_shell::from_status_hit(hit);
     }
 
     fn set_prc_status_from_hit(&mut self, hit: Option<StatusBarHit>) {
         self.prc_status_bar_focus = palm::shell::from_status_hit(hit);
+    }
+
+    fn set_records_status_from_hit(&mut self, hit: Option<StatusBarHit>) {
+        self.records_status_bar_focus = hit;
     }
 
     fn handle_reader_status_bar_button(&mut self, button: crate::platform::ButtonId) -> bool {
@@ -236,6 +372,112 @@ impl<'a, S: AppSource> Application<'a, S> {
         true
     }
 
+    fn records_handle_touch_event(&mut self, event: &PlatformInputEvent) -> bool {
+        if !matches!(
+            event,
+            PlatformInputEvent::TouchDown { .. } | PlatformInputEvent::TouchUp { .. }
+        ) {
+            return false;
+        }
+        let (x, y, is_down, is_up) = match *event {
+            PlatformInputEvent::TouchDown { x, y } => (x, y, true, false),
+            PlatformInputEvent::TouchUp { x, y } => (x, y, false, true),
+            _ => return false,
+        };
+        let point = crate::ternos::ui::Point::new(x, y);
+
+        if let Some(hit) =
+            reader_shell::status_bar_hit(self.display_buffers.size().width as i32, point)
+        {
+            match hit {
+                StatusBarHit::Home => {
+                    if is_down {
+                        self.records_status_bar_focus = Some(StatusBarHit::Home);
+                        self.records_touch_pressed_status = Some(StatusBarHit::Home);
+                        self.dirty = true;
+                    } else if is_up && self.records_touch_pressed_status == Some(StatusBarHit::Home) {
+                        self.records_touch_pressed_status = None;
+                        self.close_home_records();
+                    }
+                    return true;
+                }
+                StatusBarHit::Menu => {
+                    if is_up {
+                        self.records_touch_pressed_status = None;
+                    }
+                    return true;
+                }
+            }
+        }
+
+        if let Some(spec) = self.home_record_detail_spec() {
+            self.home_record_detail_form.sync(&spec);
+            if let Some(hit) = self
+                .home_record_detail_form
+                .hit_test(&spec, point, self.home_system_fonts.as_slice())
+            {
+                let ModalHit::Widget(id) = hit else {
+                    return true;
+                };
+                let changed = self.home_record_detail_form.select_id(&spec, id);
+                if is_down {
+                    self.home_touch_pressed_record_detail = Some(id);
+                    if changed {
+                        self.dirty = true;
+                    }
+                } else if is_up {
+                    let pressed = self.home_touch_pressed_record_detail.take();
+                    if pressed == Some(id) {
+                        let action = self.home_record_detail_form.activate_id(&spec, id);
+                        self.apply_home_record_detail_action(action);
+                    } else if changed {
+                        self.dirty = true;
+                    }
+                }
+                return true;
+            }
+            if is_up {
+                self.home_touch_pressed_record_detail = None;
+            }
+            return true;
+        }
+
+        let spec = self.home_records_spec();
+        self.home_records_form.sync(&spec);
+        if let Some(hit) = self
+            .home_records_form
+            .hit_test(&spec, point, self.home_system_fonts.as_slice())
+        {
+            let changed = self
+                .home_records_form
+                .select_hit(&spec, hit, self.home_system_fonts.as_slice());
+            if is_down {
+                self.home_touch_pressed_records = Some(hit);
+                if changed {
+                    self.dirty = true;
+                }
+            } else if is_up {
+                let pressed = self.home_touch_pressed_records.take();
+                if pressed == Some(hit) {
+                    let action = self.home_records_form.activate_hit(
+                        &spec,
+                        hit,
+                        self.home_system_fonts.as_slice(),
+                    );
+                    self.apply_home_records_action(action);
+                } else if changed {
+                    self.dirty = true;
+                }
+            }
+            return true;
+        }
+        if is_up {
+            self.home_touch_pressed_records = None;
+        }
+
+        false
+    }
+
     fn handle_prc_status_bar_button(&mut self, button: crate::platform::ButtonId) -> bool {
         let result = handle_status_bar_button(
             self.prc_status_hit(),
@@ -259,6 +501,35 @@ impl<'a, S: AppSource> Application<'a, S> {
                     }
                 }
             }
+        } else {
+            self.dirty = true;
+        }
+        true
+    }
+
+    fn handle_records_status_bar_button(&mut self, button: crate::platform::ButtonId) -> bool {
+        let result = handle_status_bar_button(
+            self.records_status_hit(),
+            StatusBarButtons {
+                home_enabled: true,
+                menu_enabled: false,
+            },
+            button,
+        );
+        if !result.consumed {
+            return false;
+        }
+        self.set_records_status_from_hit(result.focus);
+        self.records_touch_pressed_status = None;
+        if let Some(StatusBarHit::Home) = result.activated {
+            self.set_state_start_menu(true);
+        } else if button == crate::platform::ButtonId::Down && result.focus.is_none() {
+            let spec = self.home_records_spec();
+            self.home_records_form.sync(&spec);
+            if let Some(id) = spec.default_focus {
+                self.home_records_form.select_id(&spec, id);
+            }
+            self.dirty = true;
         } else {
             self.dirty = true;
         }
@@ -628,14 +899,22 @@ impl<'a, S: AppSource> Application<'a, S> {
         ) {
             let _ = self.prc_ui_controller.select_control_id(Some(&form), hit.id);
             if let Some(session) = self.prc_session.as_mut() {
-                if hit.is_field {
-                    session.inject_event_now(
-                        palm::runtime::EVT_FLD_ENTER,
-                        hit.id,
-                        "touchFldEnter",
-                    );
-                } else {
-                    session.inject_control_select_now(hit.id);
+                match hit.kind {
+                    palm::ui::FormControlKind::Field => {
+                        session.inject_event_now(
+                            palm::runtime::EVT_FLD_ENTER,
+                            hit.id,
+                            "touchFldEnter",
+                        );
+                    }
+                    palm::ui::FormControlKind::Table => {
+                        if is_down {
+                            session.inject_pen_down_now(palm_x as u16, palm_y as u16, "touchTblPenDown");
+                        }
+                    }
+                    palm::ui::FormControlKind::Control => {
+                        session.inject_control_select_now(hit.id);
+                    }
                 }
                 self.prc_blocked_elapsed_ms = 0;
                 self.prc_blocked_timeout_ticks = 0;
@@ -667,6 +946,38 @@ impl<'a, S: AppSource> Application<'a, S> {
             _ => return false,
         };
         let point = crate::ternos::ui::Point::new(x, y);
+
+        if let Some(spec) = self.home_record_detail_spec() {
+            self.home_record_detail_form.sync(&spec);
+            if let Some(hit) = self
+                .home_record_detail_form
+                .hit_test(&spec, point, self.home_system_fonts.as_slice())
+            {
+                let ModalHit::Widget(id) = hit else {
+                    return true;
+                };
+                let changed = self.home_record_detail_form.select_id(&spec, id);
+                if is_down {
+                    self.home_touch_pressed_record_detail = Some(id);
+                    if changed {
+                        self.dirty = true;
+                    }
+                } else if is_up {
+                    let pressed = self.home_touch_pressed_record_detail.take();
+                    if pressed == Some(id) {
+                        let action = self.home_record_detail_form.activate_id(&spec, id);
+                        self.apply_home_record_detail_action(action);
+                    } else if changed {
+                        self.dirty = true;
+                    }
+                }
+                return true;
+            }
+            if is_up {
+                self.home_touch_pressed_record_detail = None;
+            }
+            return true;
+        }
 
         if self.home_about_open {
             let spec = about_modal_spec(
@@ -1125,11 +1436,134 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.home_menu_controller.close();
         self.home_touch_pressed_menu = None;
         match command {
+            HomeMenuCommand::Records => {
+                self.home_about_open = false;
+                self.home_about_form.reset();
+                self.home_records = self.source.list_installed_databases();
+                self.home_records_selected_row = self
+                    .home_records_selected_row
+                    .min(self.home_records.len().saturating_sub(1));
+                self.home_records_top_row = self
+                    .home_records_top_row
+                    .min(self.home_records_selected_row);
+                self.home_records_open = true;
+                self.home_record_detail_index = None;
+                self.home_records_form.reset();
+                self.home_record_detail_form.reset();
+                self.home_touch_pressed_records = None;
+                self.home_touch_pressed_record_detail = None;
+                self.records_status_bar_focus = None;
+                self.records_touch_pressed_status = None;
+                self.state = AppState::Records;
+                self.dirty = true;
+            }
             HomeMenuCommand::About => {
+                self.home_records_open = false;
+                self.home_record_detail_index = None;
+                self.home_records_form.reset();
+                self.home_record_detail_form.reset();
                 self.home_about_open = true;
                 self.home_about_form.reset();
                 self.dirty = true;
             }
+        }
+    }
+
+    fn home_records_spec(&self) -> ModalFormSpec {
+        records_modal_spec(
+            &self.home_records,
+            self.home_records_selected_row,
+            self.home_records_top_row,
+            self.display_buffers.size().width as i32,
+            self.display_buffers.size().height as i32,
+        )
+    }
+
+    fn home_record_detail_spec(&self) -> Option<ModalFormSpec> {
+        let entry = self.home_records.get(self.home_record_detail_index?)?;
+        Some(record_detail_modal_spec(
+            entry,
+            self.display_buffers.size().width as i32,
+            self.display_buffers.size().height as i32,
+        ))
+    }
+
+    fn close_home_records(&mut self) {
+        self.home_records_open = false;
+        self.home_record_detail_index = None;
+        self.home_records_form.reset();
+        self.home_record_detail_form.reset();
+        self.home_touch_pressed_records = None;
+        self.home_touch_pressed_record_detail = None;
+        self.records_status_bar_focus = None;
+        self.records_touch_pressed_status = None;
+        self.set_state_start_menu(true);
+    }
+
+    fn apply_home_records_action(&mut self, action: crate::ternos::ui::ModalFormAction) {
+        match action {
+            crate::ternos::ui::ModalFormAction::None => {}
+            crate::ternos::ui::ModalFormAction::Redraw => self.dirty = true,
+            crate::ternos::ui::ModalFormAction::Closed => self.close_home_records(),
+            crate::ternos::ui::ModalFormAction::Activate(_) => {}
+            crate::ternos::ui::ModalFormAction::TableChanged {
+                selected_row,
+                top_row,
+                activated,
+                ..
+            } => {
+                if let Some(row) = selected_row {
+                    self.home_records_selected_row =
+                        row.min(self.home_records.len().saturating_sub(1));
+                }
+                self.home_records_top_row = top_row;
+                if activated {
+                    self.home_record_detail_index = Some(self.home_records_selected_row);
+                    self.home_record_detail_form.reset();
+                }
+                self.dirty = true;
+            }
+        }
+    }
+
+    fn apply_home_record_detail_action(&mut self, action: crate::ternos::ui::ModalFormAction) {
+        match action {
+            crate::ternos::ui::ModalFormAction::None => {}
+            crate::ternos::ui::ModalFormAction::Redraw => self.dirty = true,
+            crate::ternos::ui::ModalFormAction::Closed => {
+                self.home_record_detail_index = None;
+                self.home_record_detail_form.reset();
+                self.home_touch_pressed_record_detail = None;
+                self.dirty = true;
+            }
+            crate::ternos::ui::ModalFormAction::Activate(id) => {
+                if id == record_detail_ok_id() {
+                    self.home_record_detail_index = None;
+                    self.home_record_detail_form.reset();
+                    self.home_touch_pressed_record_detail = None;
+                    self.dirty = true;
+                } else if id == record_detail_delete_id()
+                    && let Some(index) = self.home_record_detail_index
+                    && let Some(entry) = self.home_records.get(index).cloned()
+                    && self.source.delete_installed_database(&entry.path).is_ok()
+                {
+                    let _ = self.system.remove_recent(&entry.path);
+                    self.home.installed_apps.clear();
+                    self.home.start_menu_need_base_refresh = true;
+                    self.home_records = self.source.list_installed_databases();
+                    self.home_records_selected_row = self
+                        .home_records_selected_row
+                        .min(self.home_records.len().saturating_sub(1));
+                    self.home_records_top_row =
+                        self.home_records_top_row.min(self.home_records_selected_row);
+                    self.home_record_detail_index = None;
+                    self.home_record_detail_form.reset();
+                    self.home_records_form.reset();
+                    self.home_touch_pressed_record_detail = None;
+                    self.dirty = true;
+                }
+            }
+            crate::ternos::ui::ModalFormAction::TableChanged { .. } => {}
         }
     }
 
@@ -1185,6 +1619,8 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_runtime_underlay_form_id: None,
             prc_ui_controller: palm::controller::PrcUiController::default(),
             prc_runtime_bitmap_draws: Vec::new(),
+            prc_runtime_button_labels: Vec::new(),
+            prc_runtime_selected_controls: Vec::new(),
             prc_runtime_field_draws: Vec::new(),
             prc_runtime_table_draws: Vec::new(),
             prc_runtime_focused_field_id: None,
@@ -1202,6 +1638,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                 controller
             },
             home_about_form: ModalFormController::default(),
+            home_records_form: ModalFormController::default(),
+            home_record_detail_form: ModalFormController::default(),
             prc_help_controller: palm::controller::PrcHelpDialogController::default(),
             reader_help_controller: palm::controller::PrcHelpDialogController::default(),
             prc_active_entry: None,
@@ -1215,9 +1653,13 @@ impl<'a, S: AppSource> Application<'a, S> {
             prc_status_bar_last_control: None,
             reader_status_bar_focus: None,
             reader_touch_pressed_status: None,
+            records_status_bar_focus: None,
+            records_touch_pressed_status: None,
             reader_touch_pressed_menu: None,
             home_touch_pressed_menu: None,
             home_touch_pressed_about: None,
+            home_touch_pressed_records: None,
+            home_touch_pressed_record_detail: None,
             reader_touch_pressed_overlay: None,
             reader_touch_pressed_toc: None,
             home_menu_last_rect: None,
@@ -1232,6 +1674,11 @@ impl<'a, S: AppSource> Application<'a, S> {
             exit_from: ExitFrom::Image,
             exit_overlay_drawn: false,
             home_about_open: false,
+            home_records_open: false,
+            home_records: Vec::new(),
+            home_records_selected_row: 0,
+            home_records_top_row: 0,
+            home_record_detail_index: None,
         };
         app.try_resume();
         app
@@ -1361,6 +1808,13 @@ impl<'a, S: AppSource> Application<'a, S> {
                 }
             }
         }
+        if matches!(self.state, AppState::Records) {
+            for event in events {
+                if self.records_handle_touch_event(event) {
+                    return;
+                }
+            }
+        }
 
         match self.state {
             AppState::StartMenu => {
@@ -1422,6 +1876,57 @@ impl<'a, S: AppSource> Application<'a, S> {
                     self.start_sleep_request();
                 }
             }
+            AppState::Records => {
+                if self.home_record_detail_index.is_some() {
+                    if buttons.is_pressed(input::Buttons::Back) {
+                        self.apply_home_record_detail_action(crate::ternos::ui::ModalFormAction::Closed);
+                    } else if let Some(event) = reader_shell::nav_event_from_buttons(buttons)
+                        && let Some(spec) = self.home_record_detail_spec()
+                    {
+                        let action = self.home_record_detail_form.on_event(
+                            &spec,
+                            event,
+                            self.home_system_fonts.as_slice(),
+                        );
+                        self.apply_home_record_detail_action(action);
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                    return;
+                }
+                if self.records_status_bar_focus.is_some() {
+                    if let Some(button) = Self::nav_button_from_buttons(buttons) {
+                        let _ = self.handle_records_status_bar_button(button);
+                    } else if self.system.add_idle(elapsed_ms) {
+                        self.start_sleep_request();
+                    }
+                    return;
+                }
+                if buttons.is_pressed(input::Buttons::Up)
+                    && self.home_records_form.focused_id() == Some(records_table_id())
+                    && self.home_records_selected_row == 0
+                    && self.home_records_top_row == 0
+                {
+                    self.set_records_status_from_hit(preferred_status_bar_focus(StatusBarButtons {
+                        home_enabled: true,
+                        menu_enabled: false,
+                    }));
+                    self.records_touch_pressed_status = None;
+                    self.dirty = true;
+                    return;
+                }
+                if let Some(event) = reader_shell::nav_event_from_buttons(buttons) {
+                    let spec = self.home_records_spec();
+                    let action = self.home_records_form.on_event(
+                        &spec,
+                        event,
+                        self.home_system_fonts.as_slice(),
+                    );
+                    self.apply_home_records_action(action);
+                } else if self.system.add_idle(elapsed_ms) {
+                    self.start_sleep_request();
+                }
+            }
             AppState::Viewing => {
                 if buttons.is_pressed(input::Buttons::Left) {
                     self.open_neighbor_file(-1);
@@ -1452,6 +1957,18 @@ impl<'a, S: AppSource> Application<'a, S> {
                     if self.prc_ui_controller.sync_with_form(form.as_ref()) {
                         self.dirty = true;
                     }
+                }
+                if self.prc_session.is_some()
+                    && self.prc_blocked_timeout_ticks == 0
+                    && self.prc_status_bar_focus.is_none()
+                    && !self.prc_menu_controller.is_active()
+                    && self
+                        .prc_session
+                        .as_ref()
+                        .and_then(|s| s.help_dialog())
+                        .is_none()
+                {
+                    self.resume_prc_runtime_session();
                 }
                 if let Some(dialog) = self
                     .prc_session
@@ -1578,6 +2095,18 @@ impl<'a, S: AppSource> Application<'a, S> {
                         }
                     } else if self.prc_status_bar_focus.is_none() {
                         let form = self.runtime_prc_form();
+                        let focused_table = form.as_ref().and_then(|form| {
+                            self.prc_ui_controller
+                                .focused_control_id()
+                                .and_then(|id| self.prc_table_object(form, id))
+                        });
+                        if let Some((table_id, _x, _y, _w, _h)) = focused_table
+                            && let Some(table) =
+                                self.prc_table_draw(form.as_ref().map(|f| f.form_id).unwrap_or(0), table_id)
+                            && table.cols > 1
+                        {
+                            // Keep horizontal navigation available for multi-column Palm tables.
+                        }
                         if self.prc_ui_controller.move_focus_direction(
                             form.as_ref(),
                             palm::controller::FocusDirection::Left,
@@ -1620,6 +2149,44 @@ impl<'a, S: AppSource> Application<'a, S> {
                 } else if buttons.is_pressed(input::Buttons::Up) {
                     let form = self.runtime_prc_form();
                     if self.prc_status_bar_focus.is_some() {
+                    } else if let Some(form_ref) = form.as_ref() {
+                        let table_nav = self
+                            .prc_ui_controller
+                            .focused_control_id()
+                            .and_then(|control_id| self.prc_table_object(form_ref, control_id))
+                            .and_then(|(table_id, _, _, _, _)| {
+                                let table = self.prc_table_draw(form_ref.form_id, table_id)?;
+                                let current =
+                                    (table.selected_row >= 0).then_some(table.selected_row as usize);
+                                let row = self.prc_table_next_row(table, current, -1)?;
+                                Some((table_id, row))
+                            });
+                        if let Some((table_id, row)) = table_nav {
+                            self.prc_sync_table_selection(form_ref.form_id, table_id, row as i16, 0);
+                            self.dirty = true;
+                        } else if self.prc_ui_controller.move_focus_direction(
+                            form.as_ref(),
+                            palm::controller::FocusDirection::Up,
+                        ) {
+                            self.dirty = true;
+                        } else if self.prc_status_bar_focus.is_none() {
+                            self.prc_status_bar_last_control =
+                                self.prc_ui_controller.focused_control_id();
+                            self.set_prc_status_from_hit(preferred_status_bar_focus(StatusBarButtons {
+                                home_enabled: true,
+                                menu_enabled: self.prc_menu_controller.menu_count() > 0,
+                            }));
+                            self.dirty = true;
+                        } else if let Some(session) = self.prc_session.as_mut() {
+                            session.inject_event_now(
+                                palm::runtime::EVT_KEY_DOWN,
+                                Self::PALM_KEY_UP,
+                                "keyUp",
+                            );
+                            self.prc_blocked_elapsed_ms = 0;
+                            self.prc_blocked_timeout_ticks = 0;
+                            self.resume_prc_runtime_session();
+                        }
                     } else if self.prc_ui_controller.move_focus_direction(
                         form.as_ref(),
                         palm::controller::FocusDirection::Up,
@@ -1665,13 +2232,29 @@ impl<'a, S: AppSource> Application<'a, S> {
                             }
                             self.dirty = true;
                         }
-                    } else if self.prc_ui_controller.move_focus_direction(
-                        form.as_ref(),
-                        palm::controller::FocusDirection::Down,
-                    ) {
-                        self.dirty = true;
-                    } else {
-                        if let Some(session) = self.prc_session.as_mut() {
+                    } else if let Some(form_ref) = form.as_ref() {
+                        let table_nav = self
+                            .prc_ui_controller
+                            .focused_control_id()
+                            .and_then(|control_id| self.prc_table_object(form_ref, control_id))
+                            .and_then(|(table_id, _, _, _, _)| {
+                                let table = self.prc_table_draw(form_ref.form_id, table_id)?;
+                                let current =
+                                    (table.selected_row >= 0).then_some(table.selected_row as usize);
+                                let row = self
+                                    .prc_table_next_row(table, current, 1)
+                                    .or_else(|| current.or_else(|| self.prc_table_first_selectable_row(table)))?;
+                                Some((table_id, row))
+                            });
+                        if let Some((table_id, row)) = table_nav {
+                            self.prc_sync_table_selection(form_ref.form_id, table_id, row as i16, 0);
+                            self.dirty = true;
+                        } else if self.prc_ui_controller.move_focus_direction(
+                            form.as_ref(),
+                            palm::controller::FocusDirection::Down,
+                        ) {
+                            self.dirty = true;
+                        } else if let Some(session) = self.prc_session.as_mut() {
                             session.inject_event_now(
                                 palm::runtime::EVT_KEY_DOWN,
                                 Self::PALM_KEY_DOWN,
@@ -1681,6 +2264,20 @@ impl<'a, S: AppSource> Application<'a, S> {
                             self.prc_blocked_timeout_ticks = 0;
                             self.resume_prc_runtime_session();
                         }
+                    } else if self.prc_ui_controller.move_focus_direction(
+                        form.as_ref(),
+                        palm::controller::FocusDirection::Down,
+                    ) {
+                        self.dirty = true;
+                    } else if let Some(session) = self.prc_session.as_mut() {
+                        session.inject_event_now(
+                            palm::runtime::EVT_KEY_DOWN,
+                            Self::PALM_KEY_DOWN,
+                            "keyDownNav",
+                        );
+                        self.prc_blocked_elapsed_ms = 0;
+                        self.prc_blocked_timeout_ticks = 0;
+                        self.resume_prc_runtime_session();
                     }
                 } else if buttons.is_pressed(input::Buttons::Confirm) {
                     if let Some(shell_focus) = self.prc_status_bar_focus {
@@ -1688,6 +2285,31 @@ impl<'a, S: AppSource> Application<'a, S> {
                         self.handle_prc_status_bar_button(crate::platform::ButtonId::Confirm);
                     } else {
                         let form = self.runtime_prc_form();
+                        if let Some(control_id) = self.prc_ui_controller.focused_control_id() {
+                            let table_activation = form.as_ref().and_then(|form_ref| {
+                                let (table_id, x, y, w, h) =
+                                    self.prc_table_object(form_ref, control_id)?;
+                                let table = self.prc_table_draw(form_ref.form_id, table_id)?;
+                                let row = if table.selected_row >= 0 {
+                                    Some(table.selected_row as usize)
+                                } else {
+                                    self.prc_table_first_selectable_row(table)
+                                }?;
+                                let (pen_x, pen_y) =
+                                    self.prc_table_pen_point(table, x, y, w, h, row)?;
+                                Some((form_ref.form_id, table_id, row as i16, pen_x, pen_y))
+                            });
+                            if let Some((form_id, table_id, row, pen_x, pen_y)) = table_activation {
+                                self.prc_sync_table_selection(form_id, table_id, row, 0);
+                                if let Some(session) = self.prc_session.as_mut() {
+                                    session.inject_pen_down_now(pen_x, pen_y, "keyTblPenDown");
+                                    self.prc_blocked_elapsed_ms = 0;
+                                    self.prc_blocked_timeout_ticks = 0;
+                                    self.resume_prc_runtime_session();
+                                    return;
+                                }
+                            }
+                        }
                         if let (Some(control_id), Some(session)) =
                             (self.prc_ui_controller.focused_control_id(), self.prc_session.as_mut())
                         {
@@ -1759,6 +2381,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.dirty = false;
         match self.state {
             AppState::StartMenu => self.draw_start_menu(display),
+            AppState::Records => self.draw_records(display),
             AppState::Viewing => self.draw_image_viewer(display),
             AppState::BookViewing => {
                 if let Some(indicator) = self.book_reader.take_page_turn_indicator() {
@@ -1991,6 +2614,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_runtime_focused_field_id = runtime_snapshot.focused_field_id;
                 self.prc_ui_controller.reset();
                 self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
+                self.prc_runtime_button_labels = runtime_snapshot.button_labels;
+                self.prc_runtime_selected_controls = runtime_snapshot.selected_controls;
                 self.prc_runtime_field_draws = runtime_snapshot.field_draws;
                 self.prc_runtime_table_draws = runtime_snapshot.table_draws;
                 log::info!(
@@ -2100,6 +2725,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                 self.prc_runtime_focused_field_id = runtime_snapshot.focused_field_id;
                 self.prc_ui_controller.reset();
                 self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
+                self.prc_runtime_button_labels = runtime_snapshot.button_labels;
+                self.prc_runtime_selected_controls = runtime_snapshot.selected_controls;
                 self.prc_runtime_field_draws = runtime_snapshot.field_draws;
                 self.prc_runtime_table_draws = runtime_snapshot.table_draws;
                 self.prc_system_fonts = self.source.load_prc_system_fonts();
@@ -2169,6 +2796,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                 .iter()
                 .zip(runtime_snapshot.bitmap_draws.iter())
                 .any(|(a, b)| a.resource_id != b.resource_id || a.x != b.x || a.y != b.y)
+            || self.prc_runtime_button_labels != runtime_snapshot.button_labels
+            || self.prc_runtime_selected_controls != runtime_snapshot.selected_controls
             || self.prc_runtime_field_draws != runtime_snapshot.field_draws
             || self.prc_runtime_table_draws != runtime_snapshot.table_draws
             || prev_help_dialog != runtime_snapshot.help_dialog;
@@ -2189,6 +2818,8 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_runtime_underlay_form_id = runtime_snapshot.underlay_form_id;
         self.prc_runtime_focused_field_id = runtime_snapshot.focused_field_id;
         self.prc_runtime_bitmap_draws = runtime_snapshot.bitmap_draws;
+        self.prc_runtime_button_labels = runtime_snapshot.button_labels;
+        self.prc_runtime_selected_controls = runtime_snapshot.selected_controls;
         self.prc_runtime_field_draws = runtime_snapshot.field_draws;
         self.prc_runtime_table_draws = runtime_snapshot.table_draws;
         {
@@ -2500,6 +3131,12 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.state = AppState::StartMenu;
         self.home.start_menu_need_base_refresh = need_base_refresh;
         self.install_scan_elapsed_ms = 2000;
+        self.home_records_open = false;
+        self.home_record_detail_index = None;
+        self.home_records_form.reset();
+        self.home_record_detail_form.reset();
+        self.records_status_bar_focus = None;
+        self.records_touch_pressed_status = None;
         self.home_menu_last_rect = None;
         self.dirty = true;
     }
@@ -2524,6 +3161,8 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.prc_forms = Vec::new();
         self.prc_bitmaps = Vec::new();
         self.prc_runtime_bitmap_draws = Vec::new();
+        self.prc_runtime_button_labels = Vec::new();
+        self.prc_runtime_selected_controls = Vec::new();
         self.prc_runtime_field_draws = Vec::new();
         self.prc_runtime_table_draws = Vec::new();
         self.prc_system_fonts = Vec::new();
@@ -2542,6 +3181,10 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.state = AppState::Viewing;
         self.home_about_open = false;
         self.home_about_form.reset();
+        self.home_records_open = false;
+        self.home_records_form.reset();
+        self.home_record_detail_form.reset();
+        self.home_record_detail_index = None;
         self.home_menu_controller.close();
         self.home_menu_last_rect = None;
         self.system.full_refresh = true;
@@ -2552,6 +3195,10 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.state = AppState::BookViewing;
         self.home_about_open = false;
         self.home_about_form.reset();
+        self.home_records_open = false;
+        self.home_records_form.reset();
+        self.home_record_detail_form.reset();
+        self.home_record_detail_index = None;
         self.home_menu_controller.close();
         self.home_menu_last_rect = None;
         self.reader_status_bar_focus = None;
@@ -2570,6 +3217,10 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.state = AppState::Toc;
         self.home_about_open = false;
         self.home_about_form.reset();
+        self.home_records_open = false;
+        self.home_records_form.reset();
+        self.home_record_detail_form.reset();
+        self.home_record_detail_index = None;
         self.home_menu_controller.close();
         self.home_menu_last_rect = None;
         self.reader_status_bar_focus = None;
@@ -2587,6 +3238,10 @@ impl<'a, S: AppSource> Application<'a, S> {
         self.state = AppState::PrcViewing;
         self.home_about_open = false;
         self.home_about_form.reset();
+        self.home_records_open = false;
+        self.home_records_form.reset();
+        self.home_record_detail_form.reset();
+        self.home_record_detail_index = None;
         self.home_menu_controller.close();
         self.home_menu_last_rect = None;
         self.prc_soft_menu_focused = false;
@@ -2694,6 +3349,60 @@ impl<'a, S: AppSource> Application<'a, S> {
         }
     }
 
+    fn draw_records(&mut self, display: &mut impl crate::display::Display) {
+        self.ensure_home_system_fonts();
+        self.display_buffers.clear(BinaryColor::On).ok();
+        let size = self.display_buffers.size();
+        let spec = self.home_records_spec();
+        let detail_spec = self.home_record_detail_spec();
+        self.home_records_form.sync(&spec);
+        let mut ui = UiContext {
+            buffers: self.display_buffers,
+            render_policy: self.render_policy,
+            gray2: None,
+        };
+        let count_text = format!("{}", self.home_records.len());
+        let mut status = StatusBarView {
+            battery_percent: self.system.battery_percent,
+            right_text: Some(count_text.as_str()),
+            home: StatusBarActionState {
+                enabled: true,
+                focused: self.records_status_bar_focus == Some(StatusBarHit::Home),
+            },
+            menu: StatusBarActionState {
+                enabled: false,
+                focused: false,
+            },
+            palm_fonts: self.home_system_fonts.as_slice(),
+        };
+        status.render(
+            &mut ui,
+            Rect::new(0, 0, size.width as i32, StatusBarView::HEIGHT),
+            &mut RenderQueue::default(),
+        );
+        let mut form_view = ModalFormView {
+            spec: &spec,
+            fonts: self.home_system_fonts.as_slice(),
+            focused_id: self.home_records_form.focused_id(),
+        };
+        form_view.render(&mut ui, spec.bounds, &mut RenderQueue::default());
+        if let Some(detail_spec) = detail_spec {
+            self.home_record_detail_form.sync(&detail_spec);
+            let mut detail_view = ModalFormView {
+                spec: &detail_spec,
+                fonts: self.home_system_fonts.as_slice(),
+                focused_id: self.home_record_detail_form.focused_id(),
+            };
+            detail_view.render(&mut ui, detail_spec.bounds, &mut RenderQueue::default());
+        }
+        let mut rq = RenderQueue::default();
+        rq.push(
+            Rect::new(0, 0, size.width as i32, size.height as i32),
+            RefreshMode::Half,
+        );
+        flush_queue(display, self.display_buffers, &mut rq, RefreshMode::Half);
+    }
+
     fn ensure_home_system_fonts(&mut self) {
         if self.home_system_fonts.is_empty() {
             self.home_system_fonts = self.source.load_home_system_fonts();
@@ -2750,6 +3459,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         let spec = ModalFormSpec {
             form_id: ERROR_MODAL_FORM_ID,
             bounds: Rect::new(form_x, form_y, form_w, form_h),
+            chrome: crate::ternos::ui::ModalChrome::Alert,
             title: "Error".to_string(),
             widgets,
             default_focus: Some(ERROR_OK_ID),
@@ -2864,6 +3574,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                     &self.prc_system_fonts,
                     &self.prc_bitmaps,
                     &self.prc_runtime_bitmap_draws,
+                    &self.prc_runtime_button_labels,
+                    &self.prc_runtime_selected_controls,
                     &self.prc_runtime_field_draws,
                     &self.prc_runtime_table_draws,
                     None,
@@ -2886,6 +3598,8 @@ impl<'a, S: AppSource> Application<'a, S> {
                 &self.prc_system_fonts,
                 &self.prc_bitmaps,
                 &self.prc_runtime_bitmap_draws,
+                &self.prc_runtime_button_labels,
+                &self.prc_runtime_selected_controls,
                 &self.prc_runtime_field_draws,
                 &self.prc_runtime_table_draws,
                 if self.prc_status_bar_focus.is_some() {
@@ -2985,6 +3699,7 @@ impl<'a, S: AppSource> Application<'a, S> {
         let spec = ModalFormSpec {
             form_id: USB_MODAL_FORM_ID,
             bounds: Rect::new(form_x, form_y, form_w, form_h),
+            chrome: crate::ternos::ui::ModalChrome::Alert,
             title: title.to_string(),
             widgets,
             default_focus: Some(USB_MODAL_DISCONNECT_ID),

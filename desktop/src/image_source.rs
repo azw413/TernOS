@@ -11,7 +11,7 @@ use tern_core::ternos::services::db::{
 use tern_core::ternos::services::state::{self, LauncherStateDb};
 use tern_core::image_viewer::{
     BookSource, EntryKind, Gray2StreamSource, ImageData, ImageEntry, ImageError, ImageSource,
-    InstalledAppEntry,
+    InstalledAppEntry, InstalledDatabaseEntry,
     PersistenceSource, PowerSource,
 };
 
@@ -108,6 +108,10 @@ impl DesktopImageSource {
 
     fn state_db_path(&self, uid: u64) -> PathBuf {
         self.root.join(state::state_db_rel_path(uid))
+    }
+
+    fn db_storage_path(&self, uid: u64) -> PathBuf {
+        self.root.join(format!("db/v1/db/{uid:016x}.tdb"))
     }
 
     fn load_state_db(&self) -> LauncherStateDb {
@@ -236,6 +240,14 @@ impl DesktopImageSource {
         out
     }
 
+}
+
+fn fourcc_display(bytes: &[u8; 4]) -> String {
+    if bytes.iter().all(|b| (0x20..=0x7e).contains(b)) {
+        String::from_utf8_lossy(bytes).into_owned()
+    } else {
+        format!("{:02X}{:02X}{:02X}{:02X}", bytes[0], bytes[1], bytes[2], bytes[3])
+    }
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -756,6 +768,53 @@ impl ImageSource for DesktopImageSource {
         }
         out.sort_by(|a, b| a.title.cmp(&b.title));
         out
+    }
+
+    fn list_installed_databases(&mut self) -> Vec<InstalledDatabaseEntry> {
+        let mut out = Vec::new();
+        for meta in load_catalog(&self.db_catalog_path()) {
+            let path = format!("db/v1/db/{:016x}.tdb", meta.uid);
+            let size_bytes = fs::metadata(self.root.join(&path))
+                .map(|m| m.len())
+                .unwrap_or(0);
+            let protected = meta.identity.creator == *b"TERN"
+                && meta.identity.db_type == *b"DATA"
+                && meta.identity.display_name() == "TernState";
+            out.push(InstalledDatabaseEntry {
+                title: meta.identity.display_name(),
+                path,
+                type_code: fourcc_display(&meta.identity.db_type),
+                creator_code: fourcc_display(&meta.identity.creator),
+                kind: meta.kind,
+                size_bytes,
+                can_delete: !protected,
+            });
+        }
+        out.sort_by(|a, b| a.title.to_ascii_lowercase().cmp(&b.title.to_ascii_lowercase()));
+        out
+    }
+
+    fn load_installed_database_bytes(&mut self, path: &str) -> Result<Vec<u8>, ImageError> {
+        fs::read(self.root.join(path)).map_err(|_| ImageError::Io)
+    }
+
+    fn delete_installed_database(&mut self, path: &str) -> Result<(), ImageError> {
+        let Some(uid_hex) = Path::new(path)
+            .file_stem()
+            .and_then(|name| name.to_str())
+        else {
+            return Err(ImageError::Unsupported);
+        };
+        let uid = u64::from_str_radix(uid_hex, 16).map_err(|_| ImageError::Unsupported)?;
+        let mut catalog = load_catalog(&self.db_catalog_path());
+        let before = catalog.len();
+        catalog.retain(|meta| meta.uid != uid);
+        if catalog.len() == before {
+            return Err(ImageError::Unsupported);
+        }
+        save_catalog(&self.db_catalog_path(), &catalog)?;
+        let _ = fs::remove_file(self.db_storage_path(uid));
+        Ok(())
     }
 }
 

@@ -5,7 +5,7 @@ use core::ffi::c_char;
 
 use tern_core::image_viewer::{
     BookSource, EntryKind, Gray2StreamSource, ImageData, ImageEntry, ImageError, ImageSource,
-    InstalledAppEntry, PersistenceSource, PowerSource,
+    InstalledAppEntry, InstalledDatabaseEntry, PersistenceSource, PowerSource,
 };
 
 use crate::ffi;
@@ -171,6 +171,65 @@ impl ImageSource for M5PaperImageSource {
         ffi::storage_list_end();
         entries.sort_by(|a, b| a.title.to_ascii_lowercase().cmp(&b.title.to_ascii_lowercase()));
         entries
+    }
+
+    fn list_installed_databases(&mut self) -> Vec<InstalledDatabaseEntry> {
+        let path_bytes = Self::path_bytes("/");
+        if ffi::storage_list_begin(path_bytes.as_ptr() as *const c_char) != ffi::Status::Ok {
+            return Vec::new();
+        }
+
+        let mut entries = Vec::new();
+        loop {
+            match ffi::storage_list_next() {
+                Ok(Some(raw)) => {
+                    if raw.is_dir {
+                        continue;
+                    }
+                    let name = Self::entry_name(&raw);
+                    let lower = name.to_ascii_lowercase();
+                    if !lower.ends_with(".prc") && !lower.ends_with(".tdb") {
+                        continue;
+                    }
+                    let db_type = if lower.ends_with(".prc") { "appl" } else { "DATA" };
+                    entries.push(InstalledDatabaseEntry {
+                        title: name.clone(),
+                        path: format!("/{}", name),
+                        type_code: db_type.into(),
+                        creator_code: "????".into(),
+                        kind: tern_core::ternos::services::db::DbKind::Resource,
+                        size_bytes: raw.size as u64,
+                        can_delete: false,
+                    });
+                }
+                Ok(None) => break,
+                Err(_) => break,
+            }
+        }
+        ffi::storage_list_end();
+        entries.sort_by(|a, b| a.title.to_ascii_lowercase().cmp(&b.title.to_ascii_lowercase()));
+        entries
+    }
+
+    fn load_installed_database_bytes(&mut self, path: &str) -> Result<Vec<u8>, ImageError> {
+        let path_bytes = Self::path_bytes(path);
+        let size = ffi::storage_file_size(path_bytes.as_ptr() as *const c_char)
+            .map_err(|_| ImageError::Io)? as usize;
+        let mut data = vec![0u8; size];
+        let mut offset = 0u32;
+        while (offset as usize) < size {
+            let read = ffi::storage_read_chunk(
+                path_bytes.as_ptr() as *const c_char,
+                offset,
+                &mut data[offset as usize..],
+            )
+            .map_err(|_| ImageError::Io)?;
+            if read == 0 {
+                return Err(ImageError::Io);
+            }
+            offset += read;
+        }
+        Ok(data)
     }
 }
 

@@ -2,17 +2,18 @@ extern crate alloc;
 
 use alloc::{string::String, vec::Vec};
 
-use embedded_graphics::pixelcolor::BinaryColor;
+use embedded_graphics::{pixelcolor::BinaryColor, prelude::Primitive, Drawable};
 
 use crate::display::RefreshMode;
 use crate::palm::{runtime::PalmFont, ui_component::UiNavEvent};
 
 use super::{
     chrome::draw_alert_frame_hi,
-    form::{draw_form_button_hi, draw_form_field_hi},
+    form::{draw_form_button_hi, draw_form_field_hi, draw_form_title_bar_hi},
     runtime::UiTableModel,
     table_view::{
-        PalmWrappedTextCellRenderer, TableInteraction, TableScrollBarHit, TableScrollBarView, TableView,
+        PalmTextCellRenderer, PalmWrappedTextCellRenderer, TableInteraction, TableScrollBarHit,
+        TableScrollBarView, TableView,
     },
     text::{draw_palm_text, palm_text_height, palm_text_width},
     FormResource, ObjectId, ObjectResource, Point, Rect, RenderQueue, UiContext, UiRuntime, View,
@@ -21,12 +22,23 @@ use super::{
 #[derive(Clone, Debug)]
 pub enum ModalTableCellStyle {
     Default,
+    PalmText {
+        font_id: u8,
+        padding_x: i32,
+        padding_y: i32,
+    },
     PalmWrappedText {
         font_id: u8,
         padding_x: i32,
         padding_y: i32,
         line_spacing: i32,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModalChrome {
+    Alert,
+    Form,
 }
 
 #[derive(Clone, Debug)]
@@ -99,6 +111,7 @@ impl ModalWidget {
 pub struct ModalFormSpec {
     pub form_id: u16,
     pub bounds: Rect,
+    pub chrome: ModalChrome,
     pub title: String,
     pub widgets: Vec<ModalWidget>,
     pub default_focus: Option<ObjectId>,
@@ -326,7 +339,11 @@ impl ModalFormController {
                 let before = self.focused_id();
                 self.ui_runtime.set_focus(spec.form_id, Some(table_id));
                 let interaction = self.with_table_view(model, cell_style, fonts, |table| {
-                    table.select_cell(*bounds, scrollbar_bounds(spec, table_id), row, 0, false)
+                    if model.selected_col.is_none() {
+                        table.select_row(*bounds, scrollbar_bounds(spec, table_id), row, false)
+                    } else {
+                        table.select_cell(*bounds, scrollbar_bounds(spec, table_id), row, 0, false)
+                    }
                 });
                 if let Some(ref interaction) = interaction {
                     for rect in &interaction.dirty_rects {
@@ -376,7 +393,11 @@ impl ModalFormController {
                 };
                 self.ui_runtime.set_focus(spec.form_id, Some(table_id));
                 let interaction = self.with_table_view(model, cell_style, fonts, |table| {
-                    table.select_cell(*bounds, scrollbar_bounds(spec, table_id), row, 0, true)
+                    if model.selected_col.is_none() {
+                        table.select_row(*bounds, scrollbar_bounds(spec, table_id), row, true)
+                    } else {
+                        table.select_cell(*bounds, scrollbar_bounds(spec, table_id), row, 0, true)
+                    }
                 });
                 if let Some(interaction) = interaction {
                     for rect in interaction.dirty_rects.clone() {
@@ -542,6 +563,21 @@ impl ModalFormController {
                 let table = TableView::new(model);
                 f(&table)
             }
+            ModalTableCellStyle::PalmText {
+                font_id,
+                padding_x,
+                padding_y,
+            } => {
+                let renderer = PalmTextCellRenderer {
+                    fonts,
+                    font_id: *font_id,
+                    padding_x: *padding_x,
+                    padding_y: *padding_y,
+                };
+                let mut table = TableView::new(model);
+                table.renderer = Some(&renderer);
+                f(&table)
+            }
             ModalTableCellStyle::PalmWrappedText {
                 font_id,
                 padding_x,
@@ -573,6 +609,21 @@ impl ModalFormController {
         let table_hit = match style {
             ModalTableCellStyle::Default => {
                 let table = TableView::new(model);
+                table.hit_test(bounds, point)
+            }
+            ModalTableCellStyle::PalmText {
+                font_id,
+                padding_x,
+                padding_y,
+            } => {
+                let renderer = PalmTextCellRenderer {
+                    fonts,
+                    font_id: *font_id,
+                    padding_x: *padding_x,
+                    padding_y: *padding_y,
+                };
+                let mut table = TableView::new(model);
+                table.renderer = Some(&renderer);
                 table.hit_test(bounds, point)
             }
             ModalTableCellStyle::PalmWrappedText {
@@ -610,27 +661,72 @@ pub struct ModalFormView<'a> {
 
 impl View for ModalFormView<'_> {
     fn render(&mut self, ctx: &mut UiContext<'_>, rect: Rect, _rq: &mut RenderQueue) {
-        draw_alert_frame_hi(
-            ctx.buffers,
-            rect.x,
-            rect.y,
-            rect.w,
-            rect.h,
-            34,
-        );
-
-        let title_w = palm_text_width(&self.spec.title, 1, self.fonts, 1);
-        let title_h = palm_text_height(1, self.fonts, 1);
-        draw_palm_text(
-            ctx.buffers,
-            &self.spec.title,
-            rect.x + ((rect.w - title_w) / 2).max(0),
-            rect.y + ((34 - title_h) / 2).max(2) - 1,
-            1,
-            self.fonts,
-            1,
-            BinaryColor::On,
-        );
+        match self.spec.chrome {
+            ModalChrome::Alert => {
+                draw_alert_frame_hi(
+                    ctx.buffers,
+                    rect.x,
+                    rect.y,
+                    rect.w,
+                    rect.h,
+                    34,
+                );
+                let title_w = palm_text_width(&self.spec.title, 1, self.fonts, 1);
+                let title_h = palm_text_height(1, self.fonts, 1);
+                draw_palm_text(
+                    ctx.buffers,
+                    &self.spec.title,
+                    rect.x + ((rect.w - title_w) / 2).max(0),
+                    rect.y + ((34 - title_h) / 2).max(2) - 1,
+                    1,
+                    self.fonts,
+                    1,
+                    BinaryColor::On,
+                );
+            }
+            ModalChrome::Form => {
+                let title_font_id = 1u8;
+                let ui_scale_num = 6;
+                let ui_scale_den = 5;
+                let _ = embedded_graphics::primitives::Rectangle::new(
+                    embedded_graphics::prelude::Point::new(rect.x, rect.y),
+                    embedded_graphics::geometry::Size::new(rect.w.max(1) as u32, rect.h.max(1) as u32),
+                )
+                .into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(BinaryColor::On))
+                .draw(ctx.buffers);
+                let title_w = super::text::palm_text_width_scaled(
+                    &self.spec.title,
+                    title_font_id,
+                    self.fonts,
+                    ui_scale_num,
+                    ui_scale_den,
+                );
+                let title_h = super::text::palm_text_height_scaled(
+                    title_font_id,
+                    self.fonts,
+                    ui_scale_num,
+                    ui_scale_den,
+                );
+                let title_pad_x = 9;
+                let title_pad_top = 2;
+                let title_pad_bottom = 5;
+                let tab_w = (title_w + title_pad_x * 2).min(rect.w - 8).max(80);
+                let tab_h = title_h + title_pad_top + title_pad_bottom;
+                let layout =
+                    draw_form_title_bar_hi(ctx.buffers, rect.x, rect.y, rect.w, tab_w, tab_h, 4);
+                super::text::draw_palm_text_scaled(
+                    ctx.buffers,
+                    &self.spec.title,
+                    layout.tab_x + ((layout.tab_w - title_w) / 2).max(2),
+                    layout.tab_y + title_pad_top,
+                    title_font_id,
+                    self.fonts,
+                    ui_scale_num,
+                    ui_scale_den,
+                    BinaryColor::On,
+                );
+            }
+        }
 
         for widget in &self.spec.widgets {
             let bounds = widget.bounds();
@@ -697,6 +793,22 @@ impl View for ModalFormView<'_> {
                         table.clear = false;
                         table.render(ctx, *bounds, &mut RenderQueue::default());
                     }
+                    ModalTableCellStyle::PalmText {
+                        font_id,
+                        padding_x,
+                        padding_y,
+                    } => {
+                        let renderer = PalmTextCellRenderer {
+                            fonts: self.fonts,
+                            font_id: *font_id,
+                            padding_x: *padding_x,
+                            padding_y: *padding_y,
+                        };
+                        let mut table = TableView::new(model);
+                        table.clear = false;
+                        table.renderer = Some(&renderer);
+                        table.render(ctx, *bounds, &mut RenderQueue::default());
+                    }
                     ModalTableCellStyle::PalmWrappedText {
                         font_id,
                         padding_x,
@@ -732,6 +844,21 @@ impl View for ModalFormView<'_> {
                     };
                     let visible_rows = match cell_style {
                         ModalTableCellStyle::Default => TableView::new(model).visible_row_count(*table_bounds),
+                        ModalTableCellStyle::PalmText {
+                            font_id,
+                            padding_x,
+                            padding_y,
+                        } => {
+                            let renderer = PalmTextCellRenderer {
+                                fonts: self.fonts,
+                                font_id: *font_id,
+                                padding_x: *padding_x,
+                                padding_y: *padding_y,
+                            };
+                            let mut table = TableView::new(model);
+                            table.renderer = Some(&renderer);
+                            table.visible_row_count(*table_bounds)
+                        }
                         ModalTableCellStyle::PalmWrappedText {
                             font_id,
                             padding_x,

@@ -66,6 +66,13 @@ pub struct PalmWrappedTextCellRenderer<'a> {
     pub line_spacing: i32,
 }
 
+pub struct PalmTextCellRenderer<'a> {
+    pub fonts: &'a [PalmFont],
+    pub font_id: u8,
+    pub padding_x: i32,
+    pub padding_y: i32,
+}
+
 impl PalmWrappedTextCellRenderer<'_> {
     fn wrapped_lines(&self, text: &str, cell_width: i32) -> Vec<String> {
         wrap_palm_text_lines(
@@ -112,6 +119,34 @@ impl TableCellRenderer for PalmWrappedTextCellRenderer<'_> {
                 },
             );
         }
+    }
+}
+
+impl TableCellRenderer for PalmTextCellRenderer<'_> {
+    fn row_height(&self, _table_rect: Rect, _row: &UiTableRow) -> i32 {
+        (palm_text_height(self.font_id, self.fonts, 1) + self.padding_y * 2).max(12)
+    }
+
+    fn render_cell(
+        &self,
+        ctx: &mut UiContext<'_>,
+        cell_rect: Rect,
+        _row: &UiTableRow,
+        cell: &UiTableCell,
+        _row_index: usize,
+        _col_index: usize,
+        selected: bool,
+    ) {
+        draw_palm_text(
+            ctx.buffers,
+            &cell.text,
+            cell_rect.x + self.padding_x,
+            cell_rect.y + self.padding_y,
+            self.font_id,
+            self.fonts,
+            1,
+            if selected { BinaryColor::On } else { BinaryColor::Off },
+        );
     }
 }
 
@@ -286,7 +321,9 @@ impl<'a> TableView<'a> {
                 (cell_right - cell_left + 1).max(1),
                 row_rect.h.max(1),
             );
-            let selected = selected_row && self.model.selected_col == Some(col_index as u16);
+            let selected = selected_row
+                && (self.model.selected_col.is_none()
+                    || self.model.selected_col == Some(col_index as u16));
             let _ = Rectangle::new(
                 EgPoint::new(cell_rect.x, cell_rect.y),
                 Size::new(cell_rect.w.max(1) as u32, cell_rect.h.max(1) as u32),
@@ -488,6 +525,28 @@ impl<'a> TableView<'a> {
             old_selected_col,
             Some(row),
             Some(col),
+            self.model.top_row as usize,
+            activated,
+        ))
+    }
+
+    pub fn select_row(
+        &self,
+        rect: Rect,
+        scrollbar_rect: Option<Rect>,
+        row: usize,
+        activated: bool,
+    ) -> Option<TableInteraction> {
+        let row = row.min(self.model.rows.len().saturating_sub(1));
+        let old_selected = self.model.selected_row.map(|selected| selected as usize);
+        let old_selected_col = self.model.selected_col.map(|selected| selected as usize);
+        Some(self.interaction_for_state_change(
+            rect,
+            scrollbar_rect,
+            old_selected,
+            old_selected_col,
+            Some(row),
+            None,
             self.model.top_row as usize,
             activated,
         ))

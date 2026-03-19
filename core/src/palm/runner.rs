@@ -13,8 +13,12 @@ use crate::{
     },
 };
 use crate::palm::{bootstrap, trap_stub};
+use crate::ternos::services::db::{DbKind, RecordDatabase};
 
-const PRC_EXEC_STEP_LIMIT: usize = 262_144;
+// Bound guest execution per host resume so a spinning PRC cannot starve the
+// desktop/device frame loop. The host will resume again on the next update.
+const PRC_EXEC_STEP_LIMIT: usize = 1_024;
+const PRC_EXEC_RESUME_BUDGET: usize = 8_192;
 const PRC_EXEC_STUB_STEP_BUDGET: usize = 1_000_000;
 const PRC_EXEC_TRAP_STUB_LIMIT: usize = 65_536;
 const PRC_IDLE_LOOP_POLLS: u32 = 4;
@@ -33,12 +37,97 @@ fn launch_context_for_db_type(type_code: &str) -> (u16, u16, u32) {
     }
 }
 
+fn fourcc_display_to_u32(s: &str) -> u32 {
+    let bytes = s.as_bytes();
+    if bytes.len() == 4 {
+        let mut out = [0u8; 4];
+        out.copy_from_slice(bytes);
+        u32::from_be_bytes(out)
+    } else {
+        0
+    }
+}
+
+fn alloc_record_block(
+    runtime: &mut runtime::PrcRuntimeContext,
+    memory: &mut memory::MemoryMap,
+    data: Vec<u8>,
+) -> u32 {
+    crate::ternos::services::db::runtime::alloc_mem(runtime, memory, data, None, None)
+}
+
+fn preload_installed_databases<S: AppSource>(
+    source: &mut S,
+    runtime_ctx: &mut runtime::PrcRuntimeContext,
+    memory: &mut memory::MemoryMap,
+    current_name: &str,
+    current_type: u32,
+    current_creator: u32,
+) {
+    for entry in source.list_installed_databases() {
+        let db_type = fourcc_display_to_u32(&entry.type_code);
+        let creator = fourcc_display_to_u32(&entry.creator_code);
+        let is_current_app =
+            entry.title == current_name && db_type == current_type && creator == current_creator;
+
+        if is_current_app && entry.kind == DbKind::Resource {
+            continue;
+        }
+
+        let existing_idx = runtime_ctx
+            .databases
+            .iter()
+            .position(|db| db.name == entry.title && db.db_type == db_type && db.creator == creator);
+
+        let mut version = 1u16;
+        let mut record_handles = alloc::vec::Vec::new();
+        if entry.kind == DbKind::Record
+            && let Ok(raw) = source.load_installed_database_bytes(&entry.path)
+            && let Ok(record_db) = RecordDatabase::from_bytes(&raw)
+        {
+            version = record_db.identity.version;
+            for record in record_db.records {
+                record_handles.push(alloc_record_block(runtime_ctx, memory, record.data));
+            }
+        }
+
+        if let Some(idx) = existing_idx {
+            let db = &mut runtime_ctx.databases[idx];
+            db.is_resource_db = entry.kind == DbKind::Resource;
+            db.version = version;
+            if !record_handles.is_empty() {
+                db.record_handles = record_handles;
+            }
+            continue;
+        }
+
+        let local_id = runtime_ctx.next_local_id;
+        runtime_ctx.next_local_id = runtime_ctx.next_local_id.saturating_add(1);
+        runtime_ctx.databases.push(runtime::RuntimeDatabase {
+            local_id,
+            card_no: 0,
+            name: entry.title,
+            creator,
+            db_type,
+            is_resource_db: entry.kind == DbKind::Resource,
+            version,
+            attributes: if entry.kind == DbKind::Resource { 0x0001 } else { 0 },
+            mod_number: 0,
+            app_info_id: 0,
+            sort_info_id: 0,
+            record_handles,
+        });
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeUiSnapshot {
     pub form_id: Option<u16>,
     pub underlay_form_id: Option<u16>,
     pub focused_field_id: Option<u16>,
     pub bitmap_draws: Vec<RuntimeBitmapDraw>,
+    pub button_labels: Vec<RuntimeButtonLabel>,
+    pub selected_controls: Vec<RuntimeSelectedControl>,
     pub field_draws: Vec<RuntimeFieldDraw>,
     pub table_draws: Vec<RuntimeTableDraw>,
     pub help_dialog: Option<RuntimeHelpDialog>,
@@ -59,6 +148,19 @@ pub struct RuntimeFieldDraw {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeButtonLabel {
+    pub form_id: u16,
+    pub object_id: u16,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeSelectedControl {
+    pub form_id: u16,
+    pub object_id: u16,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeTableDraw {
     pub form_id: u16,
     pub table_id: u16,
@@ -72,9 +174,19 @@ pub struct RuntimeTableDraw {
     pub col_usable: Vec<bool>,
     pub col_width: Vec<i16>,
     pub col_spacing: Vec<i16>,
+    pub cells: Vec<RuntimeTableCellDraw>,
     pub selected_row: i16,
     pub selected_col: i16,
     pub drawn: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeTableCellDraw {
+    pub row: u16,
+    pub col: u16,
+    pub style: u16,
+    pub font_id: u16,
+    pub text: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -229,6 +341,34 @@ impl PrcRuntimeSession {
                         object_id,
                         kind,
                         ptr: next_ptr,
+                        x: match obj {
+                            crate::palm::form_preview::FormPreviewObject::Button { x, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Field { x, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Table { x, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Bitmap { x, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Title { x, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Label { x, .. } => *x,
+                        },
+                        y: match obj {
+                            crate::palm::form_preview::FormPreviewObject::Button { y, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Field { y, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Table { y, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Bitmap { y, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Title { y, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Label { y, .. } => *y,
+                        },
+                        w: match obj {
+                            crate::palm::form_preview::FormPreviewObject::Button { w, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Field { w, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Table { w, .. } => *w,
+                            _ => 0,
+                        },
+                        h: match obj {
+                            crate::palm::form_preview::FormPreviewObject::Button { h, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Field { h, .. }
+                            | crate::palm::form_preview::FormPreviewObject::Table { h, .. } => *h,
+                            _ => 0,
+                        },
                         text_handle: 0,
                         sel_start: 0,
                         sel_end: 0,
@@ -251,6 +391,14 @@ impl PrcRuntimeSession {
             resource_kind: Some(u32::from_be_bytes(*b"code")),
             resource_id: Some(code_id),
                 });
+        preload_installed_databases(
+            source,
+            &mut runtime_ctx,
+            &mut memory,
+            &info.db_name,
+            fourcc_to_u32(&info.type_code),
+            fourcc_to_u32(&info.creator_code),
+        );
         // SysAppInfo.codeH is a MemHandle for code#1, not a raw pointer.
         // Apps may pass it to MemHandleLock to get executable code pointer.
         runtime_ctx.code_handle = code_handle;
@@ -376,6 +524,33 @@ impl PrcRuntimeSession {
     }
 
     pub fn resume(&mut self) -> RuntimeRunOutput {
+        fn refresh_event_buffer(
+            memory: &mut memory::MemoryMap,
+            event_p: u32,
+            evt: runtime::RuntimeEvent,
+        ) {
+            if event_p == 0 || !memory.contains_addr(event_p) {
+                return;
+            }
+            let _ = memory.write_u16_be(event_p, evt.e_type);
+            let _ = memory.write_u16_be(event_p.saturating_add(2), 0);
+            let _ = memory.write_u16_be(event_p.saturating_add(4), 0);
+            let _ = memory.write_u16_be(event_p.saturating_add(6), 0);
+            let _ = memory.write_u16_be(event_p.saturating_add(8), evt.data_u16);
+            if evt.e_type == runtime::EVT_CTL_SELECT {
+                let _ = memory.write_u32_be(event_p.saturating_add(10), 0x3001_0000u32);
+                let _ = memory.write_u8(event_p.saturating_add(14), 1);
+                let _ = memory.write_u8(event_p.saturating_add(15), 0);
+                let _ = memory.write_u16_be(event_p.saturating_add(16), 0);
+            } else if evt.e_type == runtime::EVT_KEY_DOWN {
+                let _ = memory.write_u16_be(event_p.saturating_add(8), evt.data_u16);
+                let _ = memory.write_u16_be(event_p.saturating_add(10), evt.data_u16);
+                let _ = memory.write_u16_be(event_p.saturating_add(12), 0);
+            } else {
+                let _ = memory.write_u16_be(event_p.saturating_add(10), evt.e_type);
+            }
+        }
+
         if self.stopped {
             return RuntimeRunOutput {
                 snapshot: self.snapshot(),
@@ -386,6 +561,9 @@ impl PrcRuntimeSession {
         self.runtime.terminate_requested = false;
         self.runtime.blocked_on_evt_get_event = false;
         self.runtime.blocked_evt_timeout_ticks = 0;
+        if let Some(evt) = self.runtime.pending_dispatch_event {
+            refresh_event_buffer(&mut self.memory, self.runtime.evt_event_p, evt);
+        }
 
         let mut total_steps = 0usize;
         loop {
@@ -401,10 +579,24 @@ impl PrcRuntimeSession {
                 },
             );
             total_steps = total_steps.saturating_add(trace.steps);
+            if total_steps >= PRC_EXEC_RESUME_BUDGET {
+                return RuntimeRunOutput {
+                    snapshot: self.snapshot(),
+                    state: RuntimeRunState::Running,
+                    steps: total_steps,
+                };
+            }
             let Some(stop) = trace.stop else {
                 break;
             };
             match stop {
+                core::StopReason::StepLimit { .. } => {
+                    return RuntimeRunOutput {
+                        snapshot: self.snapshot(),
+                        state: RuntimeRunState::Running,
+                        steps: total_steps,
+                    };
+                }
                 core::StopReason::ATrap { trap_word, pc }
                     if trap_stub::is_prc_runtime_trap_handled(trap_word)
                         && total_steps < PRC_EXEC_STUB_STEP_BUDGET =>
@@ -427,6 +619,13 @@ impl PrcRuntimeSession {
                                 steps: total_steps,
                             };
                         }
+                    }
+                    if total_steps >= PRC_EXEC_RESUME_BUDGET {
+                        return RuntimeRunOutput {
+                            snapshot: self.snapshot(),
+                            state: RuntimeRunState::Running,
+                            steps: total_steps,
+                        };
                     }
                     continue;
                 }
@@ -584,6 +783,8 @@ impl PrcRuntimeSession {
         self.runtime.event_queue.push(runtime::RuntimeEvent {
             e_type: runtime::EVT_NIL,
             data_u16: 0,
+            screen_x: 0,
+            screen_y: 0,
         });
     }
 
@@ -592,7 +793,12 @@ impl PrcRuntimeSession {
     }
 
     pub fn queue_event(&mut self, e_type: u16, data_u16: u16, label: &str) {
-        let evt = runtime::RuntimeEvent { e_type, data_u16 };
+        let evt = runtime::RuntimeEvent {
+            e_type,
+            data_u16,
+            screen_x: 0,
+            screen_y: 0,
+        };
         self.runtime.event_queue.insert(0, evt);
         self.runtime.pending_dispatch_event = Some(evt);
         log::info!(
@@ -608,43 +814,91 @@ impl PrcRuntimeSession {
         self.inject_event_now(runtime::EVT_CTL_SELECT, control_id, "ctlSelect");
     }
 
+    pub fn inject_pen_down_now(&mut self, screen_x: u16, screen_y: u16, label: &str) {
+        let evt = runtime::RuntimeEvent {
+            e_type: runtime::EVT_PEN_DOWN,
+            data_u16: 0,
+            screen_x,
+            screen_y,
+        };
+        self.inject_runtime_event_now(evt, label);
+    }
+
     pub fn inject_event_now(&mut self, e_type: u16, data_u16: u16, label: &str) {
+        let evt = runtime::RuntimeEvent {
+            e_type,
+            data_u16,
+            screen_x: 0,
+            screen_y: 0,
+        };
+        self.inject_runtime_event_now(evt, label);
+    }
+
+    pub fn set_table_selection(&mut self, form_id: u16, table_id: u16, row: i16, col: i16) -> bool {
+        let Some(table) = self
+            .runtime
+            .table_states
+            .iter_mut()
+            .find(|t| t.form_id == form_id && t.table_id == table_id)
+        else {
+            return false;
+        };
+        if table.selected_row == row && table.selected_col == col {
+            return false;
+        }
+        table.selected_row = row;
+        table.selected_col = col;
+        true
+    }
+
+    fn inject_runtime_event_now(&mut self, evt: runtime::RuntimeEvent, label: &str) {
         let event_p = self.runtime.evt_event_p;
         if event_p != 0 && self.memory.contains_addr(event_p) {
-            let _ = self.memory.write_u16_be(event_p, e_type);
+            let _ = self.memory.write_u16_be(event_p, evt.e_type);
             let _ = self.memory.write_u16_be(event_p.saturating_add(2), 0);
             let _ = self.memory.write_u16_be(event_p.saturating_add(4), 0);
             let _ = self.memory.write_u16_be(event_p.saturating_add(6), 0);
-            let _ = self.memory.write_u16_be(event_p.saturating_add(8), data_u16);
-            if e_type == runtime::EVT_CTL_SELECT {
+            let _ = self.memory.write_u16_be(event_p.saturating_add(8), evt.data_u16);
+            if evt.e_type == runtime::EVT_CTL_SELECT {
                 let _ = self
                     .memory
                     .write_u32_be(event_p.saturating_add(10), 0x3001_0000u32);
                 let _ = self.memory.write_u8(event_p.saturating_add(14), 1);
                 let _ = self.memory.write_u8(event_p.saturating_add(15), 0);
                 let _ = self.memory.write_u16_be(event_p.saturating_add(16), 0);
-            } else if e_type == runtime::EVT_KEY_DOWN {
-                let _ = self.memory.write_u16_be(event_p.saturating_add(10), data_u16);
+            } else if evt.e_type == runtime::EVT_KEY_DOWN {
+                let _ = self.memory.write_u16_be(event_p.saturating_add(10), evt.data_u16);
                 let _ = self.memory.write_u16_be(event_p.saturating_add(12), 0);
+            } else if evt.e_type == runtime::EVT_PEN_DOWN {
+                let _ = self.memory.write_u16_be(event_p.saturating_add(8), evt.screen_x);
+                let _ = self.memory.write_u16_be(event_p.saturating_add(10), evt.screen_y);
             } else {
-                let _ = self.memory.write_u16_be(event_p.saturating_add(10), e_type);
+                let _ = self.memory.write_u16_be(event_p.saturating_add(10), evt.e_type);
             }
             log::info!(
                 "PRC runtime input injected {} eventP=0x{:08X} eType={} data=0x{:04X}",
                 label,
                 event_p,
-                e_type,
-                data_u16
+                evt.e_type,
+                evt.data_u16
             );
         } else {
             log::info!(
                 "PRC runtime input inject skipped (no event buffer) {} eType={} data=0x{:04X}",
                 label,
-                e_type,
-                data_u16
+                evt.e_type,
+                evt.data_u16
             );
         }
-        self.queue_event(e_type, data_u16, label);
+        self.runtime.event_queue.insert(0, evt);
+        self.runtime.pending_dispatch_event = Some(evt);
+        log::info!(
+            "PRC runtime input queued {} eType={} data=0x{:04X} qlen={}",
+            label,
+            evt.e_type,
+            evt.data_u16,
+            self.runtime.event_queue.len()
+        );
     }
 
     fn snapshot(&self) -> RuntimeUiSnapshot {
@@ -665,6 +919,17 @@ impl PrcRuntimeSession {
                 col_usable: t.col_usable.clone(),
                 col_width: t.col_width.clone(),
                 col_spacing: t.col_spacing.clone(),
+                cells: t
+                    .cells
+                    .iter()
+                    .map(|cell| RuntimeTableCellDraw {
+                        row: cell.row,
+                        col: cell.col,
+                        style: cell.style,
+                        font_id: cell.font_id,
+                        text: cell.text.clone(),
+                    })
+                    .collect(),
                 selected_row: t.selected_row,
                 selected_col: t.selected_col,
                 drawn: t.drawn,
@@ -694,6 +959,35 @@ impl PrcRuntimeSession {
                     x: d.x,
                     y: d.y,
                 })
+                .collect(),
+            button_labels: self
+                .runtime
+                .button_labels
+                .iter()
+                .map(|b| RuntimeButtonLabel {
+                    form_id: b.form_id,
+                    object_id: b.object_id,
+                    text: b.text.clone(),
+                })
+                .collect(),
+            selected_controls: self
+                .runtime
+                .control_group_selections
+                .iter()
+                .map(|s| RuntimeSelectedControl {
+                    form_id: s.form_id,
+                    object_id: s.control_id,
+                })
+                .chain(
+                    self.runtime
+                        .control_values
+                        .iter()
+                        .filter(|v| v.value != 0)
+                        .map(|v| RuntimeSelectedControl {
+                            form_id: v.form_id,
+                            object_id: v.control_id,
+                        }),
+                )
                 .collect(),
             field_draws: self
                 .runtime
@@ -1361,6 +1655,8 @@ pub fn log_prc_runtime_first_trap_with_seed<S: AppSource>(
         underlay_form_id: None,
         focused_field_id: None,
         bitmap_draws: best.drawn_bitmaps.clone(),
+        button_labels: Vec::new(),
+        selected_controls: Vec::new(),
         field_draws: Vec::new(),
         table_draws: Vec::new(),
         help_dialog: None,

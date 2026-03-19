@@ -31,7 +31,7 @@ pub use form::{
 pub use geom::{Point, Rect, Size};
 pub use list_view::{ListHit, ListItem, ListView};
 pub use modal_form::{
-    ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalHit,
+    ModalChrome, ModalFormAction, ModalFormController, ModalFormSpec, ModalFormView, ModalHit,
     ModalTableCellStyle, ModalWidget,
 };
 pub use popup_view::{PopupHit, PopupMenuView};
@@ -46,7 +46,7 @@ pub use runtime::{
 pub use status_bar_view::{StatusBarActionState, StatusBarHit, StatusBarView};
 pub use status_bar_controller::{handle_button as handle_status_bar_button, preferred_focus as preferred_status_bar_focus, StatusBarButtons, StatusBarNavResult};
 pub use table_view::{
-    PalmWrappedTextCellRenderer, TableCellRenderer, TableHit, TableInteraction,
+    PalmTextCellRenderer, PalmWrappedTextCellRenderer, TableCellRenderer, TableHit, TableInteraction,
     TableScrollBarHit, TableScrollBarView, TableView,
 };
 pub use text::{

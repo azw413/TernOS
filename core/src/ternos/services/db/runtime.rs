@@ -166,20 +166,40 @@ pub fn resolved_record_db<'a>(
     runtime: &'a PrcRuntimeContext,
     requested_db_ref: u32,
 ) -> Option<&'a RuntimeDatabase> {
-    db_by_ref(runtime, requested_db_ref).or_else(|| {
-        runtime
-            .open_databases
-            .last()
-            .and_then(|open| db_by_local_id(runtime, open.local_id))
-    })
+    if let Some(db) = db_by_ref(runtime, requested_db_ref)
+        && !db.is_resource_db
+    {
+        return Some(db);
+    }
+    runtime
+        .open_databases
+        .iter()
+        .rev()
+        .filter_map(|open| db_by_local_id(runtime, open.local_id))
+        .find(|db| !db.is_resource_db)
+        .or_else(|| {
+            db_by_ref(runtime, requested_db_ref).or_else(|| {
+                runtime
+                    .open_databases
+                    .last()
+                    .and_then(|open| db_by_local_id(runtime, open.local_id))
+            })
+        })
 }
 
 pub fn resolved_record_db_mut<'a>(
     runtime: &'a mut PrcRuntimeContext,
     requested_db_ref: u32,
 ) -> Option<&'a mut RuntimeDatabase> {
-    let effective_db_ref = if db_by_ref(runtime, requested_db_ref).is_some() {
+    let effective_db_ref = if db_by_ref(runtime, requested_db_ref).is_some_and(|db| !db.is_resource_db) {
         requested_db_ref
+    } else if let Some(open) = runtime
+        .open_databases
+        .iter()
+        .rev()
+        .find(|open| db_by_local_id(runtime, open.local_id).is_some_and(|db| !db.is_resource_db))
+    {
+        open.db_ref
     } else {
         runtime.open_databases.last().map(|open| open.db_ref)?
     };
@@ -202,6 +222,57 @@ pub fn create_new_record(
     let index = insert_at.min(db.record_handles.len());
     db.record_handles.insert(index, handle);
     Ok((index, handle))
+}
+
+pub fn attach_record_handle(
+    runtime: &mut PrcRuntimeContext,
+    db_ref: u32,
+    insert_at: usize,
+    handle: u32,
+) -> Result<usize, RecordError> {
+    if handle == 0 || !runtime.mem_blocks.iter().any(|b| b.handle == handle) {
+        return Err(RecordError::InvalidParam);
+    }
+    let Some(db) = db_by_ref_mut(runtime, db_ref) else {
+        return Err(RecordError::InvalidParam);
+    };
+    let index = insert_at.min(db.record_handles.len());
+    db.record_handles.insert(index, handle);
+    Ok(index)
+}
+
+pub fn replace_record_handle(
+    runtime: &mut PrcRuntimeContext,
+    db_ref: u32,
+    index: usize,
+    handle: u32,
+) -> Result<u32, RecordError> {
+    if handle == 0 || !runtime.mem_blocks.iter().any(|b| b.handle == handle) {
+        return Err(RecordError::InvalidParam);
+    }
+    let Some(db) = db_by_ref_mut(runtime, db_ref) else {
+        return Err(RecordError::InvalidParam);
+    };
+    let Some(slot) = db.record_handles.get_mut(index) else {
+        return Err(RecordError::InvalidParam);
+    };
+    let old = *slot;
+    *slot = handle;
+    Ok(old)
+}
+
+pub fn detach_record_handle(
+    runtime: &mut PrcRuntimeContext,
+    db_ref: u32,
+    index: usize,
+) -> Result<u32, RecordError> {
+    let Some(db) = db_by_ref_mut(runtime, db_ref) else {
+        return Err(RecordError::InvalidParam);
+    };
+    if index >= db.record_handles.len() {
+        return Err(RecordError::InvalidParam);
+    }
+    Ok(db.record_handles.remove(index))
 }
 
 pub fn record_count(runtime: &PrcRuntimeContext, requested_db_ref: u32) -> Result<usize, RecordError> {
